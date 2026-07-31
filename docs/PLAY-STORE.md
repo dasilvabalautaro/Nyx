@@ -33,6 +33,17 @@ en la numeración sí están permitidos (solo tiene que ser creciente).
       explícitas en los dos XML. Antes la identidad Ed25519 y la base de mensajes subían al
       Drive del usuario. Verificado: `dumpsys package` ya no lista `ALLOW_BACKUP`.
 - [x] **Política de privacidad redactada**: [politica-privacidad.html](politica-privacidad.html).
+- [x] **FGS `specialUse`, lado app** (31 jul): el manifiesto declara
+      `foregroundServiceType="specialUse|microphone"` con su
+      `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE">` — verificado en
+      el manifiesto **fusionado** del release, no solo en el fuente. El texto de la
+      justificación nombra la tecnología y, sobre todo, el motivo por el que ningún otro tipo
+      encaja (no hay push de terceros), que es el argumento que busca el revisor. La §6 de la
+      política lo explica además en lenguaje de usuario. Falta solo el formulario de Console,
+      abajo.
+- [x] **Permisos explicados al usuario** (31 jul): la §6 de la política tiene una tabla
+      permiso → para qué, y su fila "Servicio en primer plano / inicio automático /
+      optimización de batería" cubre también `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
 
 ## Bloqueantes de ficha (trámite, no código)
 
@@ -42,11 +53,16 @@ en la numeración sí están permitidos (solo tiene que ser creciente).
       terceros, E2EE en tránsito y en el buzón).
 - [ ] **Clasificación de contenido** (cuestionario) y público objetivo.
 - [ ] **Cumplimiento de exportación de cifrado** (la pregunta que hace Play por usar E2EE).
-- [ ] **Declaración del FGS `specialUse`**: Google la revisa **a mano** y puede rechazarla si
-      cree que encaja otro tipo. El `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` del manifiesto ya trae
-      la justificación; conviene tener plan B por si la deniegan.
-- [ ] **Justificar `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`** (entrega de mensajes en 2.º plano
-      sin push de terceros).
+- [ ] **Formulario del FGS `specialUse` en Play Console** (*Contenido de la app*). Es un
+      trámite **aparte** de lo que ya está en el código: el
+      `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` del manifiesto no lo rellena. Hay que escribir ahí
+      por qué ningún otro tipo de FGS sirve, y **lo revisa una persona**, que puede denegarlo
+      si cree que encaja otro tipo. El texto ya está redactado: se copia del manifiesto y de
+      la §6 de la política. Conviene tener plan B por si lo deniegan.
+      *(Marcar como hecho cuando se envíe — a fecha de 31 jul no consta si se hizo.)*
+- [ ] **Justificar `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` en Console** (entrega de mensajes en
+      2.º plano sin push de terceros). La política ya lo explica al usuario; esto es la
+      declaración ante Play.
 - [ ] **Prueba cerrada previa**: si la cuenta de desarrollador es personal y posterior a
       nov 2023, Play pide 12 testers durante 14 días antes de habilitar producción. Son dos
       semanas de calendario: conviene arrancarla cuanto antes.

@@ -1,0 +1,32 @@
+package chat.neto.krypta.core.repository
+
+import chat.neto.krypta.core.model.Message
+import chat.neto.krypta.core.model.MessageStatus
+import kotlinx.coroutines.flow.Flow
+
+interface MessageRepository {
+    fun observeConversation(conversationId: String): Flow<List<Message>>
+
+    /** Último mensaje de cada conversación (para la lista de conversaciones). */
+    fun observeLastMessages(): Flow<List<Message>>
+
+    /** Nº de mensajes entrantes aún no vistos, por conversationId (badge de no leídos). */
+    fun observeUnreadCounts(): Flow<Map<String, Int>>
+
+    suspend fun save(message: Message)
+
+    /** Devuelve un mensaje por su id, o null (p. ej. para reintentar uno FALLIDO). */
+    suspend fun findById(id: String): Message?
+
+    suspend fun updateStatus(id: String, status: MessageStatus)
+
+    /**
+     * Marca como vistos (READ local) los mensajes **entrantes** de una conversación, al
+     * abrir su chat: limpia el badge de no leídos. En los salientes READ significa "el
+     * otro lo leyó"; en los entrantes se reutiliza como "yo lo vi" (sin cambio de esquema).
+     */
+    suspend fun markIncomingRead(conversationId: String)
+
+    /** Borra TODOS los mensajes de una conversación (vaciar chat / eliminar contacto). */
+    suspend fun deleteConversation(conversationId: String)
+}

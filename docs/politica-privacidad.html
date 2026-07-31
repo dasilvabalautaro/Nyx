@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidad — Krypta</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfefc;
+    --fg: #1a1c1b;
+    --muted: #52605c;
+    --card: #ffffff;
+    --border: #d9e2df;
+    --accent: #006a60;
+    --accent-bg: #e2f5f1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1412;
+      --fg: #e6ece9;
+      --muted: #a3b3ad;
+      --card: #171d1b;
+      --border: #2a3532;
+      --accent: #5fd9c6;
+      --accent-bg: #143430;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+  }
+  header {
+    margin-bottom: 40px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 28px;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0;
+  }
+  h2 {
+    font-size: 19px;
+    margin: 40px 0 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 0 0 20px;
+  }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 14px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  code {
+    background: var(--accent-bg);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 0.9em;
+  }
+  a { color: var(--accent); }
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 32px;
+  }
+  .toc p { margin: 0 0 8px; font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc li { margin-bottom: 4px; font-size: 14px; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="badge">🔒 Krypta</span>
+    <h1>Política de Privacidad</h1>
+    <p class="subtitle">Última actualización: 17 de julio de 2026</p>
+  </header>
+
+  <nav class="toc">
+    <p>Contenido</p>
+    <ol>
+      <li><a href="#resumen">Resumen</a></li>
+      <li><a href="#identidad">Identidad y cuenta</a></li>
+      <li><a href="#mensajes">Mensajes, multimedia y llamadas</a></li>
+      <li><a href="#dispositivo">Datos en tu dispositivo</a></li>
+      <li><a href="#servidor">Datos en el nodo de señalización</a></li>
+      <li><a href="#permisos">Permisos del sistema</a></li>
+      <li><a href="#backup">Copias de seguridad</a></li>
+      <li><a href="#terceros">Terceros, anuncios y analítica</a></li>
+      <li><a href="#seguridad">Seguridad</a></li>
+      <li><a href="#menores">Menores de edad</a></li>
+      <li><a href="#cambios">Cambios en esta política</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="resumen">1. Resumen</h2>
+  <div class="card">
+    <p><strong>Krypta es una app de mensajería descentralizada y cifrada de extremo a
+    extremo (E2EE).</strong> No existe una cuenta de usuario, ni un servidor central que
+    almacene tus conversaciones. Tu identidad es un par de claves criptográficas generado
+    y guardado únicamente en tu dispositivo. Los mensajes viajan directamente entre tu
+    teléfono y el de tu contacto (o, si uno de los dos está desconectado, se guardan
+    cifrados y de forma temporal en un nodo de la red hasta ser entregados). Nadie más que
+    los dos extremos de la conversación puede leer su contenido — incluido el propio nodo
+    que ayuda a encontrarse y entregar mensajes.</p>
+  </div>
+
+  <h2 id="identidad">2. Identidad y cuenta</h2>
+  <p>Krypta no pide número de teléfono, correo electrónico ni ningún dato personal para
+  usarse. Al abrir la app por primera vez se genera localmente un par de claves Ed25519;
+  el identificador público derivado de esa clave (tu <strong>PeerID</strong>) es lo único
+  que compartes con tus contactos para que puedan añadirte. Esa clave nunca sale de tu
+  dispositivo salvo que tú decidas exportarla en una copia de seguridad (ver
+  <a href="#backup">sección 7</a>).</p>
+
+  <h2 id="mensajes">3. Mensajes, multimedia y llamadas</h2>
+  <p>Todo el contenido que envías — texto, imágenes, archivos, notas de voz y audio/vídeo
+  de llamadas — se cifra en tu dispositivo antes de salir de él, con una clave derivada
+  por Diffie-Hellman (X25519) exclusiva entre tú y cada contacto. Ni el nodo de
+  señalización ni ningún tercero tienen esa clave, por lo que no pueden leer, escuchar ni
+  ver ese contenido; solo ven bytes cifrados de tamaño variable.</p>
+  <ul>
+    <li><strong>Entrega directa:</strong> si ambos dispositivos están en línea, el mensaje
+    viaja directamente entre ellos (p2p, a veces a través de un repetidor de tráfico
+    cifrado que tampoco puede leerlo).</li>
+    <li><strong>Entrega diferida:</strong> si el destinatario está desconectado, el
+    mensaje cifrado se deposita temporalmente en un buzón del nodo de señalización hasta
+    que se recoge (ver <a href="#servidor">sección 5</a>).</li>
+  </ul>
+
+  <h2 id="dispositivo">4. Datos que se guardan en tu dispositivo</h2>
+  <p>Toda tu información — contactos, historial de mensajes, notas de voz, archivos
+  recibidos y el estado de verificación de identidad de cada contacto — se guarda
+  localmente en tu teléfono (base de datos local de la app) y nunca se envía a ningún
+  servidor. Si desinstalas la app o borras sus datos, esa información se pierde salvo que
+  hayas hecho una copia de seguridad manual.</p>
+  <p>También puedes borrar esos datos de forma selectiva sin desinstalar la app:
+  <strong>vaciar una conversación</strong> (borra sus mensajes y los archivos/fotos/notas de
+  voz asociados, conservando el contacto) o <strong>eliminar un contacto</strong> (además
+  borra el contacto y detiene su descubrimiento en la red). Ambas acciones son locales,
+  inmediatas e irreversibles — no existe una copia en ningún servidor que restaurar.</p>
+  <table>
+    <tr><th>Dato</th><th>Dónde se guarda</th><th>Quién lo ve</th></tr>
+    <tr><td>Nombre y PeerID de tus contactos</td><td>Solo tu dispositivo</td><td>Solo tú</td></tr>
+    <tr><td>Historial de conversaciones</td><td>Solo tu dispositivo</td><td>Solo tú y tu contacto (extremo a extremo)</td></tr>
+    <tr><td>Estado de verificación (número de seguridad / QR)</td><td>Solo tu dispositivo</td><td>Solo tú</td></tr>
+  </table>
+
+  <h2 id="servidor">5. Datos en el nodo de señalización</h2>
+  <p>Krypta usa uno o varios nodos de infraestructura para tres tareas: ayudarte a
+  encontrar a tus contactos en la red (descubrimiento), retransmitir tráfico cifrado
+  cuando la conexión directa no es posible (repetidor), y guardar temporalmente mensajes
+  cifrados cuando el destinatario está desconectado (buzón). En ninguno de los tres casos
+  el nodo puede leer el contenido de tus mensajes: solo maneja bloques de datos cifrados
+  y opacos.</p>
+  <ul>
+    <li>Los mensajes depositados en el buzón se identifican por el PeerID del
+    destinatario, se autentican con la propia conexión criptográfica del remitente, y se
+    borran automáticamente al ser recogidos o, como máximo, a los <strong>7 días</strong>.</li>
+    <li>Existen límites de uso por destinatario (máx. ~200 mensajes o 5 MiB en buzón a la
+    vez) para evitar abuso, aplicados sobre datos cifrados que el nodo no puede
+    interpretar.</li>
+    <li>El nodo no guarda un registro permanente de quién habla con quién más allá de lo
+    estrictamente necesario para operar el buzón y el repetidor.</li>
+  </ul>
+
+  <h2 id="permisos">6. Permisos del sistema</h2>
+  <p>Krypta solicita permisos de Android solo para las funciones que los necesitan, y
+  nunca los usa para recopilar datos con fines distintos a esa función:</p>
+  <table>
+    <tr><th>Permiso</th><th>Para qué se usa</th></tr>
+    <tr><td>Internet / estado de red</td><td>Conectarse a la red y a tus contactos.</td></tr>
+    <tr><td>Cámara</td><td>Únicamente para escanear el código QR de verificación de
+    identidad de un contacto (no se usa para fotos salvo que tú elijas adjuntar una desde
+    la galería/cámara al enviarla).</td></tr>
+    <tr><td>Micrófono</td><td>Grabar notas de voz y llamadas de voz/vídeo que tú
+    inicies.</td></tr>
+    <tr><td>Notificaciones</td><td>Avisarte de mensajes y llamadas entrantes.</td></tr>
+    <tr><td>Servicio en primer plano / inicio automático / optimización de batería</td>
+    <td>Mantener la app conectada para poder recibir mensajes y llamadas aunque no la
+    tengas abierta.</td></tr>
+    <tr><td>Descubrimiento en red local (multicast)</td><td>Encontrar contactos que estén
+    en la misma red WiFi, como atajo más rápido que la red WAN.</td></tr>
+  </table>
+
+  <h2 id="backup">7. Copias de seguridad</h2>
+  <p>Puedes exportar tu identidad y tu lista de contactos a un archivo cifrado
+  (<code>.krbk</code>) protegido con una contraseña que solo tú conoces. Ese archivo se
+  genera y se guarda donde tú decidas (almacenamiento del propio dispositivo, tarjeta SD,
+  nube personal, etc.) — Krypta no lo envía a ningún servidor. Sin tu contraseña, el
+  archivo es ilegible. Las claves compartidas con cada contacto no se incluyen en la copia:
+  se vuelven a derivar automáticamente al restaurar.</p>
+
+  <h2 id="terceros">8. Terceros, anuncios y analítica</h2>
+  <p>Krypta no incluye bibliotecas de analítica, rastreo publicitario ni reporte de
+  fallos de terceros. No hay anuncios. No vendemos, alquilamos ni compartimos tus datos
+  con nadie, porque no los recopilamos en primer lugar: el diseño de la app hace que ni
+  siquiera sus propios desarrolladores puedan acceder al contenido de tus
+  conversaciones.</p>
+
+  <h2 id="seguridad">9. Seguridad</h2>
+  <p>Todo el contenido se cifra de extremo a extremo (AES-256-GCM con claves derivadas por
+  X25519/HKDF). Para protegerte de una posible suplantación de identidad, Krypta ofrece un
+  <strong>número de seguridad</strong> y verificación por código QR que puedes comparar con
+  tu contacto por otro canal para confirmar que hablas con quien crees. Ningún sistema es
+  perfecto: la seguridad de tus conversaciones depende también de mantener tu dispositivo y
+  tu copia de seguridad protegidos.</p>
+
+  <h2 id="menores">10. Menores de edad</h2>
+  <p>Krypta no está dirigida a menores de 16 años y no recopila conscientemente datos de
+  menores de esa edad.</p>
+
+  <h2 id="cambios">11. Cambios en esta política</h2>
+  <p>Si esta política cambia de forma relevante, se actualizará esta misma página con una
+  nueva fecha de "última actualización" y, cuando el cambio sea significativo, se avisará
+  dentro de la app.</p>
+
+  <h2 id="contacto">12. Contacto</h2>
+  <p>Para cualquier consulta sobre esta política o sobre el tratamiento de datos en
+  Krypta, escribe a <a href="mailto:info@vantix.click">info@vantix.click</a>.</p>
+
+  <footer>
+    Krypta — mensajería descentralizada y cifrada de extremo a extremo.
+  </footer>
+
+</div>
+</body>
+</html>

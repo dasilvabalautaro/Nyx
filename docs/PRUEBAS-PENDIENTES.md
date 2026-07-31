@@ -1,0 +1,457 @@
+# Pruebas pendientes de verificación en vivo (2 móviles)
+
+> Registro vivo de lo que está **implementado + testeado (unit/sonda)** pero aún **no
+> confirmado con dos móviles reales**. La colaboradora que presta el segundo móvil no
+> siempre está disponible; aquí quedan los pasos exactos para ejecutarlos cuando se pueda.
+>
+> **Rutina de despliegue:** el móvil del autor (TECNO KM5s, USB) se mantiene siempre con el
+> último build (`./gradlew :app:installDebug`). El APK para el segundo móvil se deja en
+> `~/Desktop/krypta-arm64-debug.apk` (`./gradlew :app:assembleDebug -PslimAbi` + copia) y lo
+> comparte el autor. **Ambos móviles deben tener la misma versión** para cada prueba.
+>
+> Última actualización: 16 jul 2026. (La videollamada §11 quedó **VERIFICADA** el 16 jul — funcionó bien.)
+>
+> **APK del 16 jul** (`~/Desktop/krypta-arm64-debug.apk`): todo lo del 12 jul (rediseño M3,
+> 7d parcial, multi-nodo cliente, respaldo de identidad) + **bloqueo de acceso a la app**
+> (Ajustes → "Bloqueo de la app": huella/cara/PIN del sistema, período de gracia
+> configurable). Sin cambio de protocolo ni de DB. Nota histórica: el 12 jul de madrugada
+> pudo quedarle a la colaboradora una llamada perdida accidental (prueba de proximidad,
+> ~30 s, colgada).
+
+## Cómo leer los diagnósticos en el TECNO
+El limitador OEM de Transsion **silencia el logcat de la app**. Para ver el panel de
+Diagnóstico in-app sin logcat:
+```
+adb shell uiautomator dump /sdcard/ui.xml && adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"'
+```
+
+---
+
+## 1. UX de notificaciones (app cerrada) — **VERIFICADO (4 jul, reporte del autor)**
+El autor confirmó (4 jul, tarde) que las pruebas de **notificación funcionaron** entre los
+dos móviles junto con las de imagen. Se deja la checklist por si algún matiz (deep-link,
+badge, scroll) no se probó explícitamente; si todo estaba bien, mover la sección al histórico.
+Cambios del 4 jul (raíz: `KryptaNotifications`, deep-link, cancelación al leer, auto-scroll).
+Verificado en un solo móvil: navegación por deep-link (`am start --es krypta.open_contact`)
+y config de canales (`messages_v2` importance=4/vibra=true; `service_v2` badge=false). Falta
+la prueba real de recepción entre dos móviles:
+
+1. Instalar el **mismo** APK en ambos; añadirse mutuamente como contacto.
+2. Cerrar del todo (swipe en recientes) el móvil **receptor**.
+3. Enviar un mensaje desde el emisor.
+> **Notas (4 jul):**
+> - En un móvil conectado por USB el aviso podía no aparecer (app "casi en primer plano");
+>   se cambió la detección de visibilidad a un observador en el hilo principal. Probar
+>   **DESCONECTADO**, app en 2.º plano, la otra persona enviando.
+> - **TECNO/Transsion (HiOS) congela la app a batería** aunque esté en la whitelist de Doze.
+>   Mitigación en código: **WifiLock** en el FGS (mantiene el WiFi despierto con pantalla
+>   apagada). **Ajustes manuales del móvil (imprescindibles en TECNO)**, vía el botón nuevo
+>   "⚙ Ajustes de recepción en 2.º plano": (1) **Inicio automático/Autostart** = ON;
+>   (2) **Batería → Sin restricciones**; (3) **Apps protegidas** (Phone Master); (4) bloquear
+>   la app en Recientes; (5) **WiFi → mantener activo con pantalla apagada = Siempre**.
+> - Confirmado: la colaboradora (otro modelo) **sí recibe**; el fallo es específico del TECNO.
+> - **Diagnóstico (4 jul)**: en el TECNO la notificación fija del servicio **sí se ve** (proceso
+>   vivo) y el mensaje **aparece al instante al abrir** (se recibió en 2.º plano) → no es freeze,
+>   es que el TECNO **suspende la RED** en 2.º plano; el mensaje solo se descarga al abrir y para
+>   entonces el aviso se omite (UI visible). Arreglo: **HeartbeatReceiver** (AlarmManager cada
+>   ~2 min, `setAndAllowWhileIdle`) que despierta la red y retira el buzón → aviso en ≤~2 min.
+>   **Pendiente probar en el TECNO desconectado**: con la app en 2.º plano, que ella envíe y ver
+>   si el aviso llega en ≤2 min. Si aún no, el siguiente paso es UnifiedPush (push sin Google).
+> - **RESUELTO EL MISTERIO (4 jul)**: una notificación de prueba por el canal real de mensajes
+>   (`mImportance=4`) **SÍ aparece en la cortina del TECNO**, pero **sin sonido ni banner** —
+>   HiOS silencia las notificaciones de apps de terceros aunque la app pida prioridad alta. El
+>   código y el canal funcionan; el "no llega nada" era en realidad "llega en silencio". **Fix =
+>   ajuste del móvil**: Ajustes → Notificaciones → Krypta → "Mensajes" → activar Sonido + Banner/
+>   Flotante + Pantalla de bloqueo (o en Phone Master → gestión de notificaciones). Se añadió un
+>   botón **"🔔 Probar aviso"** en la app para que cada usuario ajuste esto hasta que suene.
+
+4. Verificar en el receptor, uno a uno:
+   - [ ] **Suena y vibra** el aviso (heads-up), no solo el conteo silencioso.
+   - [ ] Tocar la notificación **abre directo esa conversación** (no la lista).
+   - [ ] El chat aparece **con el scroll abajo**, mostrando el mensaje nuevo.
+   - [ ] Al abrir/leer, **el conteo del icono se limpia** (probar entrando por el icono de
+     la app, no solo por la notificación).
+   - [ ] Enviar varios mensajes seguidos: el scroll sigue al último.
+
+## 2. Verificación de identidad anti-MITM (número + QR) — **PENDIENTE**
+Verificado en un móvil: el diálogo muestra 60 dígitos, el **QR se genera** (captura ok), el
+botón "Escanear" abre la cámara (permiso + `CaptureActivity` de ZXing), "Coinciden,
+verificar" marca el contacto y aparece la insignia de escudo (persiste). El parse del payload
+QR está cubierto por `QrCodeTest`. Falta confirmar el flujo real entre dos móviles:
+
+1. En ambos móviles, abrir el chat del otro → botón **escudo** → "Verificar identidad".
+2. **Número de seguridad**: - [ ] es **idéntico** en los dos móviles.
+3. **QR**: - [ ] "Usar QR" en ambos; A escanea el QR de B → toast **"✓ Identidad verificada"**
+   y aparece la insignia; B escanea el de A → igual. (Cada uno muestra su QR y escanea el otro.)
+4. - [ ] (MITM negativo) Escanear el QR de un tercero / un contacto con PeerID distinto → toast
+     **"⚠ El QR NO coincide (posible suplantación)"** y **no** marca verificado.
+5. - [ ] Escanear un QR cualquiera (no Krypta) → toast "Ese QR no es de Krypta".
+
+## 3. Endurecimiento de segundo plano — **PARCIAL**
+Verificado en un móvil: FGS `specialUse` (`types=0x40000000`), exención de batería en la
+whitelist de deviceidle. Falta:
+
+1. - [ ] **Reinicio del móvil**: reiniciar el receptor, **no abrir la app**, enviarle un
+     mensaje desde el emisor → debe llegar (lo rearma `BootReceiver`).
+2. - [ ] **Cambio de red**: con la app cerrada, pasar el receptor de WiFi a datos (o al revés)
+     y enviarle un mensaje → debe llegar rápido (lo dispara `kickWan()` por el NetworkCallback).
+3. - [ ] **Persistencia larga**: dejar el receptor con la app cerrada varias horas (>6 h para
+     descartar el corte de FGS de Android 15) y comprobar que sigue recibiendo.
+
+## 4. Marca de leído (READ) entre 2 móviles — **VERIFICADO (5 jul)**
+Sesión real con la colaboradora: en la Room DB del autor los mensajes salientes figuran
+**READ** tras abrirse el chat en el otro móvil (rastro extraído por adb el 5 jul). ✅
+El punto 5 (acuse por buzón con B cerrado) no se aisló explícitamente, pero el ciclo
+normal funciona. Checklist original:
+
+Verificado en 1 móvil: el sobre (`MessageEnvelope`) viaja bien de punta a punta (texto
+correcto tras enviar→buzón→recibir), los mensajes legado siguen legibles, y los estados
+salen en español. Falta el ciclo real del acuse entre dos personas:
+
+1. Ambos con el **mismo** APK, contactos añadidos.
+2. A envía a B. En A el mensaje sale **"enviado"**.
+3. B **abre el chat** con A.
+4. - [ ] En A, ese mensaje pasa a **"leído"** (el acuse llegó directo o por buzón).
+5. - [ ] Con B cerrado, A envía; luego B abre → el acuse por buzón debe llegar a A al conectar.
+6. Nota: el contacto de prueba "SinVerificar" apunta al **propio** PeerID del autor (bucle a
+   sí mismo); sirvió para probar el ida-y-vuelta del sobre, pero no es un caso real.
+
+## 5. Reintento de FAILED — **VERIFICADO en 1 móvil (4 jul)**
+Con la red cortada, el envío queda **"No enviado · toca para reintentar"**; al restaurar la
+red y tocar la burbuja, pasa a **"enviado"**. ✅
+
+## 6. Archivos (v1 troceados) entre 2 móviles — **VERIFICADO (5 jul), fragilidad v1 sigue**
+Sesión del 5 jul: dos PDFs multi-trozo llegaron al TECNO y se abren (112 KB ≈ 3 trozos y
+72 KB ≈ 2 trozos, en `files/krypta_files/`, mensajes DELIVERED en Room). El autor reporta
+"archivos ✅" en ambos sentidos. **La fragilidad v1 quedó ARREGLADA el mismo 5 jul (v2)**: el 5 jul
+se perdió 1 de 3 notas de voz (ver §7) por el mismo mecanismo que el .bin del 4 jul. Arreglo
+en tres capas: (a) `DiskFileStore` hace **staging de trozos en disco** (sobreviven a la
+muerte del proceso, reentregas idempotentes; `DiskFileStoreTest`); (b) el buzón es
+**ack-tras-persistir** (el sobre solo se borra del nodo cuando el receptor lo persistió;
+Go `TestMailboxRedeliverUnacked` + `ChatServiceTest`); (c) los sobres ya no pasan por un
+buffer de 64 que **descartaba trozos en ráfaga** (probable causa real de la nota perdida).
+Verificado en vivo en el TECNO (depósito → wake → "buzón: recogido"). **Prueba 2 móviles
+pendiente**: reenviar un archivo de varios trozos matando la app receptora a mitad
+(desliza en recientes al ver "1 de N") → al reabrir debe completarse solo.
+
+<!-- Historial 4 jul: -->
+
+Verificado en vivo: un **PDF de 84 KB (2 trozos) llegó y fue leído** por la colaboradora ✅.
+Pero un **.bin de 150 KB (4 trozos) se envió (SENT en el emisor) y nunca apareció en el
+receptor** — algún trozo se perdió en recepción y el reensamblado quedó incompleto. Fragilidad
+conocida de v1: el receptor acumula los trozos **en memoria** (`DiskFileStore`) y el buzón
+**borra los sobres ya ack'd**; si el proceso receptor muere (o pierde un trozo) a mitad de
+transferencia, el archivo es irrecuperable y no hay señal de error. Candidatos de arreglo
+(v2): staging de trozos en disco, y/o no ack'ar un trozo hasta persistirlo.
+
+1. - [ ] Repetir el envío de un archivo de varios trozos (>96 KB) con el receptor **abierto**
+     y comprobar que reensambla. Si vuelve a perderse, mirar el Diagnóstico del receptor.
+2. - [ ] Archivo mediano (1–5 MB): comprueba que reensambla bien. >8 MB se rechaza (límite v1);
+     offline (buzón) el límite práctico es ~5 MB por la cuota del buzón. Grandes = v2 (staging).
+3. - [ ] Tocar la burbuja en el receptor **abre** el archivo con el visor correspondiente.
+
+## 7. Notas de voz (v1) entre 2 móviles — **RESUELTO EL MISTERIO (6 jul)**
+**Por qué el autor "no enviaba": mantenía PULSADO el micro (costumbre WhatsApp) y el
+`TooltipBox` del botón se comía la pulsación larga mostrando el tooltip — nunca arrancaba
+la grabación** (reproducido en vivo por adb: el toque corto grababa y enviaba perfecto —
+258 KB al contacto propio — y la pulsación larga no hacía nada). **Arreglado el 6 jul**:
+el micro usa `combinedClickable` (sin tooltip) y **toque corto Y pulsación mantenida
+arrancan la grabación** igual (luego se toca "Enviar" en la barra). Instalado en el TECNO
+y refrescado `~/Desktop/krypta-arm64-debug.apk`. Nota: sigue sin ser "suelta para enviar"
+(estilo WhatsApp completo); si se quiere, es trabajo aparte.
+Recepción confirmada por el autor (6 jul): las notas de Lucia llegan todas y **la
+notificación suena con la app en 2.º plano y pantalla apagada** ✅. Falta solo confirmar
+A→B con el autor enviando (ahora que puede) y una nota larga multi-trozo (punto 5).
+
+<!-- Historial 5 jul: -->
+**PARCIAL (5 jul)**
+Sesión del 5 jul: la colaboradora envió **3 notas de voz; llegaron 2** (11:22 y 11:25,
+`.m4a` presentes en disco y reproducibles); la tercera se perdió por la fragilidad v1 de
+trozos (§6) sin ninguna señal de error. El **autor no pudo enviar**: en su TECNO el envío
+falló **en silencio** — no quedó archivo en `krypta_files/sent/` ni mensaje propio en Room.
+Reproducción por adb el mismo 5 jul: la grabadora **sí funciona** (botón 🎤 → "Grabando…",
+archivo crece, Cancelar limpia), así que fue un fallo puntual (micro ocupado justo tras la
+llamada cortada, u otro rechazo de MediaRecorder). **Bug UX CORREGIDO (5 jul, mismo día)**:
+ahora `recorder.start()` fallido y `recorder.stop()` nulo muestran toast, y el chat también
+muestra por toast los errores del ViewModel (imagen/archivo/nota que antes eran invisibles).
+Y la **pérdida de trozos quedó arreglada** también el 5 jul (v2 del §6: staging en disco +
+ack-tras-persistir): las notas de voz ya no deberían perderse. Instalado en el TECNO y en
+`~/Desktop/krypta-arm64-debug.apk` (build de la tarde, con AAR nuevo). Reintentar el envío
+A→B (pasos abajo) con el APK nuevo en ambos, incluida una tanda de 3+ notas seguidas.
+
+<!-- Historial 4 jul: -->
+
+Verificado en 1 móvil (TECNO): botón 🎤 (sustituye a "Enviar" cuando no hay texto) → pide el
+permiso de micro → barra "Grabando… m:ss" → **Cancelar** borra el archivo y vuelve al chat.
+Viaja como archivo troceado (mime `audio/mp4`, AAC mono 48 kbps); el emisor **conserva copia**
+(`filesDir/krypta_files/sent/`) así que su burbuja también es reproducible. Tests:
+`sendFile with localPath…` en `ChatServiceTest`. Falta el ciclo real:
+
+1. Ambos con el mismo APK (el de hoy o posterior).
+2. A mantiene el chat sin texto → toca 🎤 → habla unos segundos → **Enviar**.
+3. - [ ] En A la burbuja de audio aparece y **se reproduce** (play/pausa + progreso + duración).
+4. - [ ] En B llega la burbuja de audio y **se reproduce**. Notificación **"🎤 Nota de voz"**
+     si estaba cerrado.
+5. - [ ] Nota larga (1–2 min): llega y reproduce entera (multi-trozo).
+
+## 8. Sonda de latencia de llamadas en datos móviles (Fase 7a) — **VERIFICADO (5 jul): GATE SUPERADO**
+El autor corrió "📞 Latencia" con datos móviles (5 jul, 14:37 en el Diagnóstico):
+`RTT nodo: n=50/50 min=151ms p50=180ms p95=220ms max=295ms`, 0 pérdidas, Opus enc
+disponible. **p95 = 220 ms ≤ 300 ms → gate de celular superado.** Falta solo repetirla en
+el móvil de la colaboradora (no bloqueante).
+
+<!-- Historial 4 jul: -->
+
+El gate de llamadas (Opción A) está **superado en WiFi** (TECNO→nodo vía Cloudflare:
+p50≈146–163 ms, p95≤173 ms, 0 pérdidas; Opus enc disponible — ver el PLAN, Fase 7a). Falta
+la medición en **celular**: el 4 jul la SIM del autor estaba sin plan de datos (Tigo en
+CAPTIVE_PORTAL → la operadora resetea toda conexión; no es un fallo de Krypta).
+
+1. Con datos móviles activos, tocar **"📞 Latencia"** (pantalla de contactos).
+2. - [ ] El Diagnóstico muestra `📞 RTT nodo: n=50/50 … p95=…` con p95 ≲ 300 ms.
+3. - [ ] Repetir en el móvil de la colaboradora (ideal: uno en WiFi y otro en datos).
+
+## 9. Llamada de voz entre 2 móviles (Fase 7b) — **VERIFICADO (6 jul) tras el fix del relay**
+Reporte del autor (6 jul), con el nodo ya redesplegado con `WithInfiniteLimits`: **la
+llamada funciona bien, sin eco, NO se corta**, y **la notificación de llamada entrante
+llega con el móvil "apagado"** (app en 2.º plano / pantalla apagada) ✅. Quedan como
+matices no bloqueantes: probar rechazo/perdida/busy (puntos 5-7 de la checklist) y apuntar
+si la conexión sube a directa (DCUtR) o va por relay.
+
+<!-- Historial 5 jul: -->
+**PARCIAL (5 jul): funcionaba pero SE CORTABA A ~20 s**
+Primera llamada real (5 jul): **conecta, sin eco, sonido claro** en ambos sentidos ✅…
+pero **se corta a los ~20 segundos**. Causa raíz identificada en los rastros + código: la
+llamada va por **Circuit Relay v2** y el nodo usa `libp2p.EnableRelayService()` con los
+**límites por defecto de go-libp2p: 128 KiB de datos o 2 min por conexión relayada**. Al
+bitrate de la llamada (Opus 24 kbps + AES-GCM por frame + framing + overhead libp2p ≈
+5–6 KB/s por sentido), los 128 KiB se agotan en ~20–25 s y el relay **resetea la conexión**
+→ `receiveFrame()` devuelve null → "finalizada". (Coincide el appop RECORD_AUDIO del TECNO:
+uso de 21 s.) Los mensajes/archivos nunca lo pisan porque son transferencias cortas.
+**Fix APLICADO (5 jul)**: `libp2p.EnableRelayService(relayv2.WithInfiniteLimits())` en
+`infra/node/main.go` (este nodo ES el relay de Krypta y el tráfico es E2EE); binario nuevo
+compilado en `infra/node/dist/krypta-node-catalina` (verificado `minos 10.13`). **Falta:
+copiarlo a la Mac Catalina y redesplegar** (`deploy-catalina.sh`, ver README del nodo) y
+**repetir la llamada** — debe durar sin corte. Aun con fix conviene vigilar si DCUtR sube la
+llamada a directa (menos latencia y sin pasar por Cloudflare). Checklist completa abajo.
+
+<!-- Historial 4 jul: -->
+
+El MVP de llamadas está implementado y probado en JVM (`CallServiceTest`) + smoke en el
+TECNO (llamar → "Llamando…" → colgar → "cancelada"). **Imprescindible: ambos móviles con el
+APK de hoy o posterior** — un invite a un APK viejo se muestra allí como texto crudo.
+
+1. A abre el chat de B → botón **📞** (junto al escudo) → concede micro si lo pide.
+2. - [ ] En B **suena el timbre** y aparece la pantalla "Te está llamando" (o la notificación
+     "📞 Llamada entrante" si la app estaba cerrada; tocarla abre la pantalla).
+3. - [ ] B toca **Aceptar** → ambos pasan a "Conectando…" y luego al cronómetro. **Se oye la
+     voz en ambos sentidos** (probar auricular y 🔊 altavoz; el mute silencia).
+4. - [ ] Colgar en cualquiera termina en ambos ("finalizada") y se vuelve al chat solo.
+5. - [ ] B **rechaza** una llamada → A ve "rechazada".
+6. - [ ] A llama y **cuelga antes de que B conteste** → en B para el timbre y queda la fila
+     "📞 Llamada perdida" (con notificación si estaba cerrado).
+7. - [ ] A llama con **B sin abrir la app** ≥1 min (invite rancio vía buzón) → B no timbra
+     tarde: fila de llamada perdida al conectar.
+8. - [ ] Calidad: latencia percibida, eco (el AEC es del chip), cortes. Apuntar si la conexión
+     fue directa (DCUtR) o relayed (Diagnóstico). Si el audio va a tirones vía relay, subir el
+     colchón (~120 ms) o bajar bitrate — apuntarlo aquí.
+9. - [ ] **(7d, APK 12 jul) Proximidad**: en llamada al oído (sin altavoz) la pantalla se
+     apaga al acercarla y se reenciende al alejarla; la mejilla no cuelga ni silencia. Con
+     🔊 altavoz o vídeo encendido NO debe apagarse.
+10. - [ ] **(7d, APK 12 jul) Micro en 2.º plano**: con la llamada ACTIVA, apagar pantalla
+     (proximidad) o pasar la app a 2.º plano un momento → la voz sigue fluyendo (el FGS
+     declara tipo `microphone`; comprobable con
+     `adb shell dumpsys activity services chat.neto.krypta | grep -i foreground`).
+
+## 11. Videollamada (Fase 7c) entre 2 móviles — **VERIFICADO (16 jul)**
+Reporte del autor (16 jul): la videollamada real entre los dos móviles **funcionó bien**
+con los ajustes del 6 jul (320×240 / 12 fps / 250 kbps, descarte por grupos GOP,
+`keepScreenOn`), en red **mixta** (un móvil en WiFi y el otro en datos móviles) ✅. El vídeo es un **toggle dentro de la llamada de voz**: la llamada
+arranca como audio y cualquiera enciende su cámara con **🎥 Vídeo** (canales
+independientes: si el vídeo falla, la voz sigue). Cubierto por `TestVideoStreamEcho` (Go)
+y `CallServiceTest` (vídeo E2EE bidireccional + descarte por congestión). Si en llamadas
+futuras aparecieran entrecortes: anotar si era WiFi o datos y bajar a 8 fps / 180 kbps
+(la adaptación automática de bitrate es 7d).
+
+<!-- Historial 6 jul: -->
+**1.ª prueba en vivo (6 jul): entrecortes** — imagen pixelada/congelada y la VOZ también se
+congelaba (el vídeo a 640×480/500kbps saturaba el túnel wss relayed que comparte con el
+audio, y el descarte de frames sueltos corrompía el H.264); y **la pantalla se apagaba y la
+llamada se cerraba** (el OEM suspende la red con pantalla apagada). **Ajustes aplicados el
+mismo día**: vídeo a **320×240 / 12 fps / 250 kbps, keyframe cada 1 s**; descarte **por
+grupos** bajo congestión (si la red no da abasto se tira todo hasta el próximo keyframe →
+congela limpio y se recompone, en vez de pixelar; y la cola corta deja respirar al audio);
+y **la pantalla se mantiene encendida durante la llamada** (`keepScreenOn`).
+
+Checklist original (por si algún matiz — cambio de cámara §11.7, controles/PiP §11.8,
+orientación — no se probó explícitamente en la sesión del 16 jul):
+
+1. A llama a B (voz normal); B acepta → cronómetro.
+2. A toca **🎥 Vídeo** → concede el permiso de cámara si lo pide.
+   - [ ] En A aparece su PiP ("Enviando tu cámara…" hasta que B encienda la suya).
+   - [ ] En B aparece el vídeo de A a pantalla completa (fondo negro) con el nombre arriba.
+3. B toca **🎥 Vídeo** también.
+   - [ ] Ambos se ven (remoto grande + propio en PiP). Apuntar latencia percibida y fluidez.
+   - [ ] La voz sigue clara mientras hay vídeo (el audio va por su propio canal).
+4. A toca **🎥 Apagar**.
+   - [ ] En B desaparece el vídeo de A (vuelve a "pantalla de voz" si B no envía); la
+     llamada sigue.
+5. Colgar en cualquiera termina limpio (sin vídeo colgado ni cámara encendida).
+6. Anotar si la imagen sale girada (la rotación anunciada es la del sensor; el ajuste
+   fino de orientación/espejo queda pendiente de 7d) y si hay tirones vía relay (bajar
+   bitrate si hace falta).
+7. - [ ] **(7d, APK 12 jul) Cambio de cámara**: con tu vídeo encendido, tocar **Cámara**
+     (botón redondo) → pasa a la trasera (y de vuelta). En el receptor la imagen se
+     recompone en ~1 s (nuevo SPS/PPS en banda re-crea su decoder) y la voz no se corta.
+8. - [ ] **(UI-4, APK 12 jul) Controles en vídeo**: durante el vídeo, un toque en la
+     pantalla oculta/muestra los controles (se auto-ocultan a los 4 s); el **PiP propio se
+     arrastra** con el dedo y queda dentro de la pantalla.
+
+## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
+Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
+directa (DCUtR) o se queda en relay.
+
+1. - [ ] Con ambos móviles en datos móviles (operadoras distintas), enviar mensajes y revisar
+     el diagnóstico: ¿aparece conexión directa o todo va por relay/buzón?
+2. - [ ] Medir latencia directa vs. relay.
+
+---
+
+## Verificado en 1 móvil (no requiere el segundo)
+- **Preparación para Play (23 jul)**: AAR regenerado con alineación de **16 KB**
+  (`-extldflags=-Wl,-z,max-page-size=16384`; las 4 ABIs a `0x4000`, `zipalign -c -P 16` OK) y
+  **copia automática de Google desactivada** (`allowBackup="false"`; `dumpsys package` ya no
+  lista `ALLOW_BACKUP`). Con el AAR nuevo instalado en el TECNO: la app arranca, el estado es
+  **"conectado"** (DHT), los contactos siguen y las vistas previas descifran. AAB de release
+  firmado regenerado (~82 MB) y verificado por dentro. Checklist completo del lanzamiento en
+  [PLAY-STORE.md](PLAY-STORE.md).
+- **No puedes añadirte a ti mismo (23 jul)**: `ChatService.addContact` rechaza el PeerID
+  propio (`require` → `IllegalArgumentException`) y `ChatViewModel` muestra el motivo exacto;
+  además, si el PeerID ya estaba guardado con otro nombre, avisa del renombrado en vez de
+  heredar el chat anterior en silencio. Verificado en el TECNO por adb: Nuevo contacto →
+  nombre "PruebaAutoAlta" + PeerID propio → **"Ese es tu propio PeerID: pide a tu contacto
+  el suyo"** en rojo bajo la barra y **no** se crea el contacto. Unit test
+  `addContact rejects your own peerId`. Nota: esto retira el truco de auto-envío que se usaba
+  para probar el buzón en un solo móvil (ya cubierto por tests de Go y `ChatServiceTest`).
+- **Vaciar chat / eliminar contacto (17 jul)**: pulsación larga en la lista → diálogo
+  "Vaciar chat / Eliminar contacto", y menú **⋮** en la barra del chat con las mismas
+  acciones; ambas piden confirmación destructiva. Verificado por adb en el TECNO con un
+  contacto desechable ("BorrarTest", PeerID del nodo Windows): long-press → vaciar →
+  confirmación; abrir su chat → ⋮ → eliminar → vuelve a la lista y la fila desaparece;
+  Lucia y SinVerificar intactos. Todo local (sin protocolo); unit tests en
+  `ChatServiceTest` + `DiskFileStoreTest`. **Falta un matiz en vivo**: vaciar un chat que
+  tenga **archivos/notas de voz reales** y comprobar con `run-as` que los ficheros de
+  `files/krypta_files/` (ensamblados y copias en `sent/`) desaparecen del disco — la
+  verificación en vivo se hizo sobre un chat sin adjuntos (el borrado de ficheros está
+  cubierto por `DiskFileStoreTest`, pero no se observó aún en el móvil).
+- **Selector de tema (16 jul)**: Ajustes → tarjeta "Apariencia" con 3 botones
+  (Sistema/Claro/Oscuro; por defecto Sistema). `ThemePreference` (pref en `krypta_settings`)
+  + `resolveDark` (puro, `ThemePreferenceTest`). Verificado en el TECNO: pulsar "Claro" pasa
+  toda la app a tema claro **en caliente** (sin reiniciar) y marca la opción; "Sistema"
+  vuelve a seguir el modo del móvil.
+- **Ayuda in-app (16 jul)**: icono **?** en la barra superior de conversaciones y de Ajustes
+  → pantalla "Ayuda" con un FAQ corto en tarjetas desplegables agrupadas por categoría
+  (`ui/HelpScreen.kt` + `ui/HelpContent.kt`). Ayuda contextual: icono **ⓘ** en las tarjetas
+  "Tu identidad" y "Recepción en segundo plano" de Ajustes → diálogo breve. Verificado en el
+  TECNO (tema oscuro): abrir la Ayuda, desplegar una pregunta (chevron rota, respuesta
+  aparece), y el diálogo "Tu PeerID" con botón "Entendido". Datos del FAQ cubiertos por
+  `HelpContentTest`. Onboarding de primera vez: pendiente (fase posterior, acordado).
+- **Formas de avatar por PeerID (16 jul)**: en la lista de conversaciones el avatar de cada
+  contacto ya no es solo un círculo — la **forma** (círculo, squircle, hexágono, pentágono,
+  octágono) se deriva del PeerID igual que el color (`ui/theme/AvatarShape.kt`). Verificado
+  en el TECNO: Lucia → pentágono redondeado, SinVerificar → squircle, ambos con la inicial
+  bien centrada. **Falta comprobar con un contacto EN LÍNEA** que el punto verde de "en
+  línea" (reubicado a (0.70, 0.84) del recuadro) quede sobre el cuerpo de una forma no
+  circular (hexágono/pentágono) y no flotando en la esquina vacía — no había ningún contacto
+  conectado durante la verificación.
+- **Bloqueo de la app (16 jul)**: Ajustes → "Bloqueo de la app" → interruptor "Pedir
+  desbloqueo para entrar" (huella/cara/PIN del sistema, BiometricPrompt; Krypta no guarda
+  secretos) + selector "Al instante / 1 min / 5 min". Verificado por adb en el TECNO: el
+  interruptor abre el diálogo nativo (huella + "Usar patrón"), cancelar no lo activa; con
+  la pref forzada, el arranque en frío cae en "Krypta está bloqueada" (sin filtrar
+  contenido), el prompt salta solo, cancelar mantiene el bloqueo y "Desbloquear" lo
+  relanza. **Ciclo con dedo real VERIFICADO por el autor (16 jul)**: activar autenticando,
+  bloquear/desbloquear con huella — "marchó bien" (probado con gracia de 1 min); después
+  lo dejó desactivado por preferencia personal, la función queda opcional y operativa.
+  (Matiz no aislado explícitamente: atender una llamada entrante con la app bloqueada —
+  el gate va tras la rama de CallScreen, cubierto por diseño.)
+- **Rediseño de UI Material 3 (12 jul)**: tema verde-teal claro/oscuro, icono de launcher
+  nuevo, lista de conversaciones (avatar, vista previa descifrada, hora, badge de no leídos
+  que se limpia al abrir el chat), pantalla de Ajustes con los controles técnicos, chat con
+  burbujas asimétricas. Verificado en el TECNO en ambos temas; **sin cambio de protocolo ni
+  de esquema de DB** (mezclar versiones no rompe nada, pero conviene actualizar ambos).
+  El APK del 12 jul está en `~/Desktop/krypta-arm64-debug.apk`.
+- **UI-3 del chat (12 jul)**: separadores por día ("Hoy"/"Ayer"/"lunes 6 de julio"),
+  agrupación de burbujas consecutivas, hora + checks dentro de cada burbuja, hoja inferior
+  de adjuntos (Foto/Archivo), y nota de voz **mantener-y-soltar** (mantener graba, soltar
+  envía, <1 s se descarta; toque corto = grabación fijada con Cancelar/Enviar). Verificado
+  en vivo en el TECNO, incluida una nota enviada por mantener-y-soltar al contacto propio.
+  De paso se cazó y arregló un bug del gesto: si la fila de entrada se sustituía durante la
+  grabación mantenida, el gesto se cancelaba y "soltar" no enviaba.
+- **7d proximidad (12 jul)**: en llamada de voz (sin altavoz/vídeo) se adquiere el
+  `PROXIMITY_SCREEN_OFF_WAKE_LOCK` y se libera al colgar — verificado por `dumpsys power`
+  (ACQ al llamar, REL al colgar). Falta la prueba física (oreja → pantalla se apaga, se
+  reenciende al alejar) en la llamada real de dos móviles (§9.9).
+- **Multi-nodo, lado cliente (12 jul)**: el campo de bootstrap acepta varios nodos (uno
+  por línea); el bridge deposita en el primero vivo y retira/escucha de todos. Verificada
+  la **regresión con un solo nodo** (conecta y envía igual que antes); el **failover real**
+  se probará con el segundo nodo. **(16 jul) El segundo nodo está DESPLEGADO**: el PC
+  Windows del autor, expuesto como `krypta2.neto.chat` (runbook en la sección "Segundo nodo
+  en Windows" de [infra/node/README.md](../infra/node/README.md)). PeerID
+  `12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm`; verificado desde la Mac (conexión
+  libp2p completa por wss + sondas de buzón y wake OK). `DEFAULT_BOOTSTRAP` ya trae ambos
+  nodos; en el TECNO se borró la pref antigua de un solo nodo para que caiga al default
+  (conectado ✓). **Queda la prueba de failover con 2 móviles** (Fase C del runbook): ambos
+  con el APK del 16 jul (si el 2.º móvil guardó bootstrap manual alguna vez, pegar las dos
+  líneas), apagar el nodo de la Mac (`launchctl unload …chat.neto.krypta.node.plist`),
+  enviar con el receptor cerrado → debe salir SENT (buzón del nodo Windows) y notificar al
+  abrir; recargar el nodo de la Mac al acabar.
+  **(23 jul) El intento de prueba con una segunda persona ("Jimena") NO llegó a ejecutarse**:
+  el PeerID dado de alta era el **del propio TECNO**, no el de ella. Como `Contact.id` **es**
+  el PeerID, el alta hizo `upsert` sobre el contacto de auto-envío que ya existía de las
+  pruebas de buzón — heredó su chat (mensajes del 4–12 jul, incluido "prueba-multinodo") y
+  parecía un contacto real, pero los mensajes iban al propio móvil. Diagnosticado sacando
+  `databases/krypta.db` por `run-as` y derivando el PeerID propio de `krypta_identity.xml`
+  (coincidían). **Arreglado el mismo día** (ver la entrada del guardarraíl más abajo). Para
+  rehacer la prueba: eliminar ese contacto (long-press → Eliminar contacto), pedirle a ella
+  su PeerID **desde su pantalla de Ajustes** y volver a darla de alta; la verificación de
+  identidad hay que repetirla (el escudo actual no vale, se comparó contra uno mismo).
+- **Respaldo de identidad (12 jul)**: ciclo completo en el TECNO — Ajustes → "⬆ Exportar
+  copia" (frase-clave + SAF a Descargas, archivo `.krbk` de ~289 B) → "⬇ Importar copia"
+  (mismo archivo + frase-clave) → diálogo "Identidad restaurada" con el PeerID → "Cerrar
+  Krypta" → al reabrir, **mismo PeerID**, contactos intactos y vistas previas descifrando
+  (secretos re-derivados OK). La restauración **en un móvil distinto** (el caso real) se
+  probará cuando toque migrar/preparar un segundo dispositivo; los mensajes antiguos no
+  viajan en la copia (solo identidad + contactos), y una frase-clave errónea se rechaza
+  (cubierto por `IdentityBackupTest`).
+- **QR de verificación** (4 jul): el QR se genera y renderiza; el botón "Escanear" pide
+  permiso de cámara y abre la `CaptureActivity` de ZXing. Falta el escaneo real entre 2
+  móviles (§2).
+- **Migraciones Room** (4 jul): un contacto (con su flag `verified`) **sobrevive al salto
+  v3→v4** instalando encima sin desinstalar — ya no se pierden datos al actualizar. Nota: al
+  cambiar el id de un canal de notificación (no la DB) los datos igual se conservan; lo que
+  antes borraba era `fallbackToDestructiveMigration`, ya retirado.
+- **Banner "identidad sin verificar"** (4 jul): aparece en el chat de un contacto no
+  verificado y desaparece al verificar (Camarada verificado no lo muestra). Clicable → abre
+  el diálogo de verificación.
+- **Intervalo WAN adaptativo (batería)** (4 jul): con la app conectada al nodo real, el
+  diagnóstico muestra "wake activo: bucle relajado (180s)"; sin wake vuelve a 30 s. Falta
+  medir el ahorro real de batería en una sesión larga (no bloqueante).
+
+## Ya verificado en vivo con 2 móviles (histórico)
+- **Videollamada (7c)** (16 jul): llamada de voz + 🎥 vídeo entre los dos móviles, todo
+  funcionó bien con los ajustes del 6 jul (320×240/12fps/250kbps, descarte GOP,
+  `keepScreenOn`), en red **mixta** (WiFi ↔ datos móviles). ✅ (§11)
+- **Sesión completa 5 jul**: mensajes ✅ (con READ, §4), imágenes ✅, archivos multi-trozo ✅
+  (§6), notas de voz 2/3 (§7), primera llamada de voz real: clara y sin eco pero corte a
+  ~20 s (§9, causa y fix identificados), latencia en datos móviles p95=220 ms (§8). ✅
+- **Imágenes (v1 en línea) + notificación** (4 jul): foto elegida → comprimida → enviada →
+  **la colaboradora la recibe** y la notificación funciona. ✅ (antiguo §6)
+- **Archivo PDF troceado (2 trozos, 84 KB)** (4 jul): llegó y fue **leído**. El caso
+  multi-trozo perdido (.bin de 150 KB) sigue abierto en §6.
+- **Mensajería WAN por Circuit Relay v2 tras NAT** (26 jun–1 jul): mensaje `SENT` por relay.
+- **Buzón store-and-forward (entrega offline)** (3 jul): receptor cerrado → `SENT` vía buzón
+  → al abrir, el mensaje llega y descifra.
+- **Wake (aviso instantáneo)** (3 jul): depósito → retirada en ~3 s; con la app cerrada, la
+  notificación (versión previa) llegó. *La nueva UX de notificación (§1) reemplaza esa parte
+  y vuelve a estar pendiente.*

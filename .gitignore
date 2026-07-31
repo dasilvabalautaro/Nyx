@@ -1,0 +1,43 @@
+# --- Gradle / Android Studio ---
+*.iml
+.gradle
+.kotlin
+build/
+/captures
+.externalNativeBuild
+.cxx
+.DS_Store
+
+# Rutas locales de la máquina (SDK), generado por Android Studio.
+local.properties
+
+# --- Secretos ---
+# Credenciales de firma de release. El keystore vive fuera del repo
+# (~/keystores/krypta/krypta.jks); ver hasReleaseKeystore en app/build.gradle.kts.
+/keystore.properties
+*.jks
+*.keystore
+
+# --- Artefactos de compilación fuera de build/ ---
+# APK/AAB de release que Android Studio deja en app/release/.
+/app/release/
+
+# El AAR de gomobile (~75 MB) NO se versiona: se regenera con
+# native-bridge/libp2p/build-aar.sh (necesita Go + gomobile + NDK 26.1.10909125).
+# Un clon limpio debe ejecutarlo ANTES del primer ./gradlew :app:assembleDebug.
+/native-bridge/libs/*.aar
+/native-bridge/libs/*-sources.jar
+
+# Binarios del nodo infra (salida de `go build`, ~190 MB). Se regeneran con los
+# comandos de infra/node/README.md.
+/infra/node/node
+/infra/node/dist/
+
+# --- IDE (ficheros por usuario) ---
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/deploymentTargetSelector.xml

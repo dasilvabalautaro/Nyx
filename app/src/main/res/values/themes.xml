@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose pinta toda la UI; este tema solo evita el destello blanco/negro del
+         windowBackground antes del primer frame (hay variante values-night). -->
+    <style name="Theme.Krypta" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/krypta_window_background</item>
+    </style>
+</resources>

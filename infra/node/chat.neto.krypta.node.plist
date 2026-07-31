@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>chat.neto.krypta.node</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/davidsilva/krypta/krypta-node-catalina</string>
+    <string>-listen</string><string>/ip4/0.0.0.0/tcp/4001</string>
+    <string>-wsport</string><string>8081</string>
+    <string>-key</string><string>/Users/davidsilva/krypta/node.key</string>
+  </array>
+  <key>RunAtLoad</key>        <true/>
+  <key>KeepAlive</key>        <true/>
+  <key>StandardOutPath</key>  <string>/Users/davidsilva/krypta/node.log</string>
+  <key>StandardErrorPath</key><string>/Users/davidsilva/krypta/node.err</string>
+</dict>
+</plist>

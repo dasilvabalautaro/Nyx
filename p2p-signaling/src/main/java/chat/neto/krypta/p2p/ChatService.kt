@@ -1,0 +1,813 @@
+package chat.neto.krypta.p2p
+
+import chat.neto.krypta.core.FileStore
+import chat.neto.krypta.core.ISignalingService
+import chat.neto.krypta.core.KeyExchange
+import chat.neto.krypta.core.MessageCipher
+import chat.neto.krypta.core.SignalingEvent
+import chat.neto.krypta.core.model.Contact
+import chat.neto.krypta.core.model.Message
+import chat.neto.krypta.core.model.MessageContent
+import chat.neto.krypta.core.model.MessageStatus
+import chat.neto.krypta.core.repository.ContactRepository
+import chat.neto.krypta.core.repository.MessageRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.LocalTime
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Estado de la conexión WAN (a la DHT vía el nodo bootstrap). */
+enum class WanStatus { DISABLED, CONNECTING, CONNECTED, ERROR }
+
+/** Resultado de [ChatService.setBootstrap], para dar feedback inmediato en la UI. */
+enum class BootstrapResult { OK, CLEARED, INVALID }
+
+/**
+ * Validación *ligera* de un multiaddr de bootstrap: debe empezar por `/` y contener un
+ * componente `/p2p/<PeerID>` no vacío (p. ej. `/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooW…`
+ * o `/ip4/1.2.3.4/tcp/4001/p2p/12D3KooW…`). No valida el PeerID ni resuelve el host —de eso se
+ * encarga `connectDht` al conectar—; solo evita persistir basura obvia y dar feedback inmediato.
+ */
+fun isValidBootstrapAddr(addr: String): Boolean {
+    val a = addr.trim()
+    return a.startsWith("/") && a.substringAfter("/p2p/", "").isNotBlank()
+}
+
+/**
+ * Normaliza una lista de bootstraps (uno por línea): recorta cada línea y descarta las
+ * vacías. Devuelve null si alguna línea no vacía es inválida ([isValidBootstrapAddr]).
+ * Multi-nodo: el bridge conecta la DHT y reserva relay en TODOS, deposita el buzón en el
+ * primero vivo y lo retira de TODOS — un nodo caído deja de ser un punto único de fallo.
+ */
+fun normalizeBootstrapList(raw: String): String? {
+    val lines = raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    if (lines.isEmpty() || lines.any { !isValidBootstrapAddr(it) }) return null
+    return lines.joinToString("\n")
+}
+
+/**
+ * Orquesta la mensajería de extremo a extremo cerrando el lazo de dominio:
+ * cifra (E2EE) → persiste (Room) → envía por la capa de señalización; y a la inversa,
+ * recibe → resuelve el contacto por PeerID → persiste. Los `Message` guardan siempre el
+ * `ciphertext`; el texto plano solo se obtiene bajo demanda con [decrypt].
+ */
+@Singleton
+class ChatService @Inject constructor(
+    private val signaling: ISignalingService,
+    private val cipher: MessageCipher,
+    private val messages: MessageRepository,
+    private val contacts: ContactRepository,
+    private val keyExchange: KeyExchange,
+    private val rendezvous: RendezvousService,
+    private val fileStore: FileStore,
+    private val scope: CoroutineScope,
+) {
+    private val _onlinePeers = MutableStateFlow<Set<String>>(emptySet())
+    /** PeerIDs actualmente conectados (p. ej. encontrados por mDNS en LAN). */
+    val onlinePeers: StateFlow<Set<String>> = _onlinePeers.asStateFlow()
+
+    private val _wanStatus = MutableStateFlow(WanStatus.DISABLED)
+    /** Estado de la conexión a la DHT (WAN). */
+    val wanStatus: StateFlow<WanStatus> = _wanStatus.asStateFlow()
+
+    private val _log = MutableStateFlow<List<String>>(emptyList())
+    /** Registro de diagnóstico (últimas ~30 líneas). */
+    val log: StateFlow<List<String>> = _log.asStateFlow()
+
+    private val _incoming = MutableSharedFlow<Pair<Contact, Message>>(extraBufferCapacity = 16)
+    /** Mensajes entrantes ya persistidos (contacto + mensaje) — para notificaciones. */
+    val incoming: Flow<Pair<Contact, Message>> = _incoming
+
+    private val _callSignals =
+        MutableSharedFlow<Pair<Contact, MessageEnvelope.Decoded.Call>>(extraBufferCapacity = 16)
+    /** Señales de llamada entrantes (invite/accept/…), descifradas. Las consume CallService. */
+    val callSignals: Flow<Pair<Contact, MessageEnvelope.Decoded.Call>> = _callSignals
+
+    private fun logLine(msg: String) {
+        val line = "${LocalTime.now().withNano(0)}  $msg"
+        runCatching { android.util.Log.i("KryptaDiag", msg) } // a logcat; no-op en tests JVM
+        _log.update { (it + line).takeLast(30) }
+    }
+
+    /** Escribe una línea en el panel de diagnóstico desde fuera (p. ej. datos del dispositivo). */
+    fun diagnose(msg: String) = logLine(msg)
+
+    private fun short(peerId: String) = if (peerId.length > 10) "…${peerId.takeLast(8)}" else peerId
+
+    init {
+        // Sobres del buzón: se procesan AQUÍ, síncronos, y solo se confirma (ack → borrado
+        // en el nodo) lo que persistió sin error; un fallo deja el sobre en el buzón y el
+        // nodo lo reentrega (dedup por id). Es la garantía que faltaba para los trozos de
+        // archivo: antes se ack'eaba antes de persistir y una muerte del proceso los perdía.
+        signaling.setMailboxProcessor { peerId, ciphertext, envelopeId, ts ->
+            val result = runCatching { onReceived(peerId, ciphertext, envelopeId, ts) }
+            result.onSuccess { msg ->
+                if (msg != null) logLine("← mensaje de ${short(peerId)} (buzón)")
+            }.onFailure {
+                logLine("buzón: sobre ${envelopeId.take(8)} sin persistir (reintentará): ${(it.message ?: "$it").take(60)}")
+            }
+            result.isSuccess
+        }
+        scope.launch {
+            signaling.events.collect { event ->
+                when (event) {
+                    is SignalingEvent.MessageReceived -> {
+                        // runCatching: un fallo puntual (p. ej. Room) no debe matar el
+                        // bucle de eventos entero.
+                        val msg = runCatching { onReceived(event.fromContactId, event.ciphertext) }
+                            .onFailure { logLine("⚠ entrante no persistido: ${(it.message ?: "$it").take(60)}") }
+                            .getOrNull()
+                        // msg == null puede ser un acuse de lectura (no visible) o un
+                        // remitente desconocido; no lo etiquetamos como mensaje.
+                        if (msg != null) {
+                            logLine("← mensaje de ${short(event.fromContactId)}")
+                        }
+                    }
+                    is SignalingEvent.PeerFound -> {
+                        _onlinePeers.update { it + event.contactId }
+                        logLine("● en línea: ${short(event.contactId)}")
+                    }
+                    is SignalingEvent.WakeReceived -> {
+                        // El nodo avisa de correo (o el stream de wake reconectó): retirar ya.
+                        fetchMailbox()
+                    }
+                    is SignalingEvent.Failure ->
+                        logLine("⚠ ${event.cause.message ?: event.cause}")
+                }
+            }
+        }
+    }
+
+    private var wanJob: Job? = null
+
+    @Volatile
+    private var bootstrapAddr: String? = null
+
+    private val startedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Arranca el nodo y el descubrimiento: host + mDNS (LAN, pruebas) y, si hay un nodo
+     * bootstrap configurado, lanza el bucle WAN (DHT + rendezvous, auto-reparable).
+     * Idempotente: lo llaman tanto el `ChatViewModel` (UI) como el `KryptaForegroundService`
+     * y solo el primero hace el trabajo.
+     */
+    suspend fun start() {
+        if (!startedOnce.compareAndSet(false, true)) return
+        // El arranque del host/mDNS es best-effort: si falla (p. ej. en datos móviles, sin
+        // interfaz multicast para mDNS) NO debe impedir el WAN, que es el camino principal de
+        // Krypta. El bucle WAN es auto-reparable, así que reintentará `connectDht` si hiciera
+        // falta. Por eso el WAN se arranca aunque `signaling.start()` haya lanzado.
+        runCatching { signaling.start() }.onFailure { logLine("host/mDNS: ${it.message ?: it}") }
+        runCatching { signaling.bootstrap() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::startWan)
+    }
+
+    suspend fun bootstrap(): String? = signaling.bootstrap()
+
+    /**
+     * Configura el/los nodos bootstrap WAN (uno por línea) y arranca/reanuda el
+     * descubrimiento por rendezvous.
+     * - Vacío → modo **solo LAN/mDNS**: persiste `""` y **detiene el bucle WAN en vivo**.
+     * - Alguna línea inválida ([normalizeBootstrapList]) → se **rechaza** entera: ni se
+     *   persiste ni se arranca.
+     * - Válido → persiste la lista normalizada y (re)arranca el WAN, que recoge los nodos
+     *   nuevos en su próximo ciclo.
+     */
+    suspend fun setBootstrap(addr: String): BootstrapResult {
+        if (addr.isBlank()) {
+            signaling.setBootstrap("")
+            stopWan()
+            return BootstrapResult.CLEARED
+        }
+        val normalized = normalizeBootstrapList(addr)
+        if (normalized == null) {
+            logLine("bootstrap inválido (esperado /…/p2p/<PeerID>, uno por línea)")
+            return BootstrapResult.INVALID
+        }
+        signaling.setBootstrap(normalized)
+        startWan(normalized)
+        return BootstrapResult.OK
+    }
+
+    private fun startWan(bootstrap: String) {
+        bootstrapAddr = bootstrap
+        if (wanJob == null) wanJob = scope.launch { wanLoop() }
+        // Stream ligero de wake: el nodo avisa al instante cuando hay correo en el buzón.
+        scope.launch { runCatching { signaling.startWake() } }
+    }
+
+    /** Detiene el bucle WAN y vuelve a DISABLED (solo LAN/mDNS). */
+    private fun stopWan() {
+        wanJob?.cancel()
+        wanJob = null
+        bootstrapAddr = null
+        scope.launch { runCatching { signaling.stopWake() } }
+        _wanStatus.value = WanStatus.DISABLED
+        logLine("WAN: desactivado (solo LAN)")
+    }
+
+    /**
+     * Bucle WAN **auto-reparable**: cada ciclo (re)conecta a la DHT vía el nodo bootstrap
+     * (`connectDht` es idempotente) — esto sana la conexión wss que Cloudflare recicla
+     * (~cada 10 min en plan Free) — y, si hay conexión, anuncia/busca a cada contacto por su
+     * rendezvous del día `HKDF(sharedSecret, fecha)`.
+     */
+    private suspend fun wanLoop() {
+        while (true) {
+            val bootstrap = bootstrapAddr
+            if (bootstrap != null) {
+                val wasConnected = _wanStatus.value == WanStatus.CONNECTED
+                if (!wasConnected) _wanStatus.value = WanStatus.CONNECTING
+                val result = runCatching { signaling.connectDht(bootstrap) }
+                if (result.isSuccess) {
+                    if (!wasConnected) logLine("DHT: conectado")
+                    _wanStatus.value = WanStatus.CONNECTED
+                    logRelayStatus()
+                    fetchMailbox()
+                    announceAndFind()
+                } else {
+                    _wanStatus.value = WanStatus.ERROR
+                    logLine("DHT: sin conexión, reintentando — ${result.exceptionOrNull()?.message ?: ""}")
+                }
+            }
+            // Intervalo adaptativo (batería): si el stream de wake está abierto, los mensajes
+            // llegan al instante empujados por el nodo, así que el bucle puede espaciarse; si no
+            // (LAN-only o wake caído), se mantiene ágil para sondear el buzón y redescubrir.
+            val wakeUp = runCatching { signaling.wakeConnected() }.getOrDefault(false)
+            val interval = if (wakeUp) WAKE_IDLE_MS else REDISCOVER_MS
+            if (wakeUp != lastWakeUp) {
+                lastWakeUp = wakeUp
+                logLine(if (wakeUp) "wake activo: bucle relajado (${WAKE_IDLE_MS / 1000}s)" else "wake inactivo: bucle ágil (${REDISCOVER_MS / 1000}s)")
+            }
+            // Espera interrumpible: kickWan() (p. ej. al cambiar de red) adelanta el ciclo.
+            withTimeoutOrNull(interval) { wanKick.receive() }
+        }
+    }
+
+    @Volatile
+    private var lastWakeUp: Boolean? = null
+
+    private val wanKick = Channel<Unit>(Channel.CONFLATED)
+
+    /**
+     * Adelanta el próximo ciclo del bucle WAN (reconexión + rendezvous + buzón) sin esperar
+     * los 30 s — p. ej. cuando el sistema notifica un cambio de red (WiFi↔datos). No-op si
+     * la WAN está desactivada.
+     */
+    fun kickWan() {
+        wanKick.trySend(Unit)
+    }
+
+    /**
+     * Un ciclo **puntual y síncrono** (reconecta DHT + retira el buzón), para el "latido" por
+     * AlarmManager: en móviles que **suspenden la red en segundo plano** (Transsion/TECNO,
+     * etc.) el stream de wake queda dormido; al despertar el sistema el latido descarga el
+     * buzón y dispara el aviso. No hace nada si la WAN está desactivada.
+     */
+    suspend fun pollOnce() {
+        val bootstrap = bootstrapAddr ?: return
+        runCatching { signaling.connectDht(bootstrap) }
+        fetchMailbox()
+    }
+
+
+    /**
+     * Registra si el host ya tiene una **reserva de relay** (una dirección `/p2p-circuit` entre
+     * sus multiaddrs). Es la condición para ser alcanzable tras NAT: sin ella, el otro contacto
+     * te encuentra por rendezvous pero "sin direcciones" y el envío falla. Solo loguea al cambiar.
+     */
+    /**
+     * Renueva la reserva de Circuit Relay v2 cada ciclo (mantiene el slot activo en el nodo de
+     * infra, para que reenvíe conexiones hacia nosotros tras NAT). La dirección /p2p-circuit ya
+     * la anuncia el propio host (AddrsFactory en Go). Loguea solo al cambiar el estado.
+     */
+    private suspend fun logRelayStatus() {
+        val res = runCatching { signaling.reserveRelay() }.getOrElse { it.message ?: "error" }
+        val state = if (res.startsWith("OK")) "OK (alcanzable por circuit)" else res
+        if (state != lastReserveResult) {
+            lastReserveResult = state
+            logLine("relay: $state")
+        }
+    }
+
+    @Volatile
+    private var lastReserveResult: String? = null
+
+    private suspend fun announceAndFind() {
+        val targets = runCatching { contacts.observeAll().first() }
+            .getOrDefault(emptyList())
+            .filter { it.sharedSecret != null }
+        if (targets.isNotEmpty()) logLine("rendezvous: anunciando a ${targets.size} contacto(s)")
+        for (contact in targets) {
+            val rdv = rendezvous.rendezvousFor(contact.sharedSecret!!)
+            runCatching {
+                signaling.announce(rdv)
+                val found = signaling.findPeers(rdv)
+                val hit = found.any { it == contact.peerId }
+                if (hit != lastFound[contact.peerId]) {
+                    lastFound[contact.peerId] = hit
+                    logLine(if (hit) "rendezvous: ✓ encontrado ${short(contact.peerId)}" else "rendezvous: aún no encuentro ${short(contact.peerId)}")
+                }
+            }.onFailure { logLine("rendezvous ${short(contact.peerId)}: ${it.message}") }
+        }
+    }
+
+    private val lastFound = mutableMapOf<String, Boolean>()
+
+    /**
+     * Retira los mensajes pendientes del buzón del nodo (entrega offline). Cada mensaje
+     * llega por el mismo flujo de eventos que los directos y se persiste allí; aquí solo
+     * se dispara la retirada y se loguea el total.
+     */
+    private suspend fun fetchMailbox() {
+        runCatching { signaling.fetchMailbox() }
+            .onSuccess { n ->
+                lastMailboxError = null
+                if (n > 0) logLine("buzón: $n mensaje(s) recogido(s)")
+            }
+            .onFailure {
+                // Solo al cambiar, para no llenar el diagnóstico en cada ciclo del wanLoop.
+                val msg = it.message?.take(80) ?: it.toString()
+                if (msg != lastMailboxError) {
+                    lastMailboxError = msg
+                    logLine("buzón: $msg")
+                }
+            }
+    }
+
+    @Volatile
+    private var lastMailboxError: String? = null
+
+    /**
+     * Cifra [plaintext] para [contact], lo persiste (PENDING) y lo envía. Si el envío
+     * directo falla (peer offline / NAT sin ruta), cae al **buzón** store-and-forward del
+     * nodo (entrega offline) → `SENT`. Solo si el buzón también falla queda **FAILED** —
+     * nunca se propaga la excepción, para no tumbar la app. Devuelve el estado final.
+     */
+    suspend fun send(contact: Contact, plaintext: ByteArray): Message {
+        val secret = requireNotNull(contact.sharedSecret) { "contact ${contact.id} has no shared secret" }
+        // El ciphertext cifra un SOBRE que lleva el id del mensaje, para que el receptor
+        // pueda acusar su lectura citándolo (marca de leído).
+        val msgId = UUID.randomUUID().toString()
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText(msgId, plaintext))
+        val message = Message(
+            id = msgId,
+            conversationId = contact.id,
+            senderId = SELF,
+            ciphertext = ciphertext,
+            timestamp = System.currentTimeMillis(),
+            status = MessageStatus.PENDING,
+        )
+        messages.save(message)
+        return transmit(contact, message, ciphertext)
+    }
+
+    /**
+     * Envía una **imagen** (JPEG ya comprimido, ≤ límite del buzón) a [contact]. Igual que
+     * [send] pero el sobre es de tipo imagen; viaja por el mismo camino (directo → buzón).
+     */
+    suspend fun sendImage(contact: Contact, jpeg: ByteArray): Message {
+        val secret = requireNotNull(contact.sharedSecret) { "contact ${contact.id} has no shared secret" }
+        val msgId = UUID.randomUUID().toString()
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeImage(msgId, jpeg))
+        val message = Message(
+            id = msgId,
+            conversationId = contact.id,
+            senderId = SELF,
+            ciphertext = ciphertext,
+            timestamp = System.currentTimeMillis(),
+            status = MessageStatus.PENDING,
+        )
+        messages.save(message)
+        return transmit(contact, message, ciphertext)
+    }
+
+    /**
+     * Envía un **archivo** troceado a [contact]: anuncia la meta y manda cada trozo (≤ límite
+     * del buzón) como mensajes cifrados por el camino normal (directo → buzón). Crea UNA
+     * burbuja visible (descriptor). Si algún trozo falla → FAILED (reintentar reenvía todo).
+     * [localPath] (si el emisor conserva copia, p. ej. una nota de voz) hace la burbuja
+     * propia abrible/reproducible; los archivos del picker van sin copia en v1.
+     */
+    suspend fun sendFile(
+        contact: Contact,
+        name: String,
+        mime: String,
+        bytes: ByteArray,
+        localPath: String? = null,
+    ): Message {
+        val secret = requireNotNull(contact.sharedSecret) { "contact ${contact.id} has no shared secret" }
+        val fileId = UUID.randomUUID().toString()
+        val total = (bytes.size + CHUNK_SIZE - 1) / CHUNK_SIZE
+        val descriptor = MessageEnvelope.encodeFileDescriptor(name, mime, bytes.size.toLong(), localPath)
+        val message = Message(
+            id = fileId,
+            conversationId = contact.id,
+            senderId = SELF,
+            ciphertext = cipher.encrypt(secret, descriptor),
+            timestamp = System.currentTimeMillis(),
+            status = MessageStatus.PENDING,
+        )
+        messages.save(message)
+        return try {
+            sendRaw(contact, MessageEnvelope.encodeFileMeta(fileId, name, mime, bytes.size.toLong(), total))
+            for (i in 0 until total) {
+                val from = i * CHUNK_SIZE
+                val to = minOf(from + CHUNK_SIZE, bytes.size)
+                sendRaw(contact, MessageEnvelope.encodeFileChunk(fileId, i, bytes.copyOfRange(from, to)))
+            }
+            messages.updateStatus(fileId, MessageStatus.SENT)
+            logLine("→ archivo enviado a ${short(contact.peerId)} ($total trozos)")
+            message.copy(status = MessageStatus.SENT)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            messages.updateStatus(fileId, MessageStatus.FAILED)
+            logLine("✗ archivo no enviado a ${short(contact.peerId)}: ${sendErrorReason(e)}")
+            message.copy(status = MessageStatus.FAILED)
+        }
+    }
+
+    /**
+     * Envía una señal de llamada E2EE a [contact] (directo → buzón). [kind] ∈
+     * invite/accept/reject/hangup/busy. Lleva timestamp para descartar invites rancios.
+     */
+    suspend fun sendCallSignal(contact: Contact, kind: String, callId: String) {
+        sendRaw(contact, MessageEnvelope.encodeCall(kind, callId, System.currentTimeMillis()))
+    }
+
+    /** Persiste una fila local "📞 Llamada perdida" en el chat de [contact] y la emite. */
+    suspend fun recordMissedCall(contact: Contact) {
+        val secret = contact.sharedSecret ?: return
+        val id = UUID.randomUUID().toString()
+        val message = Message(
+            id = id,
+            conversationId = contact.id,
+            senderId = contact.id,
+            ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText(id, MISSED_CALL_TEXT.toByteArray())),
+            timestamp = System.currentTimeMillis(),
+            status = MessageStatus.DELIVERED,
+        )
+        messages.save(message)
+        _incoming.tryEmit(contact to message)
+        logLine("📞 llamada perdida de ${short(contact.peerId)}")
+    }
+
+    /** Cifra y envía un sobre "en crudo" (meta/trozo) sin crear un Message: directo → buzón. */
+    private suspend fun sendRaw(contact: Contact, envelope: ByteArray) {
+        val ciphertext = cipher.encrypt(requireNotNull(contact.sharedSecret), envelope)
+        try {
+            signaling.send(contact, ciphertext)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            signaling.sendOffline(contact, ciphertext) // fallback; si también falla, propaga
+        }
+    }
+
+    /**
+     * Sonda del gate de llamadas (Fase 7a): mide el RTT al nodo bootstrap — ida y vuelta a
+     * través de Cloudflare ≈ latencia one-way de un frame de audio relayed entre dos
+     * móviles — y escribe el resultado en el diagnóstico. Nunca lanza.
+     */
+    suspend fun latencyProbe(count: Int = 50, intervalMs: Int = 20) {
+        logLine("📞 midiendo RTT al nodo ($count pings/${intervalMs} ms)…")
+        runCatching { signaling.pingProbe(count, intervalMs) }
+            .onSuccess { logLine("📞 RTT nodo: $it") }
+            .onFailure { logLine("📞 sonda de latencia falló: ${(it.message ?: "$it").take(80)}") }
+    }
+
+    /**
+     * Reintenta enviar un mensaje **FALLIDO** (o cualquiera por id): lo vuelve a PENDING y
+     * repite el camino directo→buzón→FAILED, reusando su ciphertext ya persistido (mismo id,
+     * sin duplicar). Devuelve el mensaje con su estado final, o null si no existe.
+     */
+    suspend fun retry(contact: Contact, messageId: String): Message? {
+        val message = messages.findById(messageId) ?: return null
+        messages.updateStatus(messageId, MessageStatus.PENDING)
+        logLine("↻ reintentando a ${short(contact.peerId)}")
+        return transmit(contact, message.copy(status = MessageStatus.PENDING), message.ciphertext)
+    }
+
+    /** Transmite un mensaje ya persistido: directo → buzón (offline) → FAILED. Nunca lanza. */
+    private suspend fun transmit(contact: Contact, message: Message, ciphertext: ByteArray): Message =
+        try {
+            signaling.send(contact, ciphertext)
+            messages.updateStatus(message.id, MessageStatus.SENT)
+            logLine("→ enviado a ${short(contact.peerId)}")
+            message.copy(status = MessageStatus.SENT)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            sendViaMailbox(contact, message, ciphertext, e)
+        }
+
+    /** Fallback offline: deposita el ciphertext en el buzón del nodo → SENT, o FAILED. */
+    private suspend fun sendViaMailbox(
+        contact: Contact,
+        message: Message,
+        ciphertext: ByteArray,
+        directError: Exception,
+    ): Message = try {
+        signaling.sendOffline(contact, ciphertext)
+        messages.updateStatus(message.id, MessageStatus.SENT)
+        logLine("→ buzón para ${short(contact.peerId)} (offline)")
+        message.copy(status = MessageStatus.SENT)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        messages.updateStatus(message.id, MessageStatus.FAILED)
+        logLine(
+            "✗ no enviado a ${short(contact.peerId)}: ${sendErrorReason(directError)}; " +
+                "buzón: ${sendErrorReason(e)}"
+        )
+        message.copy(status = MessageStatus.FAILED)
+    }
+
+    /** Traduce el error de libp2p a algo legible en el panel de diagnóstico. */
+    private fun sendErrorReason(e: Throwable): String {
+        val msg = e.message ?: e.toString()
+        return when {
+            "no addresses" in msg || "all dials failed" in msg || "failed to dial" in msg ->
+                "sin ruta al contacto (NAT/relay pendiente)"
+            else -> msg.take(120)
+        }
+    }
+
+    /**
+     * Procesa un ciphertext entrante: resuelve el contacto por [peerId], descifra el sobre y
+     * ramifica: un **acuse de lectura** marca nuestros mensajes salientes como READ (no crea
+     * mensaje visible); un **texto** se persiste DELIVERED con el id del sobre (dedup ante
+     * reentregas). Si no lleva sobre (mensaje legado), se guarda como texto con [mailboxId] o
+     * un id generado. Devuelve el `Message` persistido, o null si es acuse/desconocido.
+     */
+    suspend fun onReceived(
+        peerId: String,
+        ciphertext: ByteArray,
+        mailboxId: String? = null,
+        ts: Long? = null,
+    ): Message? {
+        val contact = contacts.findByPeerId(peerId) ?: return null
+        val secret = contact.sharedSecret ?: return null
+        val decoded = runCatching { MessageEnvelope.decode(cipher.decrypt(secret, ciphertext)) }.getOrNull()
+
+        when (decoded) {
+            is MessageEnvelope.Decoded.Read -> {
+                markOutgoingRead(decoded.ids)
+                return null
+            }
+            is MessageEnvelope.Decoded.FileMeta -> {
+                val f = fileStore.onMeta(
+                    decoded.fileId,
+                    chat.neto.krypta.core.IncomingFileMeta(decoded.name, decoded.mime, decoded.size, decoded.totalChunks),
+                )
+                return f?.let { persistFile(contact, decoded.fileId, it) }
+            }
+            is MessageEnvelope.Decoded.FileChunk -> {
+                val f = fileStore.onChunk(decoded.fileId, decoded.index, decoded.bytes)
+                return f?.let { persistFile(contact, decoded.fileId, it) }
+            }
+            is MessageEnvelope.Decoded.Call -> {
+                _callSignals.tryEmit(contact to decoded)
+                return null
+            }
+            else -> Unit
+        }
+        val msgId = when (decoded) {
+            is MessageEnvelope.Decoded.Text -> decoded.id
+            is MessageEnvelope.Decoded.Image -> decoded.id
+            else -> null
+        } ?: mailboxId ?: UUID.randomUUID().toString()
+        // Eco de un mensaje propio (p. ej. un contacto que apunta a tu propio PeerID): no
+        // sobrescribas tu copia saliente con la versión entrante.
+        val existing = messages.findById(msgId)
+        if (existing != null && existing.senderId == SELF) return null
+        val message = Message(
+            id = msgId,
+            conversationId = contact.id,
+            senderId = contact.id,
+            ciphertext = ciphertext,
+            timestamp = ts ?: System.currentTimeMillis(),
+            status = MessageStatus.DELIVERED,
+        )
+        messages.save(message)
+        _incoming.tryEmit(contact to message)
+        return message
+    }
+
+    /** Persiste un archivo ya reensamblado como Message (descriptor con path) y lo emite. */
+    private suspend fun persistFile(contact: Contact, fileId: String, f: chat.neto.krypta.core.AssembledFile): Message? {
+        // No sobrescribas un envío propio con su eco (contacto que apunta a tu PeerID).
+        val existing = messages.findById(fileId)
+        if (existing != null && existing.senderId == SELF) return null
+        val descriptor = MessageEnvelope.encodeFileDescriptor(f.name, f.mime, f.size, f.path)
+        val message = Message(
+            id = fileId,
+            conversationId = contact.id,
+            senderId = contact.id,
+            ciphertext = cipher.encrypt(requireNotNull(contact.sharedSecret), descriptor),
+            timestamp = System.currentTimeMillis(),
+            status = MessageStatus.DELIVERED,
+        )
+        messages.save(message)
+        _incoming.tryEmit(contact to message)
+        logLine("← archivo de ${short(contact.peerId)}: ${f.name}")
+        return message
+    }
+
+    /** Marca como READ nuestros mensajes salientes cuyo id venga en un acuse de lectura. */
+    private suspend fun markOutgoingRead(ids: List<String>) {
+        for (id in ids) {
+            val m = messages.findById(id)
+            if (m != null && m.senderId == SELF && m.status != MessageStatus.READ) {
+                messages.updateStatus(id, MessageStatus.READ)
+            }
+        }
+    }
+
+    private val ackedReceipts = mutableSetOf<String>()
+
+    /**
+     * Envía un **acuse de lectura** de los mensajes recibidos de [contact] que aún no se han
+     * acusado (best-effort: directo, y si falla, buzón). Se llama al abrir/ver la conversación;
+     * el emisor pondrá esos mensajes en READ. No persiste nada ni crea burbujas.
+     */
+    suspend fun markConversationRead(contact: Contact) {
+        // Vista local: limpia el badge de no leídos aunque el acuse de red falle.
+        runCatching { messages.markIncomingRead(contact.id) }
+        val secret = contact.sharedSecret ?: return
+        val received = runCatching { messages.observeConversation(contact.id).first() }
+            .getOrDefault(emptyList())
+            .filter { it.senderId == contact.id }
+            .map { it.id }
+        val newIds = received.filter { it !in ackedReceipts }
+        if (newIds.isEmpty()) return
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeRead(newIds))
+        val ok = runCatching { signaling.send(contact, ciphertext); true }.getOrDefault(false) ||
+            runCatching { signaling.sendOffline(contact, ciphertext); true }.getOrDefault(false)
+        if (ok) ackedReceipts.addAll(newIds)
+    }
+
+    fun observeContacts(): Flow<List<Contact>> = contacts.observeAll()
+
+    /** PeerID de este dispositivo (para compartir con quien te quiera añadir). */
+    fun myPeerId(): String = keyExchange.localPeerId()
+
+    /** Contacto guardado con ese PeerID, si lo hay (el PeerID es la clave primaria). */
+    suspend fun findContact(peerId: String): Contact? = contacts.findById(peerId)
+
+    /**
+     * Da de alta (o actualiza) un contacto. El secreto compartido se calcula por ECDH
+     * (X25519) a partir de nuestra identidad y la clave pública embebida en su PeerID, así
+     * que basta con el PeerID — sin passphrase ni claves que pegar. Si el PeerID cambia
+     * respecto a uno ya guardado, la verificación previa deja de valer (se resetea).
+     *
+     * Añadirse a **uno mismo** se rechaza: el PeerID propio y el del contacto se copian y
+     * pegan por el mismo canal, así que pegar el propio por error es fácil — y el resultado
+     * era una conversación con uno mismo indistinguible de un contacto real (pasó en vivo el
+     * 23 jul 2026: un contacto nuevo heredó el chat del auto-envío de pruebas porque el
+     * PeerID pegado era el del propio teléfono, y los mensajes nunca llegaban a nadie).
+     */
+    suspend fun addContact(displayName: String, peerId: String): Contact {
+        require(peerId != keyExchange.localPeerId()) {
+            "Ese es tu propio PeerID: pide a tu contacto el suyo"
+        }
+        val existing = contacts.findById(peerId)
+        val contact = Contact(
+            id = peerId, // 1:1: el PeerID identifica la conversación
+            displayName = displayName,
+            peerId = peerId,
+            publicKey = ByteArray(0),
+            sharedSecret = keyExchange.sharedSecretWith(peerId),
+            verified = existing?.verified ?: false,
+        )
+        contacts.upsert(contact)
+        return contact
+    }
+
+    /**
+     * Número de seguridad anti-MITM con [contact] (estilo Signal): hash simétrico de ambos
+     * PeerIDs. Los dos contactos deben ver el mismo; cotejarlo fuera de banda descarta que
+     * alguien haya sustituido un PeerID en el canal por el que se compartió. Ver [SafetyNumber].
+     */
+    fun safetyNumber(contact: Contact): String =
+        SafetyNumber.compute(keyExchange.localPeerId(), contact.peerId)
+
+    /** Marca (o desmarca) [contact] como verificado tras cotejar el número de seguridad. */
+    suspend fun setVerified(contact: Contact, verified: Boolean) {
+        contacts.upsert(contact.copy(verified = verified))
+    }
+
+    /**
+     * Vacía el chat de [contact] **solo en este dispositivo**: borra sus mensajes de Room y
+     * los archivos locales asociados (adjuntos recibidos, copias de notas de voz enviadas).
+     * El contacto se conserva. Sin cambio de protocolo: al otro lado no le afecta.
+     */
+    suspend fun clearConversation(contact: Contact) {
+        val all = runCatching { messages.observeConversation(contact.id).first() }
+            .getOrDefault(emptyList())
+        for (m in all) {
+            val c = runCatching { content(contact, m) }.getOrNull()
+            if (c is MessageContent.File) {
+                runCatching { fileStore.deleteLocal(m.id, c.localPath) }
+            }
+        }
+        messages.deleteConversation(contact.id)
+        logLine("🗑 chat vaciado (${all.size} mensaje(s)) de ${short(contact.peerId)}")
+    }
+
+    /**
+     * Elimina [contact] y todo su chat (mensajes + archivos) de este dispositivo. El bucle
+     * WAN relee los contactos de Room en cada ciclo ([announceAndFind]), así que el
+     * rendezvous del contacto cesa solo, sin reiniciar el host. Re-añadirlo por PeerID
+     * vuelve a derivar el mismo secreto (la verificación habrá que repetirla).
+     */
+    suspend fun deleteContact(contact: Contact) {
+        clearConversation(contact)
+        contacts.delete(contact.id)
+        lastFound.remove(contact.peerId)
+        _onlinePeers.update { it - contact.peerId }
+        logLine("🗑 contacto eliminado: ${short(contact.peerId)}")
+    }
+
+    fun observeConversation(conversationId: String): Flow<List<Message>> =
+        messages.observeConversation(conversationId)
+
+    /** Último mensaje por conversación (lista de conversaciones). */
+    fun observeLastMessages(): Flow<List<Message>> = messages.observeLastMessages()
+
+    /** Entrantes sin ver por conversationId (badge de no leídos). */
+    fun observeUnreadCounts(): Flow<Map<String, Int>> = messages.observeUnreadCounts()
+
+    /**
+     * Descifra el contenido de [message] para mostrarlo (solo aquí aparece el texto plano).
+     * Desenvuelve el sobre y devuelve el cuerpo de texto; si el mensaje es previo al sobre
+     * (legado), devuelve el texto descifrado tal cual. Para imágenes usa [content].
+     */
+    fun decrypt(contact: Contact, message: Message): ByteArray {
+        val plain = cipher.decrypt(requireNotNull(contact.sharedSecret), message.ciphertext)
+        return when (val d = MessageEnvelope.decode(plain)) {
+            is MessageEnvelope.Decoded.Text -> d.body
+            null -> plain // legado: mensaje anterior al sobre
+            else -> ByteArray(0)
+        }
+    }
+
+    /**
+     * Descifra [message] y lo clasifica en [MessageContent] (texto o imagen) para pintarlo.
+     * Un sobre legado (sin tipo) se trata como texto.
+     */
+    fun content(contact: Contact, message: Message): MessageContent {
+        val plain = cipher.decrypt(requireNotNull(contact.sharedSecret), message.ciphertext)
+        return when (val d = MessageEnvelope.decode(plain)) {
+            is MessageEnvelope.Decoded.Text -> MessageContent.Text(String(d.body))
+            is MessageEnvelope.Decoded.Image -> MessageContent.Image(d.bytes)
+            is MessageEnvelope.Decoded.FileDescriptor ->
+                MessageContent.File(d.name, d.mime, d.size, d.path)
+            is MessageEnvelope.Decoded.Read -> MessageContent.Text("")
+            is MessageEnvelope.Decoded.FileMeta, is MessageEnvelope.Decoded.FileChunk,
+            is MessageEnvelope.Decoded.Call ->
+                MessageContent.Text("") // no deberían persistirse como Message
+            null -> MessageContent.Text(String(plain)) // legado
+        }
+    }
+
+    /** Texto para la notificación de [message] (para imágenes/archivos, un rótulo). */
+    fun notificationText(contact: Contact, message: Message): String =
+        when (val c = runCatching { content(contact, message) }.getOrNull()) {
+            is MessageContent.Image -> "📷 Foto"
+            is MessageContent.File ->
+                if (c.mime.startsWith("audio/")) "🎤 Nota de voz" else "📎 ${c.name}"
+            is MessageContent.Text -> c.text.ifBlank { "Mensaje nuevo" }
+            null -> "Mensaje nuevo"
+        }
+
+    private companion object {
+        const val SELF = "self"
+        // Texto de la fila local de llamada perdida (no viaja por la red).
+        const val MISSED_CALL_TEXT = "📞 Llamada perdida"
+        // Bucle ágil cuando el wake no está (sonda buzón + redescubre). Bien por debajo del
+        // corte por inactividad de Cloudflare (~100 s) para sanar la wss de la DHT a tiempo.
+        const val REDISCOVER_MS = 30_000L
+        // Bucle relajado cuando el wake empuja la entrega: renueva relay (TTL ~1 h) y
+        // redescubre cada 3 min; el buzón sigue como red de seguridad. Menos despertares.
+        const val WAKE_IDLE_MS = 180_000L
+        // Tamaño de trozo de archivo: deja aire bajo el límite del buzón (64 KiB) tras el
+        // sobre + el cifrado (nonce 12 + tag 16 + cabecera).
+        const val CHUNK_SIZE = 48 * 1024
+    }
+}

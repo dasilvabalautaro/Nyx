@@ -81,17 +81,17 @@ en la numeración sí están permitidos (solo tiene que ser creciente).
 
 ## Infraestructura (el riesgo real, no lo mira Play)
 
-- [ ] **Nodos en máquinas domésticas**: el Mac (Catalina) y el PC Windows del autor tras
-      Cloudflare Free. Si se caen, se cae el buzón, el wake y el relay de **todos** los
-      usuarios; además Cloudflare Free recicla los WebSocket y su ToS no contempla tráfico
-      continuo no-HTML. Antes de abrir al público: al menos un VPS como nodo primario.
-      **(23 jul) El despliegue está preparado, falta contratar la máquina**: binarios Linux
-      amd64/arm64 en `infra/node/dist/`, unidad systemd `krypta-node.service`, script
-      `deploy-vps.sh` (un comando desde la Mac) y runbook en la sección "Nodo primario en un
-      VPS Linux" de [../infra/node/README.md](../infra/node/README.md). 1–2 vCPU y 2 GB
-      bastan; lo que importa es IP pública con UDP abierto y **región cerca de los usuarios**
-      (es un relay de voz/vídeo). Con IP pública se puede quitar Cloudflare: QUIC real, mejor
-      DCUtR y adiós al reciclado de WebSocket que hoy obliga al ciclo de 30 s.
+- [x] **VPS como nodo primario** (7 ago): **contratado y desplegado** — Vultr São Paulo,
+      `216.128.169.83`, PeerID `12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5`, ya
+      como primera línea de `Libp2pNode.DEFAULT_BOOTSTRAP` por TCP directo (sin Cloudflare).
+      El Mac y el PC Windows siguen en la lista de **respaldo**: el bridge retira y escucha
+      de todos los nodos, así que la caída de cualquiera —incluido el VPS— no corta la
+      entrega. Latencia **p50 = 107 ms** desde La Paz (antes 146–163 ms vía Cloudflare).
+      Runbook y pendientes de la máquina en la sección "Nodo primario en un VPS Linux" de
+      [../infra/node/README.md](../infra/node/README.md).
+- [ ] **Copia de `node.key` del VPS fuera de la máquina**: si se pierde, el nodo cambia de
+      PeerID y **los móviles ya instalados dejan de encontrarlo** (habría que publicar una
+      versión nueva de la app). Vive en `/var/lib/krypta/node.key`.
 - [ ] **Relay abierto sin límites**: [infra/node/main.go](../infra/node/main.go) usa
       `EnableRelayService(relayv2.WithInfiniteLimits())` — necesario para que no se cortaran
       las llamadas (el tope por defecto es 128 KiB / 2 min), pero es ancho de banda gratis

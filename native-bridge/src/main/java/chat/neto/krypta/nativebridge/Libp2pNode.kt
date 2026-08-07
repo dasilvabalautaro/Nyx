@@ -343,16 +343,23 @@ class Libp2pNode @Inject constructor(
 
     companion object {
         /**
-         * Nodos bootstrap WAN por defecto (uno por línea): la infraestructura de Krypta
-         * expuesta vía Cloudflare Tunnel como `wss` sobre el 443 — el nodo principal
-         * (Mac, `krypta`) y el secundario (PC Windows, `krypta2`). Es infraestructura
-         * compartida (igual para todos los usuarios) y pública, no identidad de nadie. El
-         * bridge deposita en el primero vivo y retira/escucha de todos, así que la caída de
-         * uno no corta la entrega. Si cambia el PeerID de un nodo (p. ej. se pierde su
-         * `node.key`) o el dominio, actualiza esta constante.
+         * Nodos bootstrap WAN por defecto (uno por línea), en orden de preferencia —
+         * `MailboxPut` deposita en el primero vivo, así que quien esté primero aquí es el
+         * primario. Primero el **VPS de São Paulo** (31 jul 2026): IP pública dedicada, sin
+         * Cloudflare Tunnel de por medio (TCP directo, no `wss`), región cercana a
+         * Latinoamérica para el relay de voz/vídeo — validado con
+         * `TestMailboxFetchAgainstLiveNode`/`TestWakeAgainstLiveNode` antes de entrar aquí.
+         * Los otros dos quedan como **respaldo doméstico**, expuestos vía Cloudflare Tunnel
+         * como `wss` sobre el 443: el Mac (`krypta`) y el PC Windows (`krypta2`). Es
+         * infraestructura compartida (igual para todos los usuarios) y pública, no identidad
+         * de nadie. El bridge retira/escucha de TODOS los nodos (`MailboxFetch`,
+         * `StartWake`), así que la caída de cualquiera —incluido el VPS— no corta la
+         * entrega. Si cambia el PeerID de un nodo (p. ej. se pierde su `node.key`) o el
+         * dominio/IP, actualiza esta constante.
          */
         const val DEFAULT_BOOTSTRAP =
-            "/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooWPTUUREfK1dqiEmppLy3ycyFxCvuCbK6s1TPqaQm2UBog\n" +
+            "/ip4/216.128.169.83/tcp/4001/p2p/12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5\n" +
+                "/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooWPTUUREfK1dqiEmppLy3ycyFxCvuCbK6s1TPqaQm2UBog\n" +
                 "/dns4/krypta2.neto.chat/tcp/443/wss/p2p/12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm"
     }
 }

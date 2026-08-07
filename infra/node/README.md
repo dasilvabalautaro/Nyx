@@ -1,4 +1,4 @@
-# Krypta infra node — despliegue (sin Docker)
+      # Krypta infra node — despliegue (sin Docker)
 
 Nodo **bootstrap + DHT server + Circuit Relay v2 + buzón store-and-forward + wake** de
 Krypta (semilla de Fase 1). No lee mensajes (todo E2EE): es punto de encuentro, relé y
@@ -180,10 +180,23 @@ cat ~/krypta/node.log     # ver el PeerID
 
 ## Nodo primario en un VPS Linux (systemd) — recomendado para producción
 
-> **Estado (23 jul 2026): preparado, sin contratar.** Binarios, unidad systemd y script de
-> despliegue listos; falta la máquina. Los nodos actuales (Mac Catalina + PC Windows) son
-> equipos domésticos detrás de Cloudflare Tunnel: si se cae la casa, se cae el buzón, el
-> wake y el relay de **todos** los usuarios. Ver [../../docs/PLAY-STORE.md](../../docs/PLAY-STORE.md).
+> **Estado (7 ago 2026): DESPLEGADO.** Vultr São Paulo, `216.128.169.83`, hostname
+> `krypta-node-saopaulo`, Ubuntu 24.04, plan compartido 2 GB. PeerID
+> `12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5`. Ya es la **primera línea** de
+> `Libp2pNode.DEFAULT_BOOTSTRAP` (nodo primario, por `/ip4/…/tcp/4001` directo — sin
+> Cloudflare); el Mac Catalina y el PC Windows quedan de respaldo. Validado con las cuatro
+> sondas de abajo: buzón, wake, ciclo completo y latencia **p50 = 107 ms / p95 = 119 ms**
+> desde La Paz, frente a los 146–163 ms que daban los nodos domésticos vía Cloudflare.
+>
+> Se eligió Vultr porque **DigitalOcean no tiene ningún datacenter en Sudamérica** (NYC, San
+> Francisco, Toronto, Atlanta, Richmond, Kansas City, Amsterdam, Londres, Fráncfort,
+> Singapur, Bangalore, Sídney): para un relay de voz/vídeo la región manda sobre la marca.
+>
+> Pendiente en esta máquina: (a) `net.core.rmem_max` bajo → quic-go avisa
+> "failed to sufficiently increase receive buffer size" al arrancar (no bloquea, puede
+> limitar el throughput QUIC bajo carga); (b) **guardar una copia de `/var/lib/krypta/node.key`
+> fuera del VPS** — si se pierde, cambia el PeerID y hay que tocar `DEFAULT_BOOTSTRAP`;
+> (c) poner topes finitos al relay antes de abrirlo al público (ver el aviso de tráfico arriba).
 
 ### Por qué un VPS cambia las cosas (no es solo uptime)
 
@@ -270,11 +283,22 @@ export PATH="/usr/local/bin:$HOME/go/bin:$PATH"
 cd native-bridge/libp2p
 MBX_ADDR=/ip4/<IP>/tcp/4001/p2p/<PeerID> go test -run TestMailboxFetchAgainstLiveNode -v ./...
 WAKE_ADDR=/ip4/<IP>/tcp/4001/p2p/<PeerID> go test -run TestWakeAgainstLiveNode -v ./...
+# Ciclo completo (A deposita → nodo → B retira, payload y remitente verificados). Las dos de
+# arriba solo comprueban que el protocolo responde; esta prueba que un mensaje llega entero:
+MBX_ADDR=/ip4/<IP>/tcp/4001/p2p/<PeerID> go test -run TestMailboxRoundTripAgainstLiveNode -v ./...
+# Latencia real (es un relay de voz/vídeo: este número decide si la región elegida sirve):
+PING_ADDR=/ip4/<IP>/tcp/4001/p2p/<PeerID> go test -run TestPingAgainstLiveNode -v ./...
 ```
 
 Cuando pasen, añádelo en el móvil por Ajustes → "Nodos WAN (bootstrap)" y, una vez validado
 en vivo, muévelo a `Libp2pNode.DEFAULT_BOOTSTRAP` **como primera línea** (nodo primario),
 dejando el de Windows de secundario. La Mac Catalina puede jubilarse a máquina de desarrollo.
+
+> Recuerda que `DEFAULT_BOOTSTRAP` **solo afecta a instalaciones nuevas**: `savedBootstrap()`
+> cae al default únicamente si la preferencia está *ausente*, así que un móvil que ya guardó
+> la suya se queda con la lista vieja (le pasó al TECNO en julio; se arregló borrando la pref
+> con `run-as`). Con la app aún sin publicar da igual; si llega un nodo nuevo cuando ya haya
+> usuarios, hará falta fusionar el default con la pref guardada.
 
 ## Segundo nodo en Windows (multi-nodo / failover)
 

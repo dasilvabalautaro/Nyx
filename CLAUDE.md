@@ -149,13 +149,29 @@ to the default). The
 **macOS Catalina** host — pinned to **go-libp2p v0.38 + Go 1.22** (v0.48 needs Go ≥1.25 →
 macOS ≥11; v0.38 yields `minos 10.13`), interoperating with the v0.48 phones. Binary +
 no-Docker deploy guide (launchd) in [infra/node/README.md](infra/node/README.md).
-**A Linux/VPS deployment is prepared (23 Jul 2026, not yet contracted)**: cross-compiled
-`dist/krypta-node-linux-{amd64,arm64}`, a hardened `krypta-node.service` (systemd,
-`Restart=always`, `LimitNOFILE=65535`) and a one-command `deploy-vps.sh` (idempotent; keeps
-`node.key`, so the PeerID survives redeploys), runbook in the README's "Nodo primario en un
-VPS Linux" section. Both home nodes are single points of failure for the mailbox/wake/relay
-of every user, so a VPS is the intended primary — see [docs/PLAY-STORE.md](docs/PLAY-STORE.md).
-It also unlocks a public IP: real QUIC (better DCUtR, less relay traffic) and no Cloudflare
+**The Linux/VPS primary node is DEPLOYED (7 Aug 2026)**: **Vultr São Paulo**,
+`216.128.169.83`, Ubuntu 24.04, shared-CPU 2 GB, PeerID
+`12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5` — installed with the one-command
+`deploy-vps.sh` (cross-compiled `dist/krypta-node-linux-{amd64,arm64}` + a hardened
+`krypta-node.service`: systemd, `Restart=always`, `LimitNOFILE=65535`; idempotent, keeps
+`node.key` so the PeerID survives redeploys). It is now the **first line** of
+`Libp2pNode.DEFAULT_BOOTSTRAP` (primary), reached by **direct `/ip4/…/tcp/4001` — no
+Cloudflare**, with the Mac and Windows home nodes demoted to **backup**: the bridge puts to
+the first live node and fetches/listens on *all* of them, so any single node dying (the VPS
+included) doesn't stop delivery. Validated live from the dev Mac before promotion: mailbox,
+wake, a full round-trip (`TestMailboxRoundTripAgainstLiveNode`, added the same day: A puts →
+node persists → B fetches, payload byte-exact **and** `from` == A's real PeerID, which
+exercises the node's non-spoofable-sender property against production) and latency
+**p50 = 107 ms / p95 = 119 ms** from La Paz vs. 146–163 ms through Cloudflare. Provider note:
+**DigitalOcean has no South American region at all** (NYC, SFO, Toronto, Atlanta, Richmond,
+Kansas City, Amsterdam, London, Frankfurt, Singapore, Bangalore, Sydney), and for a
+voice/video relay the region outranks the brand — hence Vultr. Open items on that box:
+`net.core.rmem_max` is low (quic-go logs "failed to sufficiently increase receive buffer
+size" at startup — harmless, may cap QUIC throughput under load), `node.key` still needs an
+off-box copy, and the relay needs finite caps before going public. Both home nodes were
+single points of failure for the mailbox/wake/relay of every user, which is why the VPS was
+the intended primary — see [docs/PLAY-STORE.md](docs/PLAY-STORE.md).
+A public IP also unlocks: real QUIC (better DCUtR, less relay traffic) and no Cloudflare
 WebSocket recycling. That needs a **stable** QUIC port, so the node gained a `-quicport` flag
 (default `0` = the previous ephemeral behavior, correct behind Cloudflare; the systemd unit
 passes `4001`). **The host
@@ -205,7 +221,9 @@ and enforces quotas (blob ≤ 64 KiB, ≤ 200 msgs / 5 MiB per recipient, TTL 7 
 Go tests on both sides (`infra/node`: `TestMailboxStoreAndForward`/`TestMailboxQuotaAndTTL`;
 bridge: `TestMailboxPutFetch`) and `ChatServiceTest`, and **verified live two-phone**
 (recipient's app closed → sender gets `SENT` via mailbox → message arrives on open); the
-deployed node is probeable on demand with `TestMailboxFetchAgainstLiveNode` (`MBX_ADDR=…`).
+deployed node is probeable on demand with `TestMailboxFetchAgainstLiveNode` (does the node
+answer the protocol?) and `TestMailboxRoundTripAgainstLiveNode` (does a message actually make
+it there and back intact?), both `MBX_ADDR=…`.
 Sends that fail both paths are marked `FAILED` (never crash). **Wake is integrated in the
 node** (design change vs. the original UnifiedPush wake-server plan, agreed 2 Jul 2026):
 since the mailbox lives in the node, a deposit triggers an instant notice over a lightweight
@@ -362,8 +380,10 @@ connect over wss + live probes `TestMailboxFetchAgainstLiveNode` and
 `TestWakeAgainstLiveNode` pass against it. Its PeerID
 (`12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm`) was extracted without touching the
 PC via a dial-with-wrong-PeerID probe (the Noise handshake error reports the real key —
-trick worth remembering). **`Libp2pNode.DEFAULT_BOOTSTRAP` now carries both nodes**
-(newline-separated); note a phone that ever saved a bootstrap pref keeps it — the TECNO's
+trick worth remembering). **`Libp2pNode.DEFAULT_BOOTSTRAP` now carries all three nodes**
+(newline-separated, in preference order — `MailboxPut` deposits in the first live one, so
+line 1 *is* the primary: since 7 Aug that's the São Paulo VPS, with these two as backup);
+note a phone that ever saved a bootstrap pref keeps it — the TECNO's
 stale single-node pref was deleted via `run-as sed` so it falls to the new default. The
 live two-phone failover test (kill Mac node → delivery via the Windows node's mailbox) is
 in PRUEBAS-PENDIENTES. Still

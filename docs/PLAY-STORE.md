@@ -5,14 +5,20 @@ casillas según se vayan cerrando; lo que está hecho lleva la fecha de verifica
 
 ## Registro de versiones generadas
 
-El repo no está bajo git, así que **anota aquí cada AAB que se genere**: Play rechaza un
-`versionCode` repetido, y sin este registro no hay forma de saber cuál se subió. Los huecos
-en la numeración sí están permitidos (solo tiene que ser creciente).
+**Anota aquí cada AAB que se genere, y marca cuál se subió**: Play rechaza un `versionCode`
+repetido, y el historial de git dice qué versión se compiló, pero no cuál llegó a la tienda
+— eso solo lo sabe quien la subió. Los huecos en la numeración sí están permitidos (solo
+tiene que ser creciente).
 
-| versionCode | versionName | Fecha        | Estado                     |
-|-------------|-------------|--------------|----------------------------|
-| 3           | 1.2         | 23 jul 2026  | generado (¿subido?)        |
-| 4           | 1.3         | 31 jul 2026  | generado, listo para subir |
+| versionCode | versionName | Fecha        | Estado                                        |
+|-------------|-------------|--------------|-----------------------------------------------|
+| 3           | 1.2         | 23 jul 2026  | generado (¿subido?)                           |
+| 4           | 1.3         | 31 jul 2026  | **subido a Play**                             |
+| 5           | 1.4         | 7 ago 2026   | generado — añade el nodo primario de São Paulo |
+
+> La 4 se subió **antes** de que el VPS de São Paulo entrara en `DEFAULT_BOOTSTRAP`, así que
+> esa versión solo conoce los dos nodos domésticos. De ahí la 5: es lo que lleva el nodo
+> primario a los usuarios nuevos.
 
 ## Listo
 

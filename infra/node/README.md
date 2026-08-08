@@ -7,6 +7,10 @@ en la misma LAN, para depositar/retirar mensajes cuando el destinatario está of
 mantienen un stream ligero de **wake** por el que el nodo avisa al instante cuando llega
 un depósito (sin polling; la app recibe con la UI cerrada gracias a su Foreground Service).
 
+> Este README cubre el **despliegue**. Para el día a día del nodo primario de São Paulo —
+> dónde vive cada fichero, cómo entrar, qué mirar cuando algo va mal y cómo actualizarlo —
+> ver [OPERACION.md](OPERACION.md).
+
 > **Clave (relay tras Cloudflare):** el nodo se compila con `libp2p.ForceReachabilityPublic()`.
 > Tras Cloudflare Tunnel no tiene IP pública directa, así que AutoNAT lo creería "privado" y el
 > servicio de relay v2 **no ofrecería el protocolo `hop`** → los móviles no podrían reservar slot

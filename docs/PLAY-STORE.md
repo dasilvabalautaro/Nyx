@@ -95,9 +95,15 @@ tiene que ser creciente).
       entrega. Latencia **p50 = 107 ms** desde La Paz (antes 146–163 ms vía Cloudflare).
       Runbook y pendientes de la máquina en la sección "Nodo primario en un VPS Linux" de
       [../infra/node/README.md](../infra/node/README.md).
-- [ ] **Copia de `node.key` del VPS fuera de la máquina**: si se pierde, el nodo cambia de
-      PeerID y **los móviles ya instalados dejan de encontrarlo** (habría que publicar una
-      versión nueva de la app). Vive en `/var/lib/krypta/node.key`.
+- [x] **Copia de `node.key` del VPS fuera de la máquina** (8 ago): en
+      `~/keystores/krypta/krypta-node-saopaulo.key` (permisos `600`, fuera del repo, junto al
+      keystore de Android). **Verificada, no solo copiada**: el SHA-256 coincide con el del
+      VPS y, al deserializarla con `crypto.UnmarshalPrivateKey`, deriva el PeerID real
+      `12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5` — o sea que sirve para resucitar
+      el nodo con la misma identidad. Importaba porque si esa clave se pierde el nodo cambia
+      de PeerID y **los móviles ya instalados dejan de encontrarlo**: habría que publicar otra
+      versión de la app. Para restaurar: copiarla a `/var/lib/krypta/node.key` (dueño
+      `krypta:krypta`, permisos `600`) antes de arrancar el servicio.
 - [ ] **Relay abierto sin límites**: [infra/node/main.go](../infra/node/main.go) usa
       `EnableRelayService(relayv2.WithInfiniteLimits())` — necesario para que no se cortaran
       las llamadas (el tope por defecto es 128 KiB / 2 min), pero es ancho de banda gratis

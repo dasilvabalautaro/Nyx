@@ -192,11 +192,17 @@ cat ~/krypta/node.log     # ver el PeerID
 > Francisco, Toronto, Atlanta, Richmond, Kansas City, Amsterdam, Londres, Fráncfort,
 > Singapur, Bangalore, Sídney): para un relay de voz/vídeo la región manda sobre la marca.
 >
+> Copia de seguridad de la identidad **hecha (8 ago)**: `node.key` está respaldada en
+> `~/keystores/krypta/krypta-node-saopaulo.key` en la Mac del autor (`600`, fuera del repo).
+> Verificada de verdad: mismo SHA-256 que la del VPS y, al deserializarla, deriva el PeerID
+> real del nodo. Para restaurar, cópiala a `/var/lib/krypta/node.key` (dueño `krypta:krypta`,
+> permisos `600`) **antes** de arrancar el servicio; si el servicio arranca sin ella, se
+> genera una identidad nueva y el PeerID cambia.
+>
 > Pendiente en esta máquina: (a) `net.core.rmem_max` bajo → quic-go avisa
 > "failed to sufficiently increase receive buffer size" al arrancar (no bloquea, puede
-> limitar el throughput QUIC bajo carga); (b) **guardar una copia de `/var/lib/krypta/node.key`
-> fuera del VPS** — si se pierde, cambia el PeerID y hay que tocar `DEFAULT_BOOTSTRAP`;
-> (c) poner topes finitos al relay antes de abrirlo al público (ver el aviso de tráfico arriba).
+> limitar el throughput QUIC bajo carga); (b) poner topes finitos al relay antes de abrirlo
+> al público (ver el aviso de tráfico arriba).
 
 ### Por qué un VPS cambia las cosas (no es solo uptime)
 

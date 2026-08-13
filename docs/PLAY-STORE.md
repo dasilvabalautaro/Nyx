@@ -67,12 +67,47 @@ tiene que ser creciente).
       si cree que encaja otro tipo. El texto ya está redactado: se copia del manifiesto y de
       la §6 de la política. Conviene tener plan B por si lo deniegan.
       *(Marcar como hecho cuando se envíe — a fecha de 31 jul no consta si se hizo.)*
-- [ ] **Declarar `USE_FULL_SCREEN_INTENT` en Console** (nuevo en la 1.5). Desde Android 14 el
-      permiso solo se concede por defecto a apps de llamadas o alarmas, y Play pide declarar el
-      uso. Krypta encaja: es la notificación de **llamada entrante**, `CATEGORY_CALL` con
-      `Notification.CallStyle`, y sin el intent a pantalla completa una llamada con el móvil
-      bloqueado solo deja un aviso discreto en la bandeja. Verificado en el TECNO:
+- [ ] **Declarar `USE_FULL_SCREEN_INTENT` en Console** (nuevo en la 1.5). **Play lo reclamó al
+      subir la 1.5** ("Debes informarnos si tu app usa permisos de intent de pantalla
+      completa"), así que es bloqueante, no opcional. Está en *Contenido de la app → Permiso de
+      intent de pantalla completa*. Desde Android 14 el permiso solo se concede por defecto a
+      apps cuya función principal son **llamadas o alarmas**. Verificado en el TECNO:
       `dumpsys package` lo da como `granted=true` sin intervención del usuario.
+
+      **Respuestas del formulario** — ¿usa el permiso?: **Sí**. Función principal:
+      **llamadas** (no alarmas, no "otro"). Descripción, lista para pegar:
+
+      > Krypta es una app de mensajería descentralizada con llamadas de voz y vídeo cifradas
+      > de extremo a extremo.
+      >
+      > El permiso se usa en un único punto: mostrar la pantalla de llamada entrante cuando el
+      > teléfono está bloqueado o con la pantalla apagada. La notificación es de categoría
+      > CATEGORY_CALL, usa Notification.CallStyle.forIncomingCall e incluye las acciones de
+      > contestar y rechazar, igual que la app de teléfono del sistema.
+      >
+      > Krypta no utiliza servicios de notificaciones push de terceros: mantiene su propia
+      > conexión cifrada para recibir las llamadas. Sin el intent de pantalla completa, una
+      > llamada entrante con el móvil bloqueado solo dejaría un aviso discreto en la bandeja y
+      > el usuario perdería la llamada.
+      >
+      > No se usa para ningún otro fin: no hay anuncios, ni promociones, ni avisos que no sean
+      > una llamada entrante en curso.
+
+      La declaración es **verificable en el código**: hay un solo `setFullScreenIntent` en todo
+      el proyecto (`KryptaNotifications.notifyIncomingCall`), y solo se dispara con la llamada
+      en `RINGING` (`IncomingNotifier.onCallState`). Si alguna vez se añade un segundo uso, esta
+      declaración deja de ser cierta y hay que rehacerla.
+
+      Lo que ayuda a que la aprueben: (a) que la **ficha de la tienda mencione las llamadas**
+      de voz y vídeo — el revisor comprueba que la función principal declarada existe; (b)
+      tener listo un **vídeo de demostración** por si lo piden (móvil bloqueado → entra la
+      llamada → la pantalla se enciende con contestar/rechazar); ojo, ese escenario sigue
+      **sin probarse en vivo** (§12.5 de [PRUEBAS-PENDIENTES.md](PRUEBAS-PENDIENTES.md)):
+      probarlo antes de grabar. Lo revisa una persona, así que puede tardar.
+
+      **Plan B si lo deniegan**: quitar el permiso y el `setFullScreenIntent`. La llamada
+      seguiría llegando con notificación, timbre y vibración; se pierde solo que tome la
+      pantalla completa con el móvil bloqueado.
 - [ ] **Justificar `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` en Console** (entrega de mensajes en
       2.º plano sin push de terceros). La política ya lo explica al usuario; esto es la
       declaración ante Play.

@@ -15,6 +15,7 @@ tiene que ser creciente).
 | 3           | 1.2         | 23 jul 2026  | generado (¿subido?)                           |
 | 4           | 1.3         | 31 jul 2026  | **subido a Play**                             |
 | 5           | 1.4         | 7 ago 2026   | generado — añade el nodo primario de São Paulo |
+| 6           | 1.5         | 13 ago 2026  | generado — fiabilidad de avisos, GIF animado, FLAG_SECURE |
 
 > La 4 se subió **antes** de que el VPS de São Paulo entrara en `DEFAULT_BOOTSTRAP`, así que
 > esa versión solo conoce los dos nodos domésticos. De ahí la 5: es lo que lleva el nodo
@@ -66,6 +67,12 @@ tiene que ser creciente).
       si cree que encaja otro tipo. El texto ya está redactado: se copia del manifiesto y de
       la §6 de la política. Conviene tener plan B por si lo deniegan.
       *(Marcar como hecho cuando se envíe — a fecha de 31 jul no consta si se hizo.)*
+- [ ] **Declarar `USE_FULL_SCREEN_INTENT` en Console** (nuevo en la 1.5). Desde Android 14 el
+      permiso solo se concede por defecto a apps de llamadas o alarmas, y Play pide declarar el
+      uso. Krypta encaja: es la notificación de **llamada entrante**, `CATEGORY_CALL` con
+      `Notification.CallStyle`, y sin el intent a pantalla completa una llamada con el móvil
+      bloqueado solo deja un aviso discreto en la bandeja. Verificado en el TECNO:
+      `dumpsys package` lo da como `granted=true` sin intervención del usuario.
 - [ ] **Justificar `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` en Console** (entrega de mensajes en
       2.º plano sin push de terceros). La política ya lo explica al usuario; esto es la
       declaración ante Play.
@@ -74,6 +81,10 @@ tiene que ser creciente).
       semanas de calendario: conviene arrancarla cuanto antes.
 - [ ] **Assets**: icono 512, gráfico destacado 1024×500, capturas, descripción corta y larga
       (reciclables de [MANUAL.md](MANUAL.md)).
+      ⚠️ **Las capturas para la ficha no se pueden hacer con el gesto del móvil**: desde la 1.5
+      la app lleva `FLAG_SECURE` y el sistema devuelve negro. Usa **⋮ → "Capturar pantalla"**
+      dentro del chat (guarda en `Galería › Krypta`); para pantallas fuera del chat, un
+      emulador sin el flag o quitarlo temporalmente en un build local.
 
 ## Producto / política de contenido
 

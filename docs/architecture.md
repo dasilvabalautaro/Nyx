@@ -60,9 +60,10 @@ desacoplados y testeables.
 - `ChatViewModel` (`@HiltViewModel`) sobre `ChatService`: `contacts` (StateFlow),
   `messages(contact)` (descifra para mostrar), `send`, `addContact`.
 - `KryptaForegroundService` — **servicio en primer plano real** (Fase 5): `startForeground`
-  (tipo **`specialUse`**, `START_STICKY`), arranca `ChatService.start()` (idempotente) y
-  colecta `chat.incoming` para **notificar cada mensaje entrante** (título = contacto, texto
-  = descifrado al vuelo; se omite si la UI está en pantalla, vía `ProcessLifecycleOwner`).
+  (tipo **`specialUse`**, `START_STICKY`) y arranca `ChatService.start()` (idempotente).
+  Mantiene vivos el nodo y el stream de wake; **ya no postea avisos** — eso es de
+  `IncomingNotifier` (ver más abajo), porque este servicio puede no existir en un proceso
+  revivido solo por el latido y ahí se perdían mensajes y llamadas en silencio.
   La pantalla de chat tiene un botón **escudo → "Verificar identidad"** con dos vías: el
   **número de seguridad** ([SafetyNumber], para cotejar de viva voz) y **QR** (`QrCode` +
   `zxing-android-embedded`): cada uno muestra su QR —que codifica `krypta:verify:<propio
@@ -73,12 +74,56 @@ desacoplados y testeables.
   mismo PeerID conserva la verificación; si el PeerID cambia, se resetea. ZXing es FOSS (sin
   dependencias de Google).
   Las notificaciones se centralizan en `KryptaNotifications`: canal **mensajes** (v2,
-  IMPORTANCE_HIGH → heads-up + sonido + vibración, con badge) y canal **servicio** (v2,
-  IMPORTANCE_LOW, `showBadge=false` para que el ongoing no sume al conteo del icono). Cada
+  IMPORTANCE_HIGH → heads-up + sonido + vibración, con badge), canal **servicio** (v2,
+  IMPORTANCE_LOW, `showBadge=false` para que el ongoing no sume al conteo del icono) y canal
+  **llamadas** (v1, sin sonido de canal: el timbre lo pone `IncomingNotifier`). Cada
   notificación de mensaje lleva un **deep-link** (`EXTRA_OPEN_CONTACT`) que abre su
   conversación (MainActivity `singleTop` + `onNewIntent` → estado Compose → `KryptaApp`
-  navega al contacto), y se **cancela al abrir el chat** (`ChatScreen`), de modo que el
-  conteo del icono se limpia aunque entres por el icono y no por la notificación.
+  navega al contacto).
+
+  **Quién postea (revisado 13 ago 2026)**: el dueño es `IncomingNotifier` (@Singleton en
+  `:app`), enganchado desde `KryptaApplication.onCreate`, **no** desde el servicio en primer
+  plano. El motivo es el fallo "llegó el mensaje pero no sonó nada": el aviso lo posteaba el
+  FGS coleccionando `ChatService.incoming`, un `SharedFlow` con `replay = 0` que **descarta en
+  silencio** lo emitido sin suscriptores — y cuando el OEM mata el proceso y lo revive **solo
+  la alarma del latido**, el FGS no existe, así que el mensaje se retiraba del buzón, se
+  persistía, se confirmaba al nodo (borrándolo allí) y el aviso se perdía **para siempre**.
+  Ahora `ChatService.setIncomingNotifier` es un gancho directo invocado en el sitio tras
+  persistir (mismo patrón que `setMailboxProcessor`), y vive en la Application, que existe en
+  cualquier arranque del proceso (Activity, servicio o `BroadcastReceiver`). `IncomingNotifier`
+  inyecta además `CallService` por lo mismo: era el único suscriptor de `callSignals`, solo lo
+  instanciaba el FGS, y un `invite` recibido por buzón en un proceso revivido por la alarma se
+  descartaba sin timbrar. Otros dos arreglos del mismo repaso: `ChatService.pollOnce` (el
+  latido) llamaba a `connectDht` con `bootstrapAddr` **vacío** en ese proceso revivido —y sin
+  host nativo, con lo que `startDht` era un no-op silencioso—, así que ahora hace `start()` y
+  cae al bootstrap persistido; y `HeartbeatReceiver` relanza el FGS.
+
+  **Cuándo se calla**: solo si tienes **esa misma** conversación delante
+  (`IncomingNotifier.setVisibleConversation`, que fija `ChatScreen` con un `DisposableEffect`).
+  Antes bastaba con tener la app abierta en cualquier pantalla (`if (uiVisible) return`), así
+  que un mensaje de otro contacto llegaba sin sonar estando en la lista o en otro chat.
+
+  **Contenido**: `Notification.MessagingStyle` acumula los últimos 6 mensajes por contacto en
+  una sola notificación (antes cada mensaje nuevo borraba el texto del anterior) y cada uno
+  vuelve a sonar (sin `setOnlyAlertOnce`).
+
+  **Limpieza al abrir la app**: `ProcessLifecycleOwner.onStart` → `cancelAllMessages`, que
+  barre **todo** el canal de mensajes (bandeja y conteo del icono a cero) sin tocar el
+  permanente del servicio —cancelarlo mataría el FGS— ni una llamada sonando. Va en dos
+  pasadas, **hijas primero**, porque a partir de 4 avisos el sistema añade una cabecera de
+  grupo propia (`ranker_group`) que se recrea si se retira antes que sus hijas. Los **no
+  leídos por contacto no se tocan**: viven en Room (`observeUnreadCounts` = entrantes en
+  DELIVERED) y solo los borra entrar en la conversación (`markIncomingRead`), así que la lista
+  de conversaciones conserva su badge tal cual.
+
+  **Llamada entrante**: `Notification.CallStyle` (API 31+; en API 30, acciones sueltas) con
+  **`setFullScreenIntent`** —sin él una llamada con la pantalla apagada solo dejaba un aviso
+  discreto en la bandeja— y acciones **contestar/rechazar** que van a `CallActionReceiver` sin
+  pasar por desbloquear la app. El timbre usa `AudioAttributes` de
+  `USAGE_NOTIFICATION_RINGTONE` explícitos (si no puede salir por el stream de música) y va
+  acompañado de **vibración en bucle**, para que en silencio también avise. Cubierto por
+  `KryptaNotificationsTest` (instrumentado: `CallStyle` la rechaza el **sistema** en caliente
+  si le falta el full-screen intent, cosa que ningún build detectaría).
   Lo lanza `MainActivity` (`startForegroundService`), que también pide `POST_NOTIFICATIONS`
   (Android 13+) y la **exención de batería** (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, para
   que Doze no congele el bucle con la pantalla apagada). Sobrevive al swipe de la app →
@@ -131,6 +176,23 @@ desacoplados y testeables.
     Cambiar el ajuste exige autenticarse en ambos sentidos, y los fallos del prompt/manager
     van por `runCatching` (nunca crash). Política pura `shouldRelock` testeada en JVM
     (`AppLockTest`).
+  - **Bloqueo de captura y grabación de pantalla** (13 ago 2026,
+    [ScreenSecurity.kt](../app/src/main/java/chat/neto/krypta/ScreenSecurity.kt)):
+    `FLAG_SECURE` en la ventana de `MainActivity` (en `onCreate`, antes de componer). Con una
+    sola Activity queda cubierta toda la app; los diálogos y `ModalBottomSheet` viven en
+    ventanas propias pero **heredan** el flag (`SecureFlagPolicy.Inherit` es el valor por
+    defecto de `DialogProperties`, y ModalBottomSheet copia el de la ventana padre), así que no
+    hay que marcarlos uno a uno. El sistema rechaza la captura, el grabador graba negro, la
+    miniatura de "recientes" sale vacía y la ventana no se vuelca a una pantalla no segura.
+    **La propia Krypta sí puede capturar** (`captureToGallery`): pinta la jerarquía de vistas
+    sobre un `Canvas` **por software** y guarda un PNG en `Pictures/Krypta` vía `MediaStore`
+    (con `RELATIVE_PATH` + `IS_PENDING`; sin permiso de almacenamiento en minSdk 30). Tiene que
+    ser `view.draw(Canvas)` y **no `PixelCopy`**: PixelCopy lee la superficie a través del
+    compositor y con `FLAG_SECURE` devolvería negro, mientras que una app dibujando sus propias
+    vistas nunca pasa por ahí. Se ofrece en **⋮ → "Capturar pantalla"** del chat, esperando
+    **dos `withFrameNanos`** tras cerrar el menú (si no, el propio desplegable sale en la
+    imagen). Nota para depurar: `adb shell screencap` ya no sirve para ver la UI de Krypta —
+    usa `uiautomator dump`, que lee el árbol de accesibilidad y no se ve afectado.
   - **Chat** (UI-3): barra con avatar + "en línea"; burbujas con esquina-cola asimétrica
     (propias `primaryContainer`, ajenas `surfaceContainerHigh`), **agrupadas** por lado y
     ventana de 3 min (solo la primera del grupo abre esquina) y con **hora + checks de
@@ -203,9 +265,34 @@ desacoplados y testeables.
   **acuse de lectura** (`markConversationRead` lo envía al abrir el chat) marca los mensajes
   salientes citados como **READ**. `content()` clasifica en texto/imagen; `notificationText`
   da "📷 Foto" para imágenes. **Imágenes (v1, en línea)**: `sendImage(contact, jpeg)` — el
-  cliente comprime la foto (`ImageCodec`: reduce a ≤1280 px + JPEG hasta ≤58 KiB para caber
-  en el buzón) y la envía como sobre imagen por el mismo camino (directo → buzón → wake →
-  notificación). **Archivos (v1, troceados)**: `sendFile(contact, name, mime, bytes)` parte el
+  cliente comprime la foto (`ImageCodec`: reduce a ≤1280 px y baja calidad hasta ≤58 KiB para
+  caber en el buzón) y la envía como sobre imagen por el mismo camino (directo → buzón → wake →
+  notificación). El **formato depende de la transparencia**: JPEG para fotos, **WEBP_LOSSY si
+  el bitmap tiene alfa** — los stickers y emoji grandes del teclado son PNG/WebP con fondo
+  transparente y el JPEG, sin canal alfa, los entregaba con el fondo en **negro**. El receptor
+  usa el mismo `BitmapFactory`, así que no hay cambio de protocolo.
+  **Contenido enriquecido del teclado (13 ago 2026)**: la caja de mensaje lleva
+  `Modifier.contentReceiver`, que hace que el campo anuncie `*/*` en su `EditorInfo` en vez de
+  solo `text/*` — sin él, las pestañas de GIF y stickers del teclado respondían "esta app no
+  admite insertar aquí". Lo recibido se `consume` si su mime es `image/*` y va por `sendImage`;
+  el resto (texto plano) se devuelve al campo. Compose ya pide el permiso de lectura de la URI
+  (`InputContentInfoCompat.requestPermission`). Esto obliga a usar el `TextField` **basado en
+  `TextFieldState`**: solo la pila nueva de `BasicTextField`
+  (`foundation.text.input.internal`) enchufa `commitContent`; la heredada (`value`/
+  `onValueChange`) nunca lo ve.
+  **GIF animado**: `sendImage` bifurca por mime — `image/gif` e `image/webp` van **tal cual por
+  el camino de archivos troceados** (48 KiB por trozo, staging en disco, reentrega del buzón),
+  el único que pasa de los ~58 KiB del sobre en línea; recodificarlos con `ImageCodec` es justo
+  lo que los dejaba en su primer fotograma. Tope de 4 MB (por debajo del cupo de 5 MiB del
+  buzón, para que un GIF llegue también con el contacto desconectado) y **copia local** en
+  `krypta_files/sent/` pasada como `localPath`, para que la burbuja del emisor se anime igual
+  que la del receptor. Se pinta con [ui/AnimatedImage.kt](../app/src/main/java/chat/neto/krypta/ui/AnimatedImage.kt):
+  `ImageDecoder` + `AnimatedImageDrawable` del propio framework (sin dependencias nuevas),
+  dibujado sobre el canvas nativo y repintado con un bucle `withFrameNanos` — `draw()` avanza el
+  fotograma según el tiempo, así que basta con redibujar. El `tick` se lee **dentro** del bloque
+  de dibujo (invalida el dibujo, no la composición) y el bucle muere con la composición, así que
+  un GIF fuera de pantalla deja de animarse. Si el archivo falta o no decodifica, cae a la
+  burbuja de archivo. `notificationText` lo rotula **"🎞 GIF"**, no "📎 archivo.gif". **Archivos (v1, troceados)**: `sendFile(contact, name, mime, bytes)` parte el
   archivo en trozos de 48 KiB (`CHUNK_SIZE`, bajo el límite del buzón), envía una **meta** (`F`)
   + cada **trozo** (`K`) con `sendRaw` (cifrado, directo → buzón, sin crear Message), y crea UNA
   burbuja (descriptor). El receptor los pasa a `FileStore`, que al completar escribe el archivo

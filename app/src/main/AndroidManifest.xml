@@ -28,6 +28,12 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Bloqueo de acceso a la app: BiometricPrompt (huella/cara/PIN del sistema). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Vibración en bucle mientras suena una llamada entrante (en silencio no hay timbre). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Llamada entrante a pantalla completa con el móvil bloqueado. En Android 14+ se
+         concede automáticamente a las apps de llamadas (la notificación es CATEGORY_CALL con
+         CallStyle); sin esto solo salía un aviso discreto en la bandeja. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Sin copia automática de Google: los datos de la app son la identidad Ed25519
          (krypta_identity.xml), la base de mensajes y los adjuntos. Con allowBackup="true"
@@ -83,6 +89,16 @@
         <receiver
             android:name=".HeartbeatReceiver"
             android:exported="false" />
+
+        <!-- Contestar/rechazar desde la notificación de llamada entrante. -->
+        <receiver
+            android:name=".CallActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="chat.neto.krypta.CALL_ANSWER" />
+                <action android:name="chat.neto.krypta.CALL_DECLINE" />
+            </intent-filter>
+        </receiver>
 
         <!-- Para abrir archivos recibidos con otra app (visor de PDF, etc.) sin exponer rutas. -->
         <provider

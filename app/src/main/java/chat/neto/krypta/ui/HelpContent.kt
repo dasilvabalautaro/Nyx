@@ -62,6 +62,16 @@ object HelpContent {
         ),
         HelpItem(
             category = "Privacidad y seguridad",
+            question = "¿Se pueden hacer capturas de pantalla de mis chats?",
+            answer = "No con las herramientas del móvil: Krypta bloquea la captura y la " +
+                "grabación de pantalla, su ventana sale en negro si alguien graba, y tampoco " +
+                "aparece en la vista de apps recientes. Si quieres guardar una conversación, " +
+                "usa ⋮ → Capturar pantalla dentro del chat; la imagen se guarda en Galería › " +
+                "Krypta. Ojo: esa imagen ya está fuera del cifrado, así que trátala como " +
+                "cualquier foto de tu móvil.",
+        ),
+        HelpItem(
+            category = "Privacidad y seguridad",
             question = "¿Puedo recuperar mi cuenta si pierdo o cambio de teléfono?",
             answer = "Solo si hiciste una copia de seguridad (Ajustes → Copia de seguridad). Sin " +
                 "ella, perder el móvil significa perder tu PeerID, y tus contactos tendrían que " +
@@ -81,6 +91,24 @@ object HelpContent {
             answer = "Abre el chat y pulsa el icono de teléfono; durante la llamada puedes " +
                 "activar la cámara con el icono de vídeo. Las llamadas también van cifradas de " +
                 "extremo a extremo y necesitan que ambos estéis conectados a la vez.",
+        ),
+        HelpItem(
+            category = "Mensajes y llamadas",
+            question = "¿Puedo enviar GIF, stickers o emoji grandes desde el teclado?",
+            answer = "Sí. Abre la pestaña de GIF o de stickers de tu teclado y toca el que " +
+                "quieras: los GIF llegan animados y los stickers conservan su fondo " +
+                "transparente. Un GIF puede pesar bastante, así que se envía por partes y " +
+                "puede tardar unos segundos más que un mensaje de texto; el límite es de 4 MB.",
+        ),
+        HelpItem(
+            category = "Problemas frecuentes",
+            question = "¿Puedo quitar el aviso fijo de “Conectado — recibiendo mensajes”?",
+            answer = "Ese aviso es lo que mantiene a Krypta conectada con la app cerrada: sin él, " +
+                "Android detendría el servicio y dejarías de recibir mensajes y llamadas al " +
+                "instante (Krypta no usa los servidores de notificaciones de Google). El sistema " +
+                "obliga a mostrarlo mientras el servicio funciona. Sí puedes ocultarlo tú: " +
+                "deslízalo para descartarlo, o mantenlo pulsado y desactiva el canal “Servicio en " +
+                "segundo plano”. Krypta seguirá funcionando igual; solo dejarás de ver el aviso.",
         ),
         HelpItem(
             category = "Problemas frecuentes",

@@ -307,6 +307,41 @@ orientación — no se probó explícitamente en la sesión del 16 jul):
      pantalla oculta/muestra los controles (se auto-ocultan a los 4 s); el **PiP propio se
      arrastra** con el dedo y queda dentro de la pantalla.
 
+## 12. Fiabilidad de avisos tras la auditoría del 13 ago — **PENDIENTE**
+Los cinco fallos y sus arreglos están en CLAUDE.md (bloque "Notification reliability audit").
+Lo instrumentado y la limpieza de bandeja ya se verificaron en 1 móvil (ver más abajo); esto
+es lo que **solo se puede comprobar con el segundo**, y es justo el escenario del que se
+quejaba el autor ("hay mensajes recibidos pero la alarma no suena").
+
+1. - [ ] **Mensaje con el proceso muerto** (el caso que se perdía en silencio). En el móvil
+     receptor: `adb shell am force-stop chat.neto.krypta` (o matarlo desde recientes con el
+     limpiador del OEM). **No abrir la app.** Enviar un mensaje desde el otro móvil. Esperar
+     hasta ~2 min (el latido). **Esperado**: suena y aparece la notificación **sin haber
+     abierto la app**. Antes: el mensaje aparecía al abrir, sin haber sonado nunca.
+2. - [ ] **Ráfaga**: enviar 4–5 mensajes seguidos con la app cerrada. **Esperado**: **un solo
+     aviso** por contacto que los acumula (se despliega y se leen todos), suena en cada uno, y
+     el contador del icono no se dispara de más.
+3. - [ ] **Dos contactos a la vez**: recibir de A y de B con la app cerrada → dos avisos, uno
+     por contacto. Abrir la app por el **icono** (no por una notificación) y quedarse en la
+     lista. **Esperado**: la bandeja queda **vacía** de avisos de Krypta (el permanente
+     "Conectado —" sigue) y la lista muestra el **badge de no leídos de A y de B**. Entrar en
+     el chat de A → solo se limpia el badge de A.
+4. - [ ] **Mensaje estando en otro chat**: con la app abierta en el chat de A, recibir de B.
+     **Esperado**: suena y sale el aviso de B (antes: silencio total por tener la app abierta).
+     Recibir de A estando en el chat de A → sin aviso (correcto).
+5. - [ ] **Llamada con la pantalla bloqueada**: bloquear el móvil receptor y llamar.
+     **Esperado**: la llamada **toma la pantalla completa** (full-screen intent) con botones
+     contestar/rechazar, timbre y vibración. Probar **contestar desde la notificación** sin
+     desbloquear → el audio arranca.
+6. - [ ] **Llamada en modo silencio**: con el móvil en silencio, llamar. **Esperado**:
+     **vibra en bucle** aunque no suene (antes solo daba un pulso al postearse el aviso).
+7. - [ ] **Llamada con el proceso muerto**: `force-stop` en el receptor y llamar. **Esperado**:
+     el `invite` llega por buzón en el siguiente latido y timbra. (Ojo: si tarda más que el
+     `INVITE_FRESH_MS` de `CallService`, lo correcto es una fila de "📞 Llamada perdida" en vez
+     de timbrar tarde — anotar cuál de los dos pasa.)
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.
@@ -318,6 +353,33 @@ directa (DCUtR) o se queda en relay.
 ---
 
 ## Verificado en 1 móvil (no requiere el segundo)
+- **Avisos, auditoría del 13 ago**: `KryptaNotificationsTest` (instrumentado, 4/4 en el
+  TECNO/Android 15) cubre la acumulación por contacto (MessagingStyle), que cancelar un
+  contacto no toca al otro, que `cancelAllMessages` barre el canal **sin** tirar el permanente
+  del servicio, y que el sistema **acepta** la notificación de llamada con `CallStyle` +
+  full-screen intent (es donde el sistema rechaza en caliente, no en el build).
+  `USE_FULL_SCREEN_INTENT` sale `granted=true` en `dumpsys package`. En vivo: tres "Probar
+  aviso" seguidos dan **una** notificación de conversación acumulada; ir a inicio y volver a
+  abrir la app deja la bandeja limpia de mensajes con el "Conectado —" del servicio intacto
+  (comprobado con `dumpsys notification` y captura del panel).
+- **Bloqueo de capturas (13 ago)**: con `FLAG_SECURE`, `adb shell screencap` de la app sale
+  **totalmente en negro** (solo se ven las barras del sistema, que no son de Krypta), y
+  ⋮ → "Capturar pantalla" dentro del chat genera un PNG correcto con toda la UI en
+  `Pictures/Krypta` (el menú desplegable no aparece: se esperan dos fotogramas). Queda por
+  comprobar a mano en el móvil, sin adb: el gesto nativo de captura (debe salir el aviso del
+  sistema), un grabador de pantalla (debe grabar negro) y la miniatura de recientes (vacía).
+- **Contenido del teclado (13 ago)**: en el TECNO, con un contacto de usar y tirar, las
+  pestañas **GIF y stickers** de Gboard ya abren (antes: "la app no admite insertar aquí"); un
+  sticker con fondo transparente se pinta **sobre el teal de la burbuja**, no sobre un cuadro
+  negro (arreglo de `WEBP_LOSSY` en `ImageCodec`). Un **GIF de Tenor se envía troceado**
+  (diagnóstico: "→ archivo enviado … (2 trozos)") y la burbuja **se anima**: dos capturas con
+  un segundo de diferencia muestran fotogramas distintos. La vista previa de la lista dice
+  "🎞 GIF". Las dos entradas nuevas de la ayuda (el aviso fijo del servicio y el contenido del
+  teclado) se leen en pantalla.
+  - [ ] **Pendiente con 2 móviles**: que el GIF llegue **animado al receptor** (aquí solo se
+    comprobó la burbuja propia, que usa la copia local; la del receptor la reensambla
+    `DiskFileStore`). Probar también con el receptor **desconectado** (entrega por buzón: 4 MB
+    es el tope precisamente para caber en su cupo de 5 MiB).
 - **Preparación para Play (23 jul)**: AAR regenerado con alineación de **16 KB**
   (`-extldflags=-Wl,-z,max-page-size=16384`; las 4 ABIs a `0x4000`, `zipalign -c -P 16` OK) y
   **copia automática de Google desactivada** (`allowBackup="false"`; `dumpsys package` ya no

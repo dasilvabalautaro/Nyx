@@ -39,6 +39,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Antes de nada: nada de esta ventana debe poder salir en una captura, una grabación
+        // de pantalla ni la miniatura de "recientes". La captura propia de Krypta (⋮ del chat)
+        // sigue funcionando porque dibuja sus vistas, no la superficie. Ver [ScreenSecurity].
+        ScreenSecurity.protect(this)
         enableEdgeToEdge()
         // Bloqueo de acceso: cargar la preferencia y armar el observador de visibilidad
         // antes de componer, para que un arranque en frío ya nazca bloqueado.

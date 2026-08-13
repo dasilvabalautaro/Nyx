@@ -65,6 +65,7 @@ class ChatViewModel @Inject constructor(
     private val calls: CallService,
     private val video: chat.neto.krypta.video.MediaCodecVideoEngine,
     private val backup: chat.neto.krypta.p2p.BackupManager,
+    private val notifier: chat.neto.krypta.IncomingNotifier,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -288,14 +289,59 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { runCatching { chat.send(contact, text.toByteArray()) } }
     }
 
-    /** Comprime y envía una imagen desde su [uri] (photo picker). */
+    /**
+     * Envía una imagen desde su [uri] (photo picker o contenido del teclado).
+     *
+     * Bifurca por tipo: un **GIF va entero por el camino troceado** ([sendAnimation]) para que
+     * conserve la animación; el resto se comprime a una sola pieza en línea. Comprimir un GIF
+     * con `ImageCodec` lo dejaba en su primer fotograma — llegaba congelado.
+     */
     fun sendImage(contact: Contact, uri: android.net.Uri) {
         viewModelScope.launch {
+            val mime = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.getType(uri) }.getOrNull()
+            }
+            if (mime in ANIMATED_MIMES) {
+                sendAnimation(contact, uri, mime!!)
+                return@launch
+            }
             runCatching {
                 val jpeg = withContext(Dispatchers.IO) { ImageCodec.compress(context, uri) }
                 if (jpeg != null) chat.sendImage(contact, jpeg) else _error.value = "No se pudo procesar la imagen"
             }
         }
+    }
+
+    /**
+     * Envía una imagen animada **sin recodificar**: los bytes originales viajan por el camino
+     * de archivos troceados (48 KiB por trozo, con staging en disco y reentrega del buzón), que
+     * es el único que admite más de los ~58 KiB del sobre de imagen en línea — un GIF de
+     * teclado pesa entre cientos de KiB y varios MB.
+     *
+     * Guarda además una **copia local** (igual que las notas de voz) y la pasa como `localPath`,
+     * para que la burbuja propia del emisor también se anime; sin ella solo la vería el que
+     * recibe.
+     */
+    private suspend fun sendAnimation(contact: Contact, uri: android.net.Uri, mime: String) {
+        val picked = withContext(Dispatchers.IO) {
+            runCatching { FilePicker.read(context, uri, MAX_ANIMATION_BYTES) }.getOrNull()
+        }
+        if (picked == null) {
+            _error.value = "GIF demasiado grande (máx ${MAX_ANIMATION_BYTES / (1024 * 1024)} MB) o ilegible"
+            return
+        }
+        val extension = if (mime == "image/webp") "webp" else "gif"
+        val name = picked.name.takeIf { it.contains('.') } ?: "animacion.$extension"
+        val localPath = withContext(Dispatchers.IO) {
+            runCatching {
+                val dir = java.io.File(context.filesDir, "krypta_files/sent").apply { mkdirs() }
+                java.io.File(dir, "${java.util.UUID.randomUUID()}.$extension")
+                    .apply { writeBytes(picked.bytes) }
+                    .absolutePath
+            }.getOrNull()
+        }
+        runCatching { chat.sendFile(contact, name, mime, picked.bytes, localPath) }
+            .onFailure { _error.value = "No se pudo enviar el GIF" }
     }
 
     /** Lee y envía un archivo desde su [uri] (file picker), troceado. Límite v1: 8 MB. */
@@ -330,6 +376,13 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         const val MAX_FILE_BYTES = 8 * 1024 * 1024
+        /**
+         * Tope de una imagen animada. Por debajo del cupo del buzón por destinatario (5 MiB),
+         * para que un GIF siga entregándose aunque el contacto esté desconectado.
+         */
+        const val MAX_ANIMATION_BYTES = 4 * 1024 * 1024
+        /** Formatos que se envían **tal cual** (recodificarlos mataría la animación). */
+        val ANIMATED_MIMES = setOf("image/gif", "image/webp")
     }
 
     /** Reintenta un mensaje FALLIDO (tocándolo en el chat). */
@@ -340,6 +393,16 @@ class ChatViewModel @Inject constructor(
     /** Acusa la lectura de los mensajes recibidos de [contact] (al abrir/ver el chat). */
     fun markRead(contact: Contact) {
         viewModelScope.launch { runCatching { chat.markConversationRead(contact) } }
+    }
+
+    /**
+     * Declara la conversación que se está mirando (null al salir del chat): limpia su
+     * notificación y hace que [chat.neto.krypta.IncomingNotifier] silencie **solo** ese
+     * contacto. Antes bastaba con tener la app abierta en cualquier pantalla para no recibir
+     * ningún aviso, así que un mensaje de otro contacto llegaba sin sonar.
+     */
+    fun onConversationVisible(contactId: String?) {
+        notifier.setVisibleConversation(contactId)
     }
 
     private val _error = MutableStateFlow<String?>(null)

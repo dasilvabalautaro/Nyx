@@ -27,8 +27,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,7 +89,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import chat.neto.krypta.AppLock
-import chat.neto.krypta.KryptaNotifications
+import chat.neto.krypta.ScreenSecurity
 import chat.neto.krypta.core.model.Contact
 import chat.neto.krypta.core.model.MessageStatus
 import chat.neto.krypta.p2p.WanStatus
@@ -280,7 +284,8 @@ internal fun AddContactDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ExperimentalFoundationApi: `Modifier.contentReceiver` (contenido enriquecido del teclado).
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChatScreen(
     viewModel: ChatViewModel,
@@ -289,14 +294,39 @@ private fun ChatScreen(
     onBack: () -> Unit,
 ) {
     val messages by viewModel.messages(contact).collectAsState(initial = emptyList())
-    var draft by remember { mutableStateOf("") }
+    // TextFieldState (API de estado) y no `value/onValueChange`: solo el campo basado en
+    // estado enchufa `Modifier.contentReceiver`, que es lo que habilita GIF/stickers/emoji
+    // grandes del teclado (ver más abajo). `draft` es la vista de texto para el resto.
+    val draftState = rememberTextFieldState()
+    val draft = draftState.text.toString()
     var showVerify by remember { mutableStateOf(false) }
     var showAttach by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var captureRequested by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val context = LocalContext.current
+
+    // Captura propia (la del sistema está bloqueada por FLAG_SECURE). Se espera un par de
+    // fotogramas para que el menú ⋮ ya haya desaparecido: si no, sale él en la imagen.
+    if (captureRequested) {
+        val activity = context.findActivity()
+        LaunchedEffect(Unit) {
+            withFrameNanos {}
+            withFrameNanos {}
+            val message = if (activity == null) {
+                "No se pudo capturar la pantalla"
+            } else {
+                ScreenSecurity.captureToGallery(activity).fold(
+                    onSuccess = { "Captura guardada en Galería › Krypta" },
+                    onFailure = { "No se pudo guardar la captura" },
+                )
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            captureRequested = false
+        }
+    }
 
     // Photo picker del sistema (sin permiso de almacenamiento): al elegir, comprime y envía.
     val pickImage = rememberLauncherForActivityResult(
@@ -378,10 +408,12 @@ private fun ChatScreen(
     // Salir del chat a media grabación la cancela (y libera el micro).
     DisposableEffect(Unit) { onDispose { recorder.cancel() } }
 
-    // Al abrir la conversación, limpia su notificación (y con ella el conteo del icono),
-    // aunque hayas entrado por el icono de la app y no por la propia notificación.
-    LaunchedEffect(contact.id) {
-        KryptaNotifications.cancel(context, contact.id)
+    // Declara qué conversación se está mirando: limpia su notificación (aunque hayas entrado
+    // por el icono de la app) y silencia SOLO los mensajes de este contacto mientras el chat
+    // esté delante — los de cualquier otro sí avisan. Al salir se vuelve a avisar de todo.
+    DisposableEffect(contact.id) {
+        viewModel.onConversationVisible(contact.id)
+        onDispose { viewModel.onConversationVisible(null) }
     }
 
     // Acusa la lectura al abrir y cada vez que llega un mensaje mientras miras el chat →
@@ -470,6 +502,11 @@ private fun ChatScreen(
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
+                                text = { Text("Capturar pantalla") },
+                                leadingIcon = { Icon(KryptaImageIcon, contentDescription = null) },
+                                onClick = { showMenu = false; captureRequested = true },
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Vaciar chat") },
                                 leadingIcon = { Icon(KryptaDeleteIcon, contentDescription = null) },
                                 onClick = { showMenu = false; confirmClear = true },
@@ -543,9 +580,25 @@ private fun ChatScreen(
                     // burbujas (antes un OutlinedTextField transparente, con solo el borde
                     // de foco como fondo, se confundía con la barra que lo rodea).
                     TextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.weight(1f),
+                        state = draftState,
+                        // Contenido enriquecido del teclado: GIF, stickers y emoji grandes.
+                        // Sin este modificador el campo solo anuncia `text/*` en su EditorInfo
+                        // y el teclado responde "la app no admite insertar aquí" — era el caso.
+                        // Con él anuncia `*/*`, y Compose ya pide el permiso de lectura de la
+                        // URI (`InputContentInfoCompat.requestPermission`) antes de entregarla.
+                        modifier = Modifier
+                            .weight(1f)
+                            .contentReceiver { transferable ->
+                                // Devuelve lo NO consumido: el texto plano se deja al campo.
+                                transferable.consume { item ->
+                                    val uri = item.uri
+                                    val isImage = uri != null &&
+                                        context.contentResolver.getType(uri)
+                                            ?.startsWith("image/") == true
+                                    if (isImage) viewModel.sendImage(contact, uri!!)
+                                    isImage
+                                }
+                            },
                         placeholder = { Text("Mensaje cifrado…") },
                         shape = RoundedCornerShape(24.dp),
                         colors = TextFieldDefaults.colors(
@@ -630,7 +683,7 @@ private fun ChatScreen(
                 } else Button(
                     onClick = {
                         viewModel.send(contact, draft)
-                        draft = ""
+                        draftState.clearText()
                     },
                     modifier = Modifier.padding(start = 8.dp),
                 ) { Text("Enviar") }
@@ -983,10 +1036,14 @@ private fun MessageBubble(
                         }
                     }
                     message.file != null ->
-                        // Un audio con copia en disco se reproduce en la burbuja (nota de voz);
-                        // sin copia local (o mime no-audio) cae a la burbuja de archivo genérica.
-                        if (message.file.mime.startsWith("audio/") && message.file.localPath != null) {
+                        // Con copia en disco: un audio se reproduce en la burbuja (nota de voz)
+                        // y un GIF/WebP se anima. Sin copia local (o mime que no sea de esos)
+                        // cae a la burbuja de archivo genérica; AnimatedImage también cae ahí
+                        // si el archivo ya no se puede decodificar.
+                        if (message.file.localPath != null && message.file.mime.startsWith("audio/")) {
                             AudioNote(message.file)
+                        } else if (message.file.localPath != null && message.file.mime in ANIMATED_IMAGE_MIMES) {
+                            AnimatedImage(message.file.localPath) { FileAttachment(message.file) }
                         } else {
                             FileAttachment(message.file)
                         }

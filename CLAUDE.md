@@ -501,6 +501,120 @@ message verbatim and, when the PeerID already belonged to a differently-named co
 about the rename instead of merging silently. Covered by `ChatServiceTest` and verified live.
 Side effect: the one-phone self-send trick for testing the mailbox is gone (Go tests +
 `ChatServiceTest` already cover that path).
+**Notification reliability audit (13 Aug 2026)** — chasing "the message arrives but nothing
+rings". Five real defects, all in the same family: **the alert depended on a collector that
+may not exist**. (1) `ChatService._incoming` is a `SharedFlow(replay = 0)` emitted with
+`tryEmit`, and its only subscriber was `KryptaForegroundService`. When an OEM kills the
+process and **only the heartbeat alarm revives it**, the FGS isn't there — so the mailbox
+envelope was fetched, persisted, **acked (deleted at the node)** and the alert silently
+dropped, gone for good; you only saw it on next app open. Fixed with
+`ChatService.setIncomingNotifier`, a **direct hook** invoked in place right after persisting
+(same pattern as `setMailboxProcessor`), owned by a new `IncomingNotifier` (@Singleton in
+`:app`) attached from `KryptaApplication.onCreate` — the Application exists in *every* process
+start (Activity, service, or `BroadcastReceiver`). (2) Same defect for **calls**, worse:
+`_callSignals`' only subscriber is `CallService`, which only the FGS instantiated, so an
+`invite` arriving by mailbox in an alarm-revived process was dropped — no ring, no
+notification, no missed-call row. `IncomingNotifier` injects `CallService` so the consumer
+exists from process start. (3) `pollOnce()` (the heartbeat safety net) read `bootstrapAddr`,
+which only `start()` sets — in an alarm-revived process it was **null**, so the net was a
+**no-op in exactly its own scenario**; and even with an address, `Libp2pNode.startDht` is
+`node?.startDHT(...)`, a silent no-op with no host. Now it calls `start()` first and falls
+back to the persisted bootstrap; `HeartbeatReceiver` also relaunches the FGS. (4) Suppression
+was `if (uiVisible) return` — having the app open on *any* screen killed every alert, so a
+message from another contact never rang while you sat in the conversation list or another
+chat. Now it only mutes the **conversation you're actually looking at**
+(`IncomingNotifier.setVisibleConversation`, set by `ChatScreen` via `DisposableEffect`).
+(5) Each new message **overwrote** the previous notification's text (same id, plain builder);
+now `Notification.MessagingStyle` accumulates the last 6 per contact, with `setNumber`. Also:
+**incoming-call notifications** gained `Notification.CallStyle` (API 31+) with answer/decline
+actions wired to a new `CallActionReceiver`, and — the big one — **`setFullScreenIntent`**
+(new `USE_FULL_SCREEN_INTENT` permission, auto-granted to calling apps; verified `granted=true`
+on the TECNO): without it a call with the screen off/locked left only a discreet tray entry
+instead of taking over the screen. The ringtone moved out of the FGS to `IncomingNotifier`
+with explicit `USAGE_NOTIFICATION_RINGTONE` `AudioAttributes` (it could otherwise play on the
+music stream) plus **looping vibration** (`VIBRATE`), so silent mode still alerts. **Clearing
+(the second half of the ask)**: `ProcessLifecycleOwner.onStart` → `cancelAllMessages`, which
+sweeps the whole messages channel — tray and icon count to zero on app open — while leaving
+the FGS ongoing notification (cancelling it would kill the service) and a ringing call alone.
+It runs in **two passes, children first**: past 4 notifications the system adds its own
+`ranker_group` header, which it **recreates** if removed before its children (found live: an
+empty header survived the first attempt; it's hidden by the shade, but it was still there).
+Per-contact unread is untouched by design — it lives in Room (`observeUnreadCounts` = incoming
+DELIVERED) and only opening the chat clears it (`markIncomingRead`), so the conversation list
+keeps its badges exactly as before. Covered by `ChatServiceTest` (notifier fires with **no**
+subscriber; a throwing notifier still acks; `pollOnce` starts the host and uses the saved
+bootstrap) and a new instrumented `KryptaNotificationsTest` — instrumented on purpose because
+`CallStyle` is rejected by the **system at `notify()` time**, never by the build. Verified live
+on the TECNO: MessagingStyle notification renders and accumulates, app foreground clears the
+whole tray while the service notification survives, 4 instrumented tests green on Android 15.
+Still pending two phones: a real incoming message with the app killed and a real incoming call
+with the screen locked (see PRUEBAS-PENDIENTES §12).
+**Keyboard rich content — GIF / stickers / big emoji (13 Aug 2026)**: the IME's GIF and sticker
+tabs answered "this app doesn't support inserting here", because a Compose text field only
+advertises `text/*` in its `EditorInfo` unless something declares otherwise. Fixed with
+**`Modifier.contentReceiver`** on the chat input, which flips the advertised types to `*/*`
+(`TextFieldDecoratorModifierNode` picks `mediaTypesAll` when a receive-content config is
+present) and hands over a `TransferableContent`; the handler `consume`s any clip item whose
+resolved mime is `image/*` and routes it to the existing `sendImage` path, returning the rest
+(plain text) to the field. Compose already calls `InputContentInfoCompat.requestPermission()`
+before delivering, so the URI is readable — no extra permission plumbing. **This forced the
+input off the legacy `TextField(value, onValueChange)` onto the state-based
+`TextField(state: TextFieldState)`** (material3 1.4.0 has the overload): only the new
+`BasicTextField` stack (`foundation.text.input.internal`) wires `commitContent`, the legacy
+`CoreTextField` never sees it. `draft` is now `draftState.text.toString()` and clearing is
+`clearText()`. Needs `@OptIn(ExperimentalFoundationApi::class)`. Second half of the fix, in
+`ImageCodec`: stickers and big emoji are PNG/WebP **with alpha**, and JPEG has none — they
+arrived with a **black** background. `compress` now picks the format from `bitmap.hasAlpha()`:
+**`WEBP_LOSSY`** (alpha-capable, compresses at least as well, decoded by the same
+`BitmapFactory` on the far side) for stickers, JPEG for photos — no protocol change, no new
+dependency. Verified live on the TECNO: the GIF and sticker tabs open instead of refusing,
+a Tenor GIF sends, and a transparent heart sticker renders **on the bubble's teal**, not on a
+black box.
+**Animated GIF (13 Aug 2026)**: shipped, **no protocol change and no new dependency**.
+Transport — `ChatViewModel.sendImage` branches on the resolved mime: `image/gif` and
+`image/webp` go **byte-for-byte through the chunked file path** (`sendFile`, 48 KiB chunks,
+disk staging, mailbox redelivery), the only one that carries more than the inline image
+envelope's ~58 KiB — a keyboard GIF is hundreds of KiB to a few MB. **Never re-encoded**:
+running one through `ImageCodec` is exactly what flattened it to frame one. Cap
+`MAX_ANIMATION_BYTES` = 4 MB, under the node's 5 MiB per-recipient mailbox quota so a GIF still
+lands when the contact is offline. A **local copy** goes to `krypta_files/sent/` and rides as
+`localPath` (the voice-note pattern) so the sender's own bubble animates too. Rendering — new
+`ui/AnimatedImage.kt`: framework-only `ImageDecoder` + `AnimatedImageDrawable` (API 28+, minSdk
+is 30; Coil was considered and rejected for one bubble). Compose can't draw a `Drawable`, so it
+paints onto the native canvas and drives repaints with a `withFrameNanos` loop —
+`AnimatedImageDrawable.draw()` advances by elapsed time, so redrawing is all that's needed and
+no `Drawable.Callback`/scheduler is required. The `tick` is read **inside** the draw block, so
+it invalidates draw only, not composition, and the loop dies with the composition (scrolling a
+GIF off-screen stops it). `setTargetSampleSize` bounds decode to 720 px. Falls back to the
+plain file bubble when the file is gone or won't decode. The chat bubble routes
+`localPath != null && mime in ANIMATED_IMAGE_MIMES` here (static WebP works too — a non-animated
+decode just draws once), and `notificationText` labels it **"🎞 GIF"** instead of
+"📎 archivo.gif", which also fixes the conversation-list preview. Covered by `ChatServiceTest`
+(GIF goes out chunked, is labelled 🎞 GIF, keeps its `localPath`, and the receiver reassembles
+the bytes **identically**) and verified live on the TECNO: a Tenor GIF sent as "archivo enviado
+… (2 trozos)", the bubble **animates** (two screenshots a second apart show different frames),
+and the list preview reads "🎞 GIF".
+**Screenshot/screen-recording block (13 Aug 2026)**: `ScreenSecurity.protect` sets
+**`FLAG_SECURE`** on `MainActivity`'s window in `onCreate` (before composing). One Activity =
+whole app covered; Compose dialogs and `ModalBottomSheet` live in their own windows but
+**inherit** it (`DialogProperties.securePolicy` defaults to `SecureFlagPolicy.Inherit`, and
+material3's ModalBottomSheet copies the parent window's flag via its internal
+`isFlagSecureEnabled`) — no per-dialog wiring. Effect: system screenshots refuse, screen
+recorders capture black, the recents thumbnail is blank, and the window won't mirror to a
+non-secure display. **Krypta itself can still capture**, which is the point:
+`ScreenSecurity.captureToGallery` draws the decor view onto a **software** `Canvas` and saves a
+PNG to `Pictures/Krypta` via MediaStore (`RELATIVE_PATH` + `IS_PENDING`, so no storage
+permission on minSdk 30). It must be `view.draw(Canvas)` and **not `PixelCopy`** — PixelCopy
+reads the surface through the compositor and would come back black under FLAG_SECURE, whereas
+an app drawing its own view hierarchy never touches it. Exposed as **⋮ → "Capturar pantalla"**
+in the chat top bar; the handler waits **two `withFrameNanos`** after closing the menu, or the
+dropdown itself lands in the image. Verified live on the TECNO: `adb shell screencap` of the
+app is **fully black** (only the system status/nav bars show), while ⋮ → Capturar produced a
+correct full-UI PNG in `Pictures/Krypta`. **Consequence for this repo's workflow**:
+`adb shell screencap` no longer works for verifying Krypta's UI — use `uiautomator dump` (the
+accessibility tree is unaffected) or the in-app capture. Two trade-offs to keep in mind: casting
+/screen mirroring shows black, and a capture saved to the gallery is outside the E2EE boundary
+(said as much in the in-app help).
 
 ## Module structure
 
@@ -508,7 +622,10 @@ Side effect: the one-phone self-send trick for testing the mailbox is gone (Go t
 :app            Compose UI + ViewModels. KryptaApplication(@HiltAndroidApp),
                 MainActivity(@AndroidEntryPoint, singleTop for notif deep-links),
                 KryptaForegroundService (keeps the node + wake alive with the UI closed),
-                KryptaNotifications (channels + message notify with deep-link + cancel).
+                IncomingNotifier (owns every user-facing alert; attached from the
+                Application so it survives a process revived by a receiver alone),
+                KryptaNotifications (channels + MessagingStyle/CallStyle builders +
+                cancel), CallActionReceiver (answer/decline from the notification).
                 Wires all modules together.
 :core           Pure domain: interfaces (ISignalingService, IDiscoveryService,
                 MessageRepository, ContactRepository) + models (Message, Contact,
@@ -548,7 +665,15 @@ Use the Gradle wrapper (`./gradlew`).
 - All JVM unit tests: `./gradlew testDebugUnitTest`
 - One module's unit tests: `./gradlew :p2p-signaling:testDebugUnitTest`
 - One test class/method: `./gradlew :p2p-signaling:testDebugUnitTest --tests "chat.neto.krypta.p2p.RendezvousServiceTest"`
-- Instrumented tests (needs device; **uninstalls the app afterwards**): `./gradlew :app:connectedDebugAndroidTest`
+- Instrumented tests (needs device): `./gradlew :app:connectedDebugAndroidTest`
+  — ⚠️ **DESTRUCTIVE ON THE AUTHOR'S PHONE. Ask first.** It uninstalls the app afterwards,
+  which wipes app data: the **Ed25519 identity** (so the PeerID changes and every contact's
+  device now points at a dead one), the contacts, the message history and the attachments.
+  `allowBackup="false"` means there is no system backup to fall back on — the only recovery is
+  a `.krbk` export made beforehand. This bit for real on 13 Aug 2026: a notification-test run
+  wiped the TECNO's identity and its two contacts. **Export a `.krbk` first, or run it on a
+  spare device/emulator.** Target one class with
+  `-Pandroid.testInstrumentationRunnerArguments.class=<FQCN>`; the uninstall happens either way.
 - Lint: `./gradlew :app:lint`
 - Clean: `./gradlew clean`
 

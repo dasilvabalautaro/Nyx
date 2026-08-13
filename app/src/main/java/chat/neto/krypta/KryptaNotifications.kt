@@ -4,19 +4,27 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Person
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 
 /**
  * Centraliza los canales y las notificaciones de Krypta, para que tanto el
- * [KryptaForegroundService] (que postea) como la UI (que cancela al leer) usen la misma
- * lógica y los mismos ids.
+ * [IncomingNotifier] (que postea) como la UI (que limpia al leer) usen la misma lógica y los
+ * mismos ids.
  *
- * Dos canales: **servicio** (persistente, IMPORTANCE_LOW, sin badge — no debe sumar al
- * conteo del icono) y **mensajes** (IMPORTANCE_HIGH → heads-up + sonido + vibración, con
- * badge). La notificación de mensaje lleva un **deep-link** a su conversación y se
- * autocancela al tocarla; además la UI la cancela al abrir el chat, para que el conteo del
- * icono se limpie aunque entres por el icono en vez de por la notificación.
+ * Tres canales: **servicio** (persistente, IMPORTANCE_LOW, sin badge — no debe sumar al
+ * conteo del icono), **mensajes** (IMPORTANCE_HIGH → heads-up + sonido + vibración, con
+ * badge) y **llamadas** (IMPORTANCE_HIGH sin sonido de canal: el timbre en bucle lo pone
+ * [IncomingNotifier]).
+ *
+ * La notificación de mensaje usa [Notification.MessagingStyle], así que varios mensajes
+ * seguidos del mismo contacto se **acumulan** en una sola notificación (como en cualquier
+ * mensajería conocida) en vez de que el último borre al anterior. Lleva un **deep-link** a su
+ * conversación, se autocancela al tocarla, y todas se limpian al pasar la app a primer plano
+ * ([cancelAllMessages]) — los no leídos por contacto siguen viviendo en Room, así que el
+ * badge de la lista de conversaciones no se ve afectado.
  */
 object KryptaNotifications {
 
@@ -30,6 +38,15 @@ object KryptaNotifications {
 
     /** Extra del Intent de MainActivity: id del contacto cuya conversación abrir. */
     const val EXTRA_OPEN_CONTACT = "krypta.open_contact"
+
+    /**
+     * Historial reciente por contacto para el [Notification.MessagingStyle]. Vive en memoria
+     * a propósito: es solo el contenido *ya visible* en la bandeja, y se descarta al cancelar
+     * la notificación. El texto plano no se persiste en ningún sitio.
+     */
+    private val recent = mutableMapOf<String, MutableList<Pair<Long, String>>>()
+
+    private const val MAX_LINES = 6
 
     fun ensureChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -59,10 +76,12 @@ object KryptaNotifications {
                 CHANNEL_CALLS, "Llamadas", NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "Llamadas entrantes"
-                // Sin sonido de canal: el timbre en bucle lo pone el servicio (RingtoneManager).
+                // Sin sonido de canal: el timbre en bucle lo pone IncomingNotifier
+                // (RingtoneManager), que también vibra en bucle mientras suena.
                 setSound(null, null)
-                enableVibration(true)
+                enableVibration(false)
                 setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
         )
     }
@@ -77,12 +96,38 @@ object KryptaNotifications {
             .setOngoing(true)
             .build()
 
-    /** Postea la notificación de un mensaje nuevo (con deep-link a su conversación). */
-    fun notifyMessage(context: Context, contactId: String, title: String, text: String) {
+    /**
+     * Postea (o actualiza) la notificación de [contactId] añadiendo [text] a su hilo. Con
+     * varios mensajes sin leer se ven las últimas [MAX_LINES] líneas y el conteo, y **cada
+     * mensaje nuevo vuelve a sonar** (sin `setOnlyAlertOnce`), que es el comportamiento
+     * esperado en una mensajería.
+     */
+    fun notifyMessage(
+        context: Context,
+        contactId: String,
+        contactName: String,
+        text: String,
+        timestamp: Long = System.currentTimeMillis(),
+    ) {
+        val lines = synchronized(recent) {
+            val list = recent.getOrPut(contactId) { mutableListOf() }
+            list.add(timestamp to text)
+            while (list.size > MAX_LINES) list.removeAt(0)
+            list.toList()
+        }
+        val sender = Person.Builder().setName(contactName).setImportant(true).build()
+        val style = Notification.MessagingStyle(Person.Builder().setName("Tú").build())
+            .setConversationTitle(contactName)
+        for ((ts, line) in lines) style.addMessage(line, ts, sender)
+
         val notification = Notification.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_stat_krypta)
-            .setContentTitle(title)
+            .setStyle(style)
+            .setContentTitle(contactName)
             .setContentText(text)
+            .setWhen(timestamp)
+            .setShowWhen(true)
+            .setNumber(lines.size)
             .setContentIntent(openAppIntent(context, contactId, requestCode = contactId.hashCode()))
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setAutoCancel(true)
@@ -91,23 +136,71 @@ object KryptaNotifications {
             .notify(contactId.hashCode(), notification)
     }
 
-    /** Cancela la notificación de [contactId] (al leer su chat → limpia el conteo del icono). */
+    /** Cancela la notificación de [contactId] (al abrir su chat) y olvida su hilo. */
     fun cancel(context: Context, contactId: String) {
+        synchronized(recent) { recent.remove(contactId) }
         context.getSystemService(NotificationManager::class.java).cancel(contactId.hashCode())
     }
 
-    /** Notificación de llamada entrante: tocarla abre la app (la pantalla de llamada ya
-     * está en RINGING). El timbre lo pone el servicio, no el canal. */
+    /**
+     * Retira **todas** las notificaciones de mensaje (al pasar la app a primer plano): la
+     * bandeja y el conteo del icono quedan limpios de un golpe, sin tener que entrar en cada
+     * chat. Los **no leídos siguen intactos** — viven en Room y solo los borra abrir la
+     * conversación (`markIncomingRead`), así que la lista de contactos conserva su badge.
+     *
+     * Filtra por canal en vez de usar `cancelAll()` para no tirar la notificación permanente
+     * del servicio en primer plano (que lo mataría) ni la de una llamada entrante sonando.
+     *
+     * Va en **dos pasadas, hijas primero**: cuando hay 4+ avisos el sistema los agrupa bajo
+     * una cabecera automática suya (`ranker_group`), y si se retira antes que sus hijas el
+     * sistema la vuelve a crear — se quedaba una cabecera vacía en la bandeja, contando en el
+     * icono. Por eso la segunda pasada relee las activas y barre lo que quede en el canal.
+     */
+    fun cancelAllMessages(context: Context) {
+        synchronized(recent) { recent.clear() }
+        val nm = context.getSystemService(NotificationManager::class.java)
+        runCatching {
+            val onMessagesChannel = { sbn: android.service.notification.StatusBarNotification ->
+                sbn.notification.channelId == CHANNEL_MESSAGES
+            }
+            nm.activeNotifications
+                .filter { onMessagesChannel(it) && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
+                .forEach { nm.cancel(it.tag, it.id) }
+            nm.activeNotifications
+                .filter(onMessagesChannel)
+                .forEach { nm.cancel(it.tag, it.id) }
+        }
+    }
+
+    /**
+     * Notificación de **llamada entrante**. Desde API 31 usa [Notification.CallStyle] con
+     * acciones de contestar/rechazar y, en ambas versiones, un **full-screen intent**: sin él
+     * (era el caso) una llamada con la pantalla apagada o bloqueada solo dejaba un aviso
+     * discreto en la bandeja en vez de tomar la pantalla como cualquier teléfono.
+     */
     fun notifyIncomingCall(context: Context, contactName: String) {
-        val notification = Notification.Builder(context, CHANNEL_CALLS)
+        val fullScreen = openAppIntent(context, contactId = null, requestCode = CALL_ID)
+        val answer = CallActionReceiver.pendingIntent(context, CallActionReceiver.ACTION_ANSWER)
+        val decline = CallActionReceiver.pendingIntent(context, CallActionReceiver.ACTION_DECLINE)
+        val builder = Notification.Builder(context, CHANNEL_CALLS)
             .setSmallIcon(R.drawable.ic_stat_krypta)
             .setContentTitle("📞 Llamada entrante")
             .setContentText(contactName)
-            .setContentIntent(openAppIntent(context, contactId = null, requestCode = CALL_ID))
+            .setContentIntent(fullScreen)
+            .setFullScreenIntent(fullScreen, true)
             .setCategory(Notification.CATEGORY_CALL)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOngoing(true)
-            .build()
-        context.getSystemService(NotificationManager::class.java).notify(CALL_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val caller = Person.Builder().setName(contactName).setImportant(true).build()
+            builder.setStyle(Notification.CallStyle.forIncomingCall(caller, decline, answer))
+        } else {
+            val icon = android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_stat_krypta)
+            builder
+                .addAction(Notification.Action.Builder(icon, "Rechazar", decline).build())
+                .addAction(Notification.Action.Builder(icon, "Contestar", answer).build())
+        }
+        context.getSystemService(NotificationManager::class.java).notify(CALL_ID, builder.build())
     }
 
     /** Retira la notificación de llamada (al contestar/rechazar/perderse). */

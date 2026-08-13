@@ -87,13 +87,49 @@ class ChatService @Inject constructor(
     /** Registro de diagnóstico (últimas ~30 líneas). */
     val log: StateFlow<List<String>> = _log.asStateFlow()
 
-    private val _incoming = MutableSharedFlow<Pair<Contact, Message>>(extraBufferCapacity = 16)
-    /** Mensajes entrantes ya persistidos (contacto + mensaje) — para notificaciones. */
+    private val _incoming = MutableSharedFlow<Pair<Contact, Message>>(extraBufferCapacity = 64)
+    /**
+     * Mensajes entrantes ya persistidos (contacto + mensaje). **Observación best-effort**: es
+     * un SharedFlow sin replay, así que lo emitido sin suscriptores (o con el búfer lleno) se
+     * pierde. Para el **aviso al usuario** no se usa esto sino [setIncomingNotifier], que es
+     * un gancho directo y no puede perderse — ver su documentación.
+     */
     val incoming: Flow<Pair<Contact, Message>> = _incoming
 
+    @Volatile
+    private var incomingNotifier: (suspend (Contact, Message) -> Unit)? = null
+
+    /**
+     * Registra el gancho de **aviso de mensaje entrante**, invocado *en el sitio* justo tras
+     * persistir cada entrante (mismo patrón que [ISignalingService.setMailboxProcessor]).
+     *
+     * Existe porque el aviso NO puede depender de que alguien esté coleccionando [incoming]:
+     * un `MutableSharedFlow` con `replay = 0` **descarta en silencio** lo emitido sin
+     * suscriptores, y eso pasaba de verdad — cuando el OEM mata el proceso y lo revive solo
+     * el `HeartbeatReceiver`, el servicio en primer plano (único suscriptor) no existe, el
+     * mensaje se retiraba del buzón, se persistía, se confirmaba (borrándolo del nodo) y el
+     * aviso se perdía para siempre: "llegó el mensaje pero no sonó nada".
+     */
+    fun setIncomingNotifier(notifier: suspend (Contact, Message) -> Unit) {
+        incomingNotifier = notifier
+    }
+
+    /** Publica un entrante ya persistido: flujo de observación + gancho de aviso garantizado. */
+    private suspend fun emitIncoming(contact: Contact, message: Message) {
+        _incoming.tryEmit(contact to message)
+        // El aviso nunca debe tumbar la recepción (y un fallo aquí no debe impedir el ack:
+        // el mensaje YA está persistido, que es lo que el buzón confirma).
+        runCatching { incomingNotifier?.invoke(contact, message) }
+            .onFailure { logLine("aviso no mostrado: ${(it.message ?: "$it").take(60)}") }
+    }
+
     private val _callSignals =
-        MutableSharedFlow<Pair<Contact, MessageEnvelope.Decoded.Call>>(extraBufferCapacity = 16)
-    /** Señales de llamada entrantes (invite/accept/…), descifradas. Las consume CallService. */
+        MutableSharedFlow<Pair<Contact, MessageEnvelope.Decoded.Call>>(extraBufferCapacity = 64)
+    /**
+     * Señales de llamada entrantes (invite/accept/…), descifradas. Las consume `CallService`,
+     * que por eso debe instanciarse al arrancar el proceso (lo hace `KryptaApplication`): sin
+     * suscriptor, un `invite` se descarta en silencio y la llamada no suena.
+     */
     val callSignals: Flow<Pair<Contact, MessageEnvelope.Decoded.Call>> = _callSignals
 
     private fun logLine(msg: String) {
@@ -277,9 +313,17 @@ class ChatService @Inject constructor(
      * AlarmManager: en móviles que **suspenden la red en segundo plano** (Transsion/TECNO,
      * etc.) el stream de wake queda dormido; al despertar el sistema el latido descarga el
      * buzón y dispara el aviso. No hace nada si la WAN está desactivada.
+     *
+     * Arranca antes el host/WAN ([start] es idempotente): si el OEM mató el proceso y lo
+     * revivió **solo la alarma**, nadie llamó a `start()`, así que `bootstrapAddr` estaría
+     * vacío y el nodo nativo ni existiría — el latido era un no-op justo en el escenario
+     * para el que se creó. Tras `start()` se releen los nodos guardados por si acaso.
      */
     suspend fun pollOnce() {
-        val bootstrap = bootstrapAddr ?: return
+        runCatching { start() }
+        val bootstrap = bootstrapAddr
+            ?: runCatching { signaling.bootstrap() }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return
         runCatching { signaling.connectDht(bootstrap) }
         fetchMailbox()
     }
@@ -463,7 +507,7 @@ class ChatService @Inject constructor(
             status = MessageStatus.DELIVERED,
         )
         messages.save(message)
-        _incoming.tryEmit(contact to message)
+        emitIncoming(contact, message)
         logLine("📞 llamada perdida de ${short(contact.peerId)}")
     }
 
@@ -605,7 +649,7 @@ class ChatService @Inject constructor(
             status = MessageStatus.DELIVERED,
         )
         messages.save(message)
-        _incoming.tryEmit(contact to message)
+        emitIncoming(contact, message)
         return message
     }
 
@@ -624,7 +668,7 @@ class ChatService @Inject constructor(
             status = MessageStatus.DELIVERED,
         )
         messages.save(message)
-        _incoming.tryEmit(contact to message)
+        emitIncoming(contact, message)
         logLine("← archivo de ${short(contact.peerId)}: ${f.name}")
         return message
     }
@@ -790,14 +834,21 @@ class ChatService @Inject constructor(
     fun notificationText(contact: Contact, message: Message): String =
         when (val c = runCatching { content(contact, message) }.getOrNull()) {
             is MessageContent.Image -> "📷 Foto"
-            is MessageContent.File ->
-                if (c.mime.startsWith("audio/")) "🎤 Nota de voz" else "📎 ${c.name}"
+            is MessageContent.File -> when {
+                c.mime.startsWith("audio/") -> "🎤 Nota de voz"
+                // Un GIF viaja por el camino de archivos (para no perder la animación), pero
+                // para el usuario no es "un adjunto llamado archivo.gif".
+                c.mime in ANIMATED_IMAGE_MIMES -> "🎞 GIF"
+                else -> "📎 ${c.name}"
+            }
             is MessageContent.Text -> c.text.ifBlank { "Mensaje nuevo" }
             null -> "Mensaje nuevo"
         }
 
     private companion object {
         const val SELF = "self"
+        /** Imágenes animadas: viajan como archivo pero se rotulan/pintan como imagen. */
+        val ANIMATED_IMAGE_MIMES = setOf("image/gif", "image/webp")
         // Texto de la fila local de llamada perdida (no viaja por la red).
         const val MISSED_CALL_TEXT = "📞 Llamada perdida"
         // Bucle ágil cuando el wake no está (sonda buzón + redescubre). Bien por debajo del

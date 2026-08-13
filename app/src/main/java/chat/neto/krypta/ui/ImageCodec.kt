@@ -11,9 +11,15 @@ import kotlin.math.max
 
 /**
  * Compresión de imágenes para envío **en línea** (v1): reduce la resolución y baja la calidad
- * JPEG hasta que quepa bajo el límite del buzón (~60 KiB, dejando margen para el sobre + el
+ * hasta que quepa bajo el límite del buzón (~60 KiB, dejando margen para el sobre + el
  * cifrado). Para resolución completa hará falta troceado (chunking) — v2. Solo aquí (usa las
  * APIs Bitmap de Android); el sobre/cifrado son agnósticos del formato.
+ *
+ * **Formato según transparencia**: JPEG para fotos, **WEBP_LOSSY para lo que tenga canal
+ * alfa**. Los stickers y los emoji grandes del teclado son PNG/WebP con fondo transparente, y
+ * el JPEG no tiene alfa: llegaban con el fondo en **negro**. WebP con pérdida sí conserva el
+ * alfa, comprime igual o mejor, y el receptor lo abre con el mismo `BitmapFactory` — así que
+ * no hace falta tocar el protocolo ni añadir dependencias.
  */
 object ImageCodec {
 
@@ -21,23 +27,24 @@ object ImageCodec {
     private const val MAX_BYTES = 58 * 1024
     private const val MAX_DIMENSION = 1280
 
-    /** Lee [uri], reduce y comprime a JPEG bajo [MAX_BYTES]. Devuelve null si no se puede. */
+    /** Lee [uri], reduce y comprime bajo [MAX_BYTES]. Devuelve null si no se puede. */
     fun compress(context: Context, uri: Uri): ByteArray? {
         val original = decodeScaled(context, uri, MAX_DIMENSION) ?: return null
         try {
+            val format = formatFor(original)
             var quality = 85
-            var out = jpeg(original, quality)
+            var out = encode(original, format, quality)
             // Baja calidad mientras no quepa (suelo de 40 para no destrozar la imagen).
             while (out.size > MAX_BYTES && quality > 40) {
                 quality -= 10
-                out = jpeg(original, quality)
+                out = encode(original, format, quality)
             }
             // Si aún no cabe, reduce a la mitad y reintenta una vez.
             if (out.size > MAX_BYTES) {
                 val half = Bitmap.createScaledBitmap(
                     original, max(1, original.width / 2), max(1, original.height / 2), true,
                 )
-                out = jpeg(half, 80)
+                out = encode(half, format, 80)
                 half.recycle()
             }
             return if (out.size <= MAX_BYTES) out else null
@@ -46,13 +53,17 @@ object ImageCodec {
         }
     }
 
-    /** Decodifica un JPEG (recibido) a [ImageBitmap] para pintarlo. */
+    /** Decodifica una imagen recibida (JPEG o WebP) a [ImageBitmap] para pintarla. */
     fun decode(jpeg: ByteArray): ImageBitmap? =
         runCatching { BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.asImageBitmap() }.getOrNull()
 
-    private fun jpeg(bitmap: Bitmap, quality: Int): ByteArray =
+    /** WebP si hay transparencia que preservar (sticker/emoji), JPEG si no (foto). */
+    private fun formatFor(bitmap: Bitmap): Bitmap.CompressFormat =
+        if (bitmap.hasAlpha()) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.JPEG
+
+    private fun encode(bitmap: Bitmap, format: Bitmap.CompressFormat, quality: Int): ByteArray =
         ByteArrayOutputStream().use { bos ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, bos)
+            bitmap.compress(format, quality, bos)
             bos.toByteArray()
         }
 

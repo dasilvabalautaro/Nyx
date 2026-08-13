@@ -326,6 +326,42 @@ class ChatServiceTest {
         assertEquals("🎤 Nota de voz", chat.notificationText(contact, messages.saved.single()))
     }
 
+    /**
+     * Un GIF viaja **por el camino de archivos troceados y sin recodificar** (es la única forma
+     * de conservar la animación: el sobre de imagen en línea no pasa de ~58 KiB y comprimirlo
+     * lo dejaba en su primer fotograma). Debe llegar con sus bytes intactos, con copia local
+     * para que la burbuja propia se anime, y rotularse "🎞 GIF" y no "📎 archivo.gif".
+     */
+    @Test
+    fun `an animated GIF travels intact as a chunked file and is labelled as GIF`() = runTest {
+        val senderSig = FakeSignaling()
+        val messages = FakeMessages()
+        val chat = ChatService(senderSig, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), backgroundScope)
+        // 100 KiB: por encima del límite del sobre en línea, así que obliga al troceado.
+        val gif = ByteArray(100 * 1024) { (it % 251).toByte() }
+
+        val sent = chat.sendFile(
+            contact, "baile.gif", "image/gif", gif,
+            localPath = "/data/krypta_files/sent/baile.gif",
+        )
+
+        assertEquals(MessageStatus.SENT, sent.status)
+        assertEquals("🎞 GIF", chat.notificationText(contact, messages.saved.single()))
+        val c = chat.content(contact, messages.saved.single()) as chat.neto.krypta.core.model.MessageContent.File
+        assertEquals("image/gif", c.mime)
+        assertEquals("/data/krypta_files/sent/baile.gif", c.localPath)
+
+        // Y del otro lado los bytes se reensamblan **idénticos** (sin recodificar).
+        val rxSig = FakeSignaling()
+        val rxFileStore = FakeFileStore()
+        ChatService(rxSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, backgroundScope)
+        val processor = rxSig.registeredMailboxProcessor!!
+        senderSig.sentAll.forEachIndexed { i, env ->
+            assertTrue(processor(contact.peerId, env, "env-$i", i.toLong()))
+        }
+        assertArrayEquals(gif, rxFileStore.assembled)
+    }
+
     /** Reintentar un mensaje FALLIDO lo reenvía (mismo id) y, si ahora va, queda SENT. */
     @Test
     fun `retry re-sends a FAILED message and marks SENT without duplicating`() = runTest {
@@ -631,6 +667,66 @@ class ChatServiceTest {
         messages.failOnSave = false
         assertTrue(processor(contact.peerId, other, "env-2", 222L))
         assertEquals(2, messages.saved.size)
+    }
+
+    // --- Aviso garantizado del entrante (13 ago) --------------------------------------
+
+    /**
+     * Regresión del "llegó el mensaje pero no sonó nada": el aviso se dispara con el gancho
+     * directo, **sin ningún suscriptor de `incoming`** — que es la situación real cuando el
+     * OEM mata el proceso y lo revive solo la alarma del latido (el servicio en primer plano,
+     * único coleccionador, no existe y el SharedFlow sin replay descartaba la emisión).
+     */
+    @Test
+    fun `incoming notifier fires without any subscriber to the incoming flow`() = runTest {
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), backgroundScope)
+        val avisados = mutableListOf<Pair<String, String>>()
+        chat.setIncomingNotifier { c, m -> avisados.add(c.id to m.id) }
+        val processor = signaling.registeredMailboxProcessor!!
+
+        // Texto por buzón, archivo troceado por buzón y llamada perdida: los tres avisan.
+        val texto = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-1", "hola".toByteArray()))
+        assertTrue(processor(contact.peerId, texto, "env-1", 111L))
+        assertTrue(processor(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeFileMeta("f1", "n.txt", "text/plain", 4L, 1)), "env-2", 222L))
+        assertTrue(processor(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeFileChunk("f1", 0, "hola".toByteArray())), "env-3", 333L))
+        chat.recordMissedCall(contact)
+
+        assertEquals(listOf("mid-1", "f1"), avisados.take(2).map { it.second })
+        assertEquals(3, avisados.size) // + la fila de llamada perdida
+        assertTrue(avisados.all { it.first == contact.id })
+    }
+
+    /** Un aviso que revienta no debe impedir el ack: el mensaje ya está persistido. */
+    @Test
+    fun `a failing notifier does not block the mailbox ack`() = runTest {
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), backgroundScope)
+        chat.setIncomingNotifier { _, _ -> error("NotificationManager murió") }
+
+        val texto = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-9", "hola".toByteArray()))
+        assertTrue(signaling.registeredMailboxProcessor!!(contact.peerId, texto, "env-9", 1L))
+        assertEquals(1, messages.saved.size)
+    }
+
+    /**
+     * Regresión del latido: en un proceso revivido solo por la alarma nadie llamó a `start()`,
+     * así que `pollOnce` se iba de vacío (sin bootstrap en memoria, y sin host nativo) — el
+     * salvavidas de entrega no hacía nada justo en su escenario. Ahora arranca y usa el
+     * bootstrap **persistido**.
+     */
+    @Test
+    fun `pollOnce starts the host and falls back to the saved bootstrap`() = runTest {
+        val signaling = FakeSignaling()
+        signaling.bootstrapAddr = validAddr // pref guardada, pero start() nunca se llamó
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), backgroundScope)
+
+        chat.pollOnce()
+
+        assertEquals(validAddr, signaling.connectedBootstrap)
+        assertTrue(signaling.fetchCalls > 0)
     }
 
     /** Un trozo que no se pudo persistir no se confirma; su reentrega completa el archivo. */

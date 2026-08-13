@@ -130,7 +130,7 @@
   <header>
     <span class="badge">🔒 Krypta</span>
     <h1>Política de Privacidad</h1>
-    <p class="subtitle">Última actualización: 17 de julio de 2026</p>
+    <p class="subtitle">Última actualización: 13 de agosto de 2026</p>
   </header>
 
   <nav class="toc">
@@ -172,8 +172,8 @@
   <a href="#backup">sección 7</a>).</p>
 
   <h2 id="mensajes">3. Mensajes, multimedia y llamadas</h2>
-  <p>Todo el contenido que envías — texto, imágenes, archivos, notas de voz y audio/vídeo
-  de llamadas — se cifra en tu dispositivo antes de salir de él, con una clave derivada
+  <p>Todo el contenido que envías — texto, imágenes, GIF, stickers, archivos, notas de voz
+  y audio/vídeo de llamadas — se cifra en tu dispositivo antes de salir de él, con una clave derivada
   por Diffie-Hellman (X25519) exclusiva entre tú y cada contacto. Ni el nodo de
   señalización ni ningún tercero tienen esa clave, por lo que no pueden leer, escuchar ni
   ver ese contenido; solo ven bytes cifrados de tamaño variable.</p>
@@ -197,6 +197,16 @@
   voz asociados, conservando el contacto) o <strong>eliminar un contacto</strong> (además
   borra el contacto y detiene su descubrimiento en la red). Ambas acciones son locales,
   inmediatas e irreversibles — no existe una copia en ningún servidor que restaurar.</p>
+  <p><strong>Una excepción que conviene que conozcas: las capturas de pantalla que hagas
+  tú.</strong> Krypta bloquea la captura y la grabación de pantalla del sistema (ver
+  <a href="#seguridad">sección 9</a>), pero ofrece dentro del chat una opción propia
+  («⋮ → Capturar pantalla»). La imagen que genera se guarda como un archivo normal en la
+  galería de tu teléfono (<em>Imágenes › Krypta</em>) y, a partir de ese momento,
+  <strong>deja de estar protegida por Krypta</strong>: no se cifra, no se borra al vaciar la
+  conversación ni al eliminar el contacto, cualquier app con acceso a tus fotos puede leerla
+  y, si tienes activada la copia automática de fotos de tu teléfono (Google Fotos u otra),
+  se subirá a esa nube como cualquier otra imagen. Trátala como lo que es: una foto más de
+  tu galería. Si no quieres que exista, bórrala desde la galería.</p>
   <table>
     <tr><th>Dato</th><th>Dónde se guarda</th><th>Quién lo ve</th></tr>
     <tr><td>Nombre y PeerID de tus contactos</td><td>Solo tu dispositivo</td><td>Solo tú</td></tr>
@@ -234,6 +244,15 @@
     <tr><td>Micrófono</td><td>Grabar notas de voz y llamadas de voz/vídeo que tú
     inicies.</td></tr>
     <tr><td>Notificaciones</td><td>Avisarte de mensajes y llamadas entrantes.</td></tr>
+    <tr><td>Notificación a pantalla completa</td><td>Mostrar una llamada entrante ocupando
+    la pantalla, como hace la app de teléfono, para que puedas contestarla con el móvil
+    bloqueado. Solo se usa para llamadas.</td></tr>
+    <tr><td>Vibración</td><td>Vibrar mientras suena una llamada entrante, para que te
+    enteres también con el teléfono en silencio.</td></tr>
+    <tr><td>Galería (solo escritura)</td><td>Guardar en <em>Imágenes › Krypta</em> las
+    capturas de pantalla que pidas tú desde el chat (ver <a href="#dispositivo">sección
+    4</a>). Krypta no lee tu galería: para adjuntar una foto usas el selector del sistema,
+    que solo le entrega la imagen que elijas.</td></tr>
     <tr><td>Servicio en primer plano / inicio automático / optimización de batería</td>
     <td>Mantener la app conectada para poder recibir mensajes y llamadas aunque no la
     tengas abierta.</td></tr>
@@ -255,14 +274,29 @@
   con nadie, porque no los recopilamos en primer lugar: el diseño de la app hace que ni
   siquiera sus propios desarrolladores puedan acceder al contenido de tus
   conversaciones.</p>
+  <p><strong>Tu teclado sí es un tercero.</strong> Krypta te deja enviar GIF, stickers y
+  emoji grandes desde tu teclado, pero esas pestañas las sirve el teclado que tengas
+  instalado (Gboard, SwiftKey, etc.), no Krypta: al buscar un GIF, es <em>el teclado</em>
+  quien envía lo que escribes a sus propios servidores y descarga la imagen desde ellos.
+  Eso ocurre fuera de Krypta y de su cifrado, y se rige por la política de privacidad de
+  tu teclado. Una vez elegido, el GIF ya viaja cifrado como cualquier otro adjunto. Esto
+  vale para cualquier app de mensajería: si no quieres que tu teclado vea nada, usa un
+  teclado sin buscador de GIF o adjunta el archivo desde el clip.</p>
 
   <h2 id="seguridad">9. Seguridad</h2>
   <p>Todo el contenido se cifra de extremo a extremo (AES-256-GCM con claves derivadas por
   X25519/HKDF). Para protegerte de una posible suplantación de identidad, Krypta ofrece un
   <strong>número de seguridad</strong> y verificación por código QR que puedes comparar con
-  tu contacto por otro canal para confirmar que hablas con quien crees. Ningún sistema es
-  perfecto: la seguridad de tus conversaciones depende también de mantener tu dispositivo y
-  tu copia de seguridad protegidos.</p>
+  tu contacto por otro canal para confirmar que hablas con quien crees.</p>
+  <p>Krypta <strong>bloquea la captura y la grabación de pantalla</strong> del sistema: si
+  alguien intenta capturar la app, el teléfono lo impide; si graba la pantalla o la
+  proyecta en otro dispositivo, la ventana de Krypta sale en negro; y sus contenidos
+  tampoco aparecen en la vista de aplicaciones recientes. Esto protege tus conversaciones
+  frente a otras apps del teléfono y frente a una grabación descuidada, pero no puede
+  impedir que alguien fotografíe la pantalla con otra cámara ni que tu propio contacto
+  guarde lo que le envías.</p>
+  <p>Ningún sistema es perfecto: la seguridad de tus conversaciones depende también de
+  mantener tu dispositivo y tu copia de seguridad protegidos.</p>
 
   <h2 id="menores">10. Menores de edad</h2>
   <p>Krypta no está dirigida a menores de 16 años y no recopila conscientemente datos de

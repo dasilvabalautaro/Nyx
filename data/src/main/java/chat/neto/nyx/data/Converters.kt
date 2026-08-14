@@ -1,7 +1,7 @@
-package chat.neto.krypta.data
+package chat.neto.nyx.data
 
 import androidx.room.TypeConverter
-import chat.neto.krypta.core.model.MessageStatus
+import chat.neto.nyx.core.model.MessageStatus
 
 class Converters {
     @TypeConverter

@@ -1,13 +1,13 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.KeyExchange
-import chat.neto.krypta.core.SignalingEvent
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.core.repository.ContactRepository
-import chat.neto.krypta.core.repository.MessageRepository
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.KeyExchange
+import chat.neto.nyx.core.SignalingEvent
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.core.repository.MessageRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
@@ -57,12 +57,12 @@ class ChatServiceTest {
         override suspend fun pingProbe(count: Int, intervalMs: Int): String =
             "n=$count/$count min=1ms p50=1ms p95=2ms max=3ms"
         override val incomingCallStreams =
-            MutableSharedFlow<Pair<String, chat.neto.krypta.core.CallStream>>()
-        override suspend fun openCallStream(contact: Contact): chat.neto.krypta.core.CallStream =
+            MutableSharedFlow<Pair<String, chat.neto.nyx.core.CallStream>>()
+        override suspend fun openCallStream(contact: Contact): chat.neto.nyx.core.CallStream =
             error("sin streams de llamada en este fake")
         override val incomingVideoStreams =
-            MutableSharedFlow<Pair<String, chat.neto.krypta.core.CallStream>>()
-        override suspend fun openVideoStream(contact: Contact): chat.neto.krypta.core.CallStream =
+            MutableSharedFlow<Pair<String, chat.neto.nyx.core.CallStream>>()
+        override suspend fun openVideoStream(contact: Contact): chat.neto.nyx.core.CallStream =
             error("sin streams de vídeo en este fake")
         var failOnSend = false
         val sentAll = mutableListOf<ByteArray>()
@@ -149,12 +149,12 @@ class ChatServiceTest {
     }
 
     /** Reensambla en memoria (sin disco), para probar el troceado de archivos. */
-    private class FakeFileStore : chat.neto.krypta.core.FileStore {
-        private var meta: chat.neto.krypta.core.IncomingFileMeta? = null
+    private class FakeFileStore : chat.neto.nyx.core.FileStore {
+        private var meta: chat.neto.nyx.core.IncomingFileMeta? = null
         private val chunks = mutableMapOf<Int, ByteArray>()
         /** Simula un fallo de staging (p. ej. escritura a disco) al guardar un trozo. */
         var failOnChunk = false
-        override suspend fun onMeta(fileId: String, m: chat.neto.krypta.core.IncomingFileMeta) =
+        override suspend fun onMeta(fileId: String, m: chat.neto.nyx.core.IncomingFileMeta) =
             run { meta = m; assemble() }
         override suspend fun onChunk(fileId: String, index: Int, bytes: ByteArray) =
             run {
@@ -162,11 +162,11 @@ class ChatServiceTest {
                 chunks[index] = bytes
                 assemble()
             }
-        private fun assemble(): chat.neto.krypta.core.AssembledFile? {
+        private fun assemble(): chat.neto.nyx.core.AssembledFile? {
             val m = meta ?: return null
             if (chunks.size < m.totalChunks) return null
             val all = (0 until m.totalChunks).fold(ByteArray(0)) { acc, i -> acc + chunks[i]!! }
-            return chat.neto.krypta.core.AssembledFile(m.name, m.mime, m.size, "/tmp/${m.name}").also {
+            return chat.neto.nyx.core.AssembledFile(m.name, m.mime, m.size, "/tmp/${m.name}").also {
                 assembled = all
             }
         }
@@ -266,7 +266,7 @@ class ChatServiceTest {
         assertArrayEquals(jpeg, (env as MessageEnvelope.Decoded.Image).bytes)
         // content() lo clasifica como imagen
         val c = chat.content(contact, messages.saved.single())
-        assertArrayEquals(jpeg, (c as chat.neto.krypta.core.model.MessageContent.Image).jpeg)
+        assertArrayEquals(jpeg, (c as chat.neto.nyx.core.model.MessageContent.Image).jpeg)
         // la notificación de una imagen es "📷 Foto"
         assertEquals("📷 Foto", chat.notificationText(contact, messages.saved.single()))
     }
@@ -284,7 +284,7 @@ class ChatServiceTest {
         assertEquals("img-9", received.id)
         assertEquals(MessageStatus.DELIVERED, received.status)
         val c = chat.content(contact, received)
-        assertArrayEquals(jpeg, (c as chat.neto.krypta.core.model.MessageContent.Image).jpeg)
+        assertArrayEquals(jpeg, (c as chat.neto.nyx.core.model.MessageContent.Image).jpeg)
     }
 
     /** Un archivo grande se trocea al enviar (emisor) y se reensambla idéntico al recibir (receptor). */
@@ -320,7 +320,7 @@ class ChatServiceTest {
         )
 
         assertEquals(MessageStatus.SENT, sent.status)
-        val c = chat.content(contact, messages.saved.single()) as chat.neto.krypta.core.model.MessageContent.File
+        val c = chat.content(contact, messages.saved.single()) as chat.neto.nyx.core.model.MessageContent.File
         assertEquals("audio/mp4", c.mime)
         assertEquals("/data/notas/nota-voz-1.m4a", c.localPath) // burbuja propia reproducible
         assertEquals("🎤 Nota de voz", chat.notificationText(contact, messages.saved.single()))
@@ -342,14 +342,14 @@ class ChatServiceTest {
 
         val sent = chat.sendFile(
             contact, "baile.gif", "image/gif", gif,
-            localPath = "/data/krypta_files/sent/baile.gif",
+            localPath = "/data/nyx_files/sent/baile.gif",
         )
 
         assertEquals(MessageStatus.SENT, sent.status)
         assertEquals("🎞 GIF", chat.notificationText(contact, messages.saved.single()))
-        val c = chat.content(contact, messages.saved.single()) as chat.neto.krypta.core.model.MessageContent.File
+        val c = chat.content(contact, messages.saved.single()) as chat.neto.nyx.core.model.MessageContent.File
         assertEquals("image/gif", c.mime)
-        assertEquals("/data/krypta_files/sent/baile.gif", c.localPath)
+        assertEquals("/data/nyx_files/sent/baile.gif", c.localPath)
 
         // Y del otro lado los bytes se reensamblan **idénticos** (sin recodificar).
         val rxSig = FakeSignaling()
@@ -443,14 +443,14 @@ class ChatServiceTest {
 
     /**
      * Regresión: el bug de los datos móviles. mDNS revienta sin interfaz multicast y eso NO
-     * debe impedir el WAN (camino principal de Krypta). Aunque `signaling.start()` lance, el
+     * debe impedir el WAN (camino principal de Nyx). Aunque `signaling.start()` lance, el
      * bucle WAN debe arrancar y conectar a la DHT vía el bootstrap.
      */
     @Test
     fun `start launches WAN even when host-mDNS startup fails`() = runTest {
         val signaling = FakeSignaling().apply {
             failOnStart = true // mDNS revienta (datos móviles)
-            bootstrapAddr = "/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooWNode"
+            bootstrapAddr = "/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooWNode"
         }
         val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), backgroundScope)
 
@@ -505,13 +505,13 @@ class ChatServiceTest {
         assertEquals("Jimena", contacts.findById("12D3KooWJimena")!!.displayName)
     }
 
-    private val validAddr = "/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooWNode"
+    private val validAddr = "/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooWNode"
 
     @Test
     fun `bootstrap validation accepts real multiaddrs and rejects garbage`() {
         assertTrue(isValidBootstrapAddr(validAddr))
         assertTrue(isValidBootstrapAddr("/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNode"))
-        assertFalse(isValidBootstrapAddr("krypta.neto.chat"))          // no empieza por /
+        assertFalse(isValidBootstrapAddr("nyx.neto.chat"))          // no empieza por /
         assertFalse(isValidBootstrapAddr("/dns4/x/tcp/443/wss"))       // sin /p2p/
         assertFalse(isValidBootstrapAddr("/dns4/x/tcp/443/wss/p2p/"))  // /p2p/ vacío
         assertFalse(isValidBootstrapAddr(""))
@@ -773,7 +773,7 @@ class ChatServiceTest {
         chat.send(contact, "un texto".toByteArray())
         val voiceNote = chat.sendFile(
             contact, "nota.m4a", "audio/mp4",
-            ByteArray(1024) { 5 }, localPath = "/data/krypta_files/sent/nota.m4a",
+            ByteArray(1024) { 5 }, localPath = "/data/nyx_files/sent/nota.m4a",
         )
         assertEquals(2, messages.saved.size)
 
@@ -781,7 +781,7 @@ class ChatServiceTest {
 
         assertTrue(messages.saved.isEmpty())
         // El archivo pidió su borrado local (staging/ensamblado + copia propia).
-        assertEquals(listOf(voiceNote.id to "/data/krypta_files/sent/nota.m4a"), fileStore.deleted)
+        assertEquals(listOf(voiceNote.id to "/data/nyx_files/sent/nota.m4a"), fileStore.deleted)
         // El contacto sobrevive (solo se vació el chat).
         assertEquals(contact, contacts.store[contact.id])
     }

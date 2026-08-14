@@ -1,4 +1,4 @@
-package chat.neto.krypta.data
+package chat.neto.nyx.data
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase

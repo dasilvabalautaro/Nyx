@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.Manifest
 import android.content.Intent
@@ -17,8 +17,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import chat.neto.krypta.ui.KryptaApp
-import chat.neto.krypta.ui.theme.KryptaTheme
+import chat.neto.nyx.ui.NyxApp
+import chat.neto.nyx.ui.theme.NyxTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -34,13 +34,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(KryptaNotifications.EXTRA_OPEN_CONTACT)?.let { openContactId = it }
+        intent.getStringExtra(NyxNotifications.EXTRA_OPEN_CONTACT)?.let { openContactId = it }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Antes de nada: nada de esta ventana debe poder salir en una captura, una grabación
-        // de pantalla ni la miniatura de "recientes". La captura propia de Krypta (⋮ del chat)
+        // de pantalla ni la miniatura de "recientes". La captura propia de Nyx (⋮ del chat)
         // sigue funcionando porque dibuja sus vistas, no la superficie. Ver [ScreenSecurity].
         ScreenSecurity.protect(this)
         enableEdgeToEdge()
@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         AppLock.init(applicationContext)
         // Preferencia de tema (claro/oscuro/sistema); por defecto sigue al sistema.
         ThemePreference.init(applicationContext)
-        openContactId = intent.getStringExtra(KryptaNotifications.EXTRA_OPEN_CONTACT)
+        openContactId = intent.getStringExtra(NyxNotifications.EXTRA_OPEN_CONTACT)
         // Android 13+ exige permiso en tiempo de ejecución para notificar mensajes nuevos.
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -71,11 +71,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         // El servicio mantiene el nodo (y las notificaciones) vivos al cerrar la UI.
-        KryptaForegroundService.start(this)
+        NyxForegroundService.start(this)
         setContent {
             val themeMode by ThemePreference.mode.collectAsState()
-            KryptaTheme(darkTheme = ThemePreference.resolveDark(themeMode, isSystemInDarkTheme())) {
-                KryptaApp(
+            NyxTheme(darkTheme = ThemePreference.resolveDark(themeMode, isSystemInDarkTheme())) {
+                NyxApp(
                     openContactId = openContactId,
                     onOpenConsumed = { openContactId = null },
                 )

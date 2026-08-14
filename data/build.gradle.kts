@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "chat.neto.krypta.data"
+    namespace = "chat.neto.nyx.data"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1

@@ -1,10 +1,10 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import java.math.BigInteger
 import java.security.MessageDigest
 
 /**
- * Número de seguridad anti-MITM (estilo Signal). En Krypta el PeerID **es** la clave pública
+ * Número de seguridad anti-MITM (estilo Signal). En Nyx el PeerID **es** la clave pública
  * (Ed25519 embebida), así que el intercambio de claves no es vulnerable a un intermediario en
  * la matemática: el riesgo es que alguien **sustituya el PeerID** en el canal por el que se
  * comparte. Este número deriva de *ambos* PeerIDs, es **simétrico** (los dos contactos obtienen
@@ -16,7 +16,7 @@ import java.security.MessageDigest
  */
 object SafetyNumber {
 
-    private const val DOMAIN = "krypta-safety-number-v1"
+    private const val DOMAIN = "nyx-safety-number-v1"
     private const val DIGITS = 60
     private const val GROUP = 5
 

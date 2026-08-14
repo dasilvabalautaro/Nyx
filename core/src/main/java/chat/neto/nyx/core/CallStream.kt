@@ -1,7 +1,7 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /**
- * Stream de llamada full-duplex sobre libp2p (`/krypta/call/1.0.0`): frames binarios opacos
+ * Stream de llamada full-duplex sobre libp2p (`/nyx/call/1.0.0`): frames binarios opacos
  * (cifrados E2EE por la capa superior), transporte fiable y ordenado (yamux/QUIC), directo
  * (DCUtR) o relayed. La implementación concreta envuelve el stream del puente Go.
  */

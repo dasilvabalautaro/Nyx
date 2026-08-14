@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -6,7 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
-import chat.neto.krypta.p2p.ChatService
+import chat.neto.nyx.p2p.ChatService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,14 +31,14 @@ class HeartbeatReceiver : BroadcastReceiver() {
         // goAsync + wakelock: mantiene CPU y ventana de red mientras se retira el buzón.
         val pending = goAsync()
         val wakeLock = context.getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "krypta:heartbeat")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nyx:heartbeat")
             .apply { acquire(WAKELOCK_MS) }
         // Si el OEM mató el proceso, esta alarma es lo único que lo revive: relanzar el
         // servicio deja el nodo y el stream de wake otra vez en pie (y no solo hasta el
         // siguiente latido). La alarma `setAndAllowWhileIdle` abre la ventana que permite
         // arrancar un FGS desde segundo plano; si el sistema aun así lo rechaza, el aviso
         // igualmente sale porque IncomingNotifier vive en la Application.
-        runCatching { KryptaForegroundService.start(context) }
+        runCatching { NyxForegroundService.start(context) }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 chat.pollOnce()

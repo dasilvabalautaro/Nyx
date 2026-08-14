@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui.theme
+package chat.neto.nyx.ui.theme
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size

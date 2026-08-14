@@ -1,6 +1,6 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
-import chat.neto.krypta.core.model.Contact
+import chat.neto.nyx.core.model.Contact
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -95,7 +95,7 @@ interface ISignalingService {
     suspend fun openCallStream(contact: Contact): CallStream
 
     /**
-     * Streams de **vídeo** entrantes (Fase 7c): canal aparte del audio (`/krypta/video/…`,
+     * Streams de **vídeo** entrantes (Fase 7c): canal aparte del audio (`/nyx/video/…`,
      * frames hasta 1 MiB) — si el vídeo se cae, la voz no se ve afectada. Mismo contrato
      * [CallStream]; el consumidor valida el hello E2EE de la llamada activa.
      */

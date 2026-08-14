@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.content.Intent
 import android.net.Uri
@@ -56,11 +56,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import chat.neto.krypta.AppLock
-import chat.neto.krypta.KryptaNotifications
-import chat.neto.krypta.ThemeMode
-import chat.neto.krypta.ThemePreference
-import chat.neto.krypta.p2p.WanStatus
+import chat.neto.nyx.AppLock
+import chat.neto.nyx.NyxNotifications
+import chat.neto.nyx.ThemeMode
+import chat.neto.nyx.ThemePreference
+import chat.neto.nyx.p2p.WanStatus
 
 /**
  * Ajustes: identidad (PeerID para compartir), red WAN (bootstrap + estado), recepción en
@@ -119,12 +119,12 @@ fun SettingsScreen(
                 title = { Text("Ajustes") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(KryptaBackIcon, contentDescription = "Atrás")
+                        Icon(NyxBackIcon, contentDescription = "Atrás")
                     }
                 },
                 actions = {
                     IconButton(onClick = onOpenHelp) {
-                        Icon(KryptaHelpIcon, contentDescription = "Ayuda")
+                        Icon(NyxHelpIcon, contentDescription = "Ayuda")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -144,7 +144,7 @@ fun SettingsScreen(
                 "Tu identidad",
                 onInfo = {
                     infoDialog = "Tu PeerID" to (
-                        "Tu PeerID es tu identidad en Krypta: es tu clave pública, no un " +
+                        "Tu PeerID es tu identidad en Nyx: es tu clave pública, no un " +
                             "teléfono ni un correo, y se crea sola en este móvil. Compártela con " +
                             "quien quiera añadirte; con ella pueden escribirte, pero no revela " +
                             "ningún otro dato tuyo. Si pierdes el móvil sin copia de seguridad, " +
@@ -177,14 +177,14 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SettingsActionButton(
-                        "Copiar", KryptaCopyIcon, myPeerId.isNotEmpty(),
+                        "Copiar", NyxCopyIcon, myPeerId.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     ) {
                         clipboard.setText(AnnotatedString(myPeerId))
                         Toast.makeText(context, "PeerID copiado", Toast.LENGTH_SHORT).show()
                     }
                     SettingsActionButton(
-                        "Compartir", KryptaShareIcon, myPeerId.isNotEmpty(),
+                        "Compartir", NyxShareIcon, myPeerId.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     ) {
                         val send = Intent(Intent.ACTION_SEND).apply {
@@ -209,11 +209,11 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SettingsActionButton(
-                        "Exportar", KryptaUploadIcon,
+                        "Exportar", NyxUploadIcon,
                         modifier = Modifier.weight(1f),
                     ) { askExportPass = true }
                     SettingsActionButton(
-                        "Importar", KryptaDownloadIcon,
+                        "Importar", NyxDownloadIcon,
                         modifier = Modifier.weight(1f),
                     ) { openBackup.launch(arrayOf("*/*")) }
                 }
@@ -232,7 +232,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
-                            "Con tu huella, cara o el PIN del móvil. Krypta no guarda " +
+                            "Con tu huella, cara o el PIN del móvil. Nyx no guarda " +
                                 "ese secreto: lo comprueba el sistema.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -254,8 +254,8 @@ fun SettingsScreen(
                             // al desactivar impide que otro lo apague con el móvil en mano.
                             AppLock.authenticate(
                                 activity,
-                                if (want) "Activar el bloqueo de Krypta"
-                                else "Desactivar el bloqueo de Krypta",
+                                if (want) "Activar el bloqueo de Nyx"
+                                else "Desactivar el bloqueo de Nyx",
                             ) { ok -> if (ok) AppLock.setEnabled(context, want) }
                         },
                     )
@@ -337,7 +337,7 @@ fun SettingsScreen(
                 )
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                     Spacer(Modifier.weight(1f))
-                    SettingsActionButton("Aplicar", KryptaCheckIcon) {
+                    SettingsActionButton("Aplicar", NyxCheckIcon) {
                         onSetBootstrap(bootstrapDraft)
                     }
                 }
@@ -347,10 +347,10 @@ fun SettingsScreen(
                 "Recepción en segundo plano",
                 onInfo = {
                     infoDialog = "Recepción en segundo plano" to (
-                        "Para recibir mensajes con la app cerrada, Krypta mantiene una conexión " +
+                        "Para recibir mensajes con la app cerrada, Nyx mantiene una conexión " +
                             "ligera en segundo plano. Muchos móviles la cortan para ahorrar " +
                             "batería, y entonces los avisos llegan tarde o solo al abrir la app. " +
-                            "Pulsa “Ajustes del sistema” y permite a Krypta: batería sin " +
+                            "Pulsa “Ajustes del sistema” y permite a Nyx: batería sin " +
                             "restricciones, inicio automático y notificaciones."
                         )
                 },
@@ -367,17 +367,17 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SettingsActionButton(
-                        "Probar aviso", KryptaBellIcon,
+                        "Probar aviso", NyxBellIcon,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        KryptaNotifications.ensureChannels(context)
-                        KryptaNotifications.notifyMessage(
+                        NyxNotifications.ensureChannels(context)
+                        NyxNotifications.notifyMessage(
                             context, "diag-test", "Prueba de aviso",
                             "Si ves esto con sonido y banner, ¡listo!",
                         )
                     }
                     SettingsActionButton(
-                        "Ajustes del sistema", KryptaSettingsIcon,
+                        "Ajustes del sistema", NyxSettingsIcon,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         val intent = Intent(
@@ -391,7 +391,7 @@ fun SettingsScreen(
 
             SettingsCard("Diagnóstico") {
                 SettingsActionButton(
-                    "Sonda de latencia de llamadas", KryptaPhoneIcon,
+                    "Sonda de latencia de llamadas", NyxPhoneIcon,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onProbeLatency,
                 )
@@ -427,7 +427,7 @@ fun SettingsScreen(
             onConfirm = { pass ->
                 askExportPass = false
                 exportPass = pass
-                createBackup.launch("krypta-identidad.krbk")
+                createBackup.launch("nyx-identidad.krbk")
             },
         )
     }
@@ -435,7 +435,7 @@ fun SettingsScreen(
     importUri?.let { uri ->
         PassphraseDialog(
             title = "Importar copia de seguridad",
-            text = "Introduce la frase-clave de la copia. Al reiniciar Krypta tu identidad " +
+            text = "Introduce la frase-clave de la copia. Al reiniciar Nyx tu identidad " +
                 "actual será SUSTITUIDA por la de la copia (contactos incluidos).",
             confirmLabel = "Importar",
             onDismiss = { importUri = null },
@@ -452,12 +452,12 @@ fun SettingsScreen(
             title = { Text("Identidad restaurada") },
             text = {
                 Text(
-                    "PeerID importado:\n$restoredPeerId\n\nKrypta debe reiniciarse para " +
+                    "PeerID importado:\n$restoredPeerId\n\nNyx debe reiniciarse para " +
                         "usarla. Se cerrará ahora; vuelve a abrirla.",
                 )
             },
             confirmButton = {
-                TextButton(onClick = { kotlin.system.exitProcess(0) }) { Text("Cerrar Krypta") }
+                TextButton(onClick = { kotlin.system.exitProcess(0) }) { Text("Cerrar Nyx") }
             },
         )
     }
@@ -530,7 +530,7 @@ private fun SettingsCard(
                 if (onInfo != null) {
                     IconButton(onClick = onInfo, modifier = Modifier.size(28.dp)) {
                         Icon(
-                            KryptaInfoIcon,
+                            NyxInfoIcon,
                             contentDescription = "Más información",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),

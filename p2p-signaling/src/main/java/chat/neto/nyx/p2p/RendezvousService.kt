@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -9,7 +9,7 @@ import javax.inject.Singleton
  * Deriva el punto de encuentro (rendezvous) diario entre dos contactos a partir del
  * secreto compartido que ya comparten tras intercambiar claves públicas:
  *
- *     rendezvous = HKDF(shared_secret, info = "krypta-rdv:" + fecha)
+ *     rendezvous = HKDF(shared_secret, info = "nyx-rdv:" + fecha)
  *
  * Propiedades (ver docs/PLAN-senalizacion-descentralizada.md, Riesgo 1 / Fase 3):
  *  - Rotativo por día → no correlacionable a largo plazo.
@@ -23,7 +23,7 @@ class RendezvousService @Inject constructor() {
         sharedSecret: ByteArray,
         date: LocalDate = LocalDate.now(ZoneOffset.UTC),
     ): ByteArray {
-        val info = "krypta-rdv:$date".toByteArray(Charsets.UTF_8)
+        val info = "nyx-rdv:$date".toByteArray(Charsets.UTF_8)
         return Hkdf.derive(ikm = sharedSecret, salt = ByteArray(0), info = info, length = 32)
     }
 }

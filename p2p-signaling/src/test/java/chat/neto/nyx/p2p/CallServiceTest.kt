@@ -1,15 +1,15 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.AudioEngine
-import chat.neto.krypta.core.CallStream
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.KeyExchange
-import chat.neto.krypta.core.SignalingEvent
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.core.repository.ContactRepository
-import chat.neto.krypta.core.repository.MessageRepository
+import chat.neto.nyx.core.AudioEngine
+import chat.neto.nyx.core.CallStream
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.KeyExchange
+import chat.neto.nyx.core.SignalingEvent
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.core.repository.MessageRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -139,8 +139,8 @@ class CallServiceTest {
         override fun sharedSecretWith(peerId: String) = ByteArray(32) { 7 }
     }
 
-    private class FakeFileStore : chat.neto.krypta.core.FileStore {
-        override suspend fun onMeta(fileId: String, m: chat.neto.krypta.core.IncomingFileMeta) = null
+    private class FakeFileStore : chat.neto.nyx.core.FileStore {
+        override suspend fun onMeta(fileId: String, m: chat.neto.nyx.core.IncomingFileMeta) = null
         override suspend fun onChunk(fileId: String, index: Int, bytes: ByteArray) = null
         override suspend fun deleteLocal(fileId: String, path: String?) = Unit
     }
@@ -289,10 +289,10 @@ class CallServiceTest {
         runCurrent()
 
         // Sin drenar el TX (la red "no da abasto"): tras el umbral los delta se descartan…
-        val delta = byteArrayOf(chat.neto.krypta.core.VideoFrame.DELTA, 1)
+        val delta = byteArrayOf(chat.neto.nyx.core.VideoFrame.DELTA, 1)
         repeat(20) { a.calls.sendVideoFrame(delta) }
         // …y el siguiente keyframe reabre el grifo (la imagen se recompone entera con él).
-        val key = byteArrayOf(chat.neto.krypta.core.VideoFrame.KEY, 2)
+        val key = byteArrayOf(chat.neto.nyx.core.VideoFrame.KEY, 2)
         a.calls.sendVideoFrame(key)
         runCurrent()
 

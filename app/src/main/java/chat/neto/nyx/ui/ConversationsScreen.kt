@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -44,11 +44,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.p2p.WanStatus
-import chat.neto.krypta.ui.theme.AvatarColors
-import chat.neto.krypta.ui.theme.avatarShapeFor
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.p2p.WanStatus
+import chat.neto.nyx.ui.theme.AvatarColors
+import chat.neto.nyx.ui.theme.avatarShapeFor
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -86,16 +86,16 @@ fun ConversationsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Krypta", style = MaterialTheme.typography.titleLarge)
+                        Text("Nyx", style = MaterialTheme.typography.titleLarge)
                         WanStatusSubtitle(wanStatus)
                     }
                 },
                 actions = {
                     IconButton(onClick = onOpenHelp) {
-                        Icon(KryptaHelpIcon, contentDescription = "Ayuda")
+                        Icon(NyxHelpIcon, contentDescription = "Ayuda")
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(KryptaSettingsIcon, contentDescription = "Ajustes")
+                        Icon(NyxSettingsIcon, contentDescription = "Ajustes")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -106,7 +106,7 @@ fun ConversationsScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { onClearError(); showAdd = true },
-                icon = { Icon(KryptaAddIcon, contentDescription = null) },
+                icon = { Icon(NyxAddIcon, contentDescription = null) },
                 text = { Text("Nuevo contacto") },
             )
         },
@@ -273,7 +273,7 @@ private fun ConversationRow(
                     )
                     if (contact.verified) {
                         Icon(
-                            KryptaShieldIcon,
+                            NyxShieldIcon,
                             contentDescription = "Identidad verificada",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 4.dp).size(15.dp),
@@ -333,10 +333,10 @@ fun MessageStatusIcon(
     failedTint: Color = MaterialTheme.colorScheme.error,
 ) {
     val (icon, tint) = when (status) {
-        MessageStatus.PENDING -> KryptaClockIcon to mutedTint
-        MessageStatus.SENT -> KryptaCheckIcon to mutedTint
-        MessageStatus.DELIVERED -> KryptaDoubleCheckIcon to mutedTint
-        MessageStatus.READ -> KryptaDoubleCheckIcon to readTint
+        MessageStatus.PENDING -> NyxClockIcon to mutedTint
+        MessageStatus.SENT -> NyxCheckIcon to mutedTint
+        MessageStatus.DELIVERED -> NyxDoubleCheckIcon to mutedTint
+        MessageStatus.READ -> NyxDoubleCheckIcon to readTint
         MessageStatus.FAILED -> null to failedTint
     }
     if (icon != null) {
@@ -406,7 +406,7 @@ private fun EmptyConversations() {
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            KryptaChatBubbleIcon,
+            NyxChatBubbleIcon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
             modifier = Modifier.size(72.dp),

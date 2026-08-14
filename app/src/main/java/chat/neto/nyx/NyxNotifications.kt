@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,7 +10,7 @@ import android.content.Intent
 import android.os.Build
 
 /**
- * Centraliza los canales y las notificaciones de Krypta, para que tanto el
+ * Centraliza los canales y las notificaciones de Nyx, para que tanto el
  * [IncomingNotifier] (que postea) como la UI (que limpia al leer) usen la misma lógica y los
  * mismos ids.
  *
@@ -26,18 +26,18 @@ import android.os.Build
  * ([cancelAllMessages]) — los no leídos por contacto siguen viviendo en Room, así que el
  * badge de la lista de conversaciones no se ve afectado.
  */
-object KryptaNotifications {
+object NyxNotifications {
 
     // v2: los canales son inmutables tras crearse, así que para cambiar showBadge/vibración
     // hay que crear ids nuevos y borrar los viejos.
-    const val CHANNEL_SERVICE = "krypta_service_v2"
-    const val CHANNEL_MESSAGES = "krypta_messages_v2"
-    const val CHANNEL_CALLS = "krypta_calls_v1"
+    const val CHANNEL_SERVICE = "nyx_service_v2"
+    const val CHANNEL_MESSAGES = "nyx_messages_v2"
+    const val CHANNEL_CALLS = "nyx_calls_v1"
     const val ONGOING_ID = 1
     const val CALL_ID = 2
 
     /** Extra del Intent de MainActivity: id del contacto cuya conversación abrir. */
-    const val EXTRA_OPEN_CONTACT = "krypta.open_contact"
+    const val EXTRA_OPEN_CONTACT = "nyx.open_contact"
 
     /**
      * Historial reciente por contacto para el [Notification.MessagingStyle]. Vive en memoria
@@ -51,13 +51,13 @@ object KryptaNotifications {
     fun ensureChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         // Limpia los canales v1 (importance/badge ya no configurables en ellos).
-        nm.deleteNotificationChannel("krypta_service")
-        nm.deleteNotificationChannel("krypta_messages")
+        nm.deleteNotificationChannel("nyx_service")
+        nm.deleteNotificationChannel("nyx_messages")
         nm.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_SERVICE, "Servicio en segundo plano", NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Mantiene Krypta conectada para recibir mensajes"
+                description = "Mantiene Nyx conectada para recibir mensajes"
                 setShowBadge(false) // el ongoing no debe contar en el icono
             }
         )
@@ -89,7 +89,7 @@ object KryptaNotifications {
     /** Notificación persistente del servicio (obligatoria para un FG service). */
     fun serviceNotification(context: Context): Notification =
         Notification.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(R.drawable.ic_stat_krypta)
+            .setSmallIcon(R.drawable.ic_stat_nyx)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText("Conectado — recibiendo mensajes cifrados")
             .setContentIntent(openAppIntent(context, contactId = null, requestCode = 0))
@@ -121,7 +121,7 @@ object KryptaNotifications {
         for ((ts, line) in lines) style.addMessage(line, ts, sender)
 
         val notification = Notification.Builder(context, CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_stat_krypta)
+            .setSmallIcon(R.drawable.ic_stat_nyx)
             .setStyle(style)
             .setContentTitle(contactName)
             .setContentText(text)
@@ -183,7 +183,7 @@ object KryptaNotifications {
         val answer = CallActionReceiver.pendingIntent(context, CallActionReceiver.ACTION_ANSWER)
         val decline = CallActionReceiver.pendingIntent(context, CallActionReceiver.ACTION_DECLINE)
         val builder = Notification.Builder(context, CHANNEL_CALLS)
-            .setSmallIcon(R.drawable.ic_stat_krypta)
+            .setSmallIcon(R.drawable.ic_stat_nyx)
             .setContentTitle("📞 Llamada entrante")
             .setContentText(contactName)
             .setContentIntent(fullScreen)
@@ -195,7 +195,7 @@ object KryptaNotifications {
             val caller = Person.Builder().setName(contactName).setImportant(true).build()
             builder.setStyle(Notification.CallStyle.forIncomingCall(caller, decline, answer))
         } else {
-            val icon = android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_stat_krypta)
+            val icon = android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_stat_nyx)
             builder
                 .addAction(Notification.Action.Builder(icon, "Rechazar", decline).build())
                 .addAction(Notification.Action.Builder(icon, "Contestar", answer).build())

@@ -1,9 +1,9 @@
-package chat.neto.krypta.data.entity
+package chat.neto.nyx.data.entity
 
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import chat.neto.krypta.core.model.MessageStatus
+import chat.neto.nyx.core.model.MessageStatus
 
 @Entity(
     tableName = "messages",

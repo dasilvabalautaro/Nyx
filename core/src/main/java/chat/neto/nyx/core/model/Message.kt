@@ -1,4 +1,4 @@
-package chat.neto.krypta.core.model
+package chat.neto.nyx.core.model
 
 /**
  * Mensaje E2EE. El contenido viaja siempre cifrado (`ciphertext`); el dominio nunca

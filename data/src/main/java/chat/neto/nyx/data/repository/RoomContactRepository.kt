@@ -1,9 +1,9 @@
-package chat.neto.krypta.data.repository
+package chat.neto.nyx.data.repository
 
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.repository.ContactRepository
-import chat.neto.krypta.data.dao.ContactDao
-import chat.neto.krypta.data.entity.ContactEntity
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.data.dao.ContactDao
+import chat.neto.nyx.data.entity.ContactEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject

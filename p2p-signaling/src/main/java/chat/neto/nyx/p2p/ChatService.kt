@@ -1,16 +1,16 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.FileStore
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.KeyExchange
-import chat.neto.krypta.core.MessageCipher
-import chat.neto.krypta.core.SignalingEvent
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.core.model.MessageContent
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.core.repository.ContactRepository
-import chat.neto.krypta.core.repository.MessageRepository
+import chat.neto.nyx.core.FileStore
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.KeyExchange
+import chat.neto.nyx.core.MessageCipher
+import chat.neto.nyx.core.SignalingEvent
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageContent
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.core.repository.MessageRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -37,7 +37,7 @@ enum class BootstrapResult { OK, CLEARED, INVALID }
 
 /**
  * Validación *ligera* de un multiaddr de bootstrap: debe empezar por `/` y contener un
- * componente `/p2p/<PeerID>` no vacío (p. ej. `/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooW…`
+ * componente `/p2p/<PeerID>` no vacío (p. ej. `/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooW…`
  * o `/ip4/1.2.3.4/tcp/4001/p2p/12D3KooW…`). No valida el PeerID ni resuelve el host —de eso se
  * encarga `connectDht` al conectar—; solo evita persistir basura obvia y dar feedback inmediato.
  */
@@ -127,14 +127,14 @@ class ChatService @Inject constructor(
         MutableSharedFlow<Pair<Contact, MessageEnvelope.Decoded.Call>>(extraBufferCapacity = 64)
     /**
      * Señales de llamada entrantes (invite/accept/…), descifradas. Las consume `CallService`,
-     * que por eso debe instanciarse al arrancar el proceso (lo hace `KryptaApplication`): sin
+     * que por eso debe instanciarse al arrancar el proceso (lo hace `NyxApplication`): sin
      * suscriptor, un `invite` se descarta en silencio y la llamada no suena.
      */
     val callSignals: Flow<Pair<Contact, MessageEnvelope.Decoded.Call>> = _callSignals
 
     private fun logLine(msg: String) {
         val line = "${LocalTime.now().withNano(0)}  $msg"
-        runCatching { android.util.Log.i("KryptaDiag", msg) } // a logcat; no-op en tests JVM
+        runCatching { android.util.Log.i("NyxDiag", msg) } // a logcat; no-op en tests JVM
         _log.update { (it + line).takeLast(30) }
     }
 
@@ -197,14 +197,14 @@ class ChatService @Inject constructor(
     /**
      * Arranca el nodo y el descubrimiento: host + mDNS (LAN, pruebas) y, si hay un nodo
      * bootstrap configurado, lanza el bucle WAN (DHT + rendezvous, auto-reparable).
-     * Idempotente: lo llaman tanto el `ChatViewModel` (UI) como el `KryptaForegroundService`
+     * Idempotente: lo llaman tanto el `ChatViewModel` (UI) como el `NyxForegroundService`
      * y solo el primero hace el trabajo.
      */
     suspend fun start() {
         if (!startedOnce.compareAndSet(false, true)) return
         // El arranque del host/mDNS es best-effort: si falla (p. ej. en datos móviles, sin
         // interfaz multicast para mDNS) NO debe impedir el WAN, que es el camino principal de
-        // Krypta. El bucle WAN es auto-reparable, así que reintentará `connectDht` si hiciera
+        // Nyx. El bucle WAN es auto-reparable, así que reintentará `connectDht` si hiciera
         // falta. Por eso el WAN se arranca aunque `signaling.start()` haya lanzado.
         runCatching { signaling.start() }.onFailure { logLine("host/mDNS: ${it.message ?: it}") }
         runCatching { signaling.bootstrap() }.getOrNull()
@@ -617,7 +617,7 @@ class ChatService @Inject constructor(
             is MessageEnvelope.Decoded.FileMeta -> {
                 val f = fileStore.onMeta(
                     decoded.fileId,
-                    chat.neto.krypta.core.IncomingFileMeta(decoded.name, decoded.mime, decoded.size, decoded.totalChunks),
+                    chat.neto.nyx.core.IncomingFileMeta(decoded.name, decoded.mime, decoded.size, decoded.totalChunks),
                 )
                 return f?.let { persistFile(contact, decoded.fileId, it) }
             }
@@ -654,7 +654,7 @@ class ChatService @Inject constructor(
     }
 
     /** Persiste un archivo ya reensamblado como Message (descriptor con path) y lo emite. */
-    private suspend fun persistFile(contact: Contact, fileId: String, f: chat.neto.krypta.core.AssembledFile): Message? {
+    private suspend fun persistFile(contact: Contact, fileId: String, f: chat.neto.nyx.core.AssembledFile): Message? {
         // No sobrescribas un envío propio con su eco (contacto que apunta a tu PeerID).
         val existing = messages.findById(fileId)
         if (existing != null && existing.senderId == SELF) return null

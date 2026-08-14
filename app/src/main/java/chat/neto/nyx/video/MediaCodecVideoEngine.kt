@@ -1,4 +1,4 @@
-package chat.neto.krypta.video
+package chat.neto.nyx.video
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -12,7 +12,7 @@ import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
-import chat.neto.krypta.core.VideoFrame
+import chat.neto.nyx.core.VideoFrame
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
@@ -102,7 +102,7 @@ class MediaCodecVideoEngine @Inject constructor(
 
         // Drena el encoder en su propio hilo (dequeue bloqueante corto). Los keyframes van
         // marcados (K) para que CallService pueda descartar por grupos bajo congestión.
-        drainThread = thread(name = "krypta-video-enc") {
+        drainThread = thread(name = "nyx-video-enc") {
             val info = MediaCodec.BufferInfo()
             runCatching {
                 while (capturing) {
@@ -124,7 +124,7 @@ class MediaCodecVideoEngine @Inject constructor(
             }
         }
 
-        val handlerThread = HandlerThread("krypta-camera").apply { start() }
+        val handlerThread = HandlerThread("nyx-camera").apply { start() }
         cameraThread = handlerThread
         val handler = Handler(handlerThread.looper)
         manager.openCamera(cameraId, object : CameraDevice.StateCallback() {

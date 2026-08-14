@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--
    Reglas de extracción en API >= 31 (copia en la nube y transferencia entre dispositivos).
-   Krypta desactiva ambas con allowBackup="false"; estas exclusiones son defensa en
+   Nyx desactiva ambas con allowBackup="false"; estas exclusiones son defensa en
    profundidad por si la bandera se reactivara. Ni la identidad Ed25519 (sharedpref) ni los
    mensajes (database) ni los adjuntos (file) deben salir del dispositivo por esta vía: la
    migración soportada es la exportación .krbk, cifrada con la frase-clave del usuario.

@@ -1,11 +1,11 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.AudioEngine
-import chat.neto.krypta.core.CallStream
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.MessageCipher
-import chat.neto.krypta.core.VideoFrame
-import chat.neto.krypta.core.model.Contact
+import chat.neto.nyx.core.AudioEngine
+import chat.neto.nyx.core.CallStream
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.MessageCipher
+import chat.neto.nyx.core.VideoFrame
+import chat.neto.nyx.core.model.Contact
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -56,7 +56,7 @@ data class CallState(
 
 /**
  * Orquesta las llamadas de voz (Fase 7b, Opción A): señalización por sobres E2EE `C`
- * (vía [ChatService], directo → buzón), medios por un stream libp2p `/krypta/call/1.0.0`
+ * (vía [ChatService], directo → buzón), medios por un stream libp2p `/nyx/call/1.0.0`
  * (directo por DCUtR o relayed), y cada frame de audio cifrado con una **clave por llamada**
  * `HKDF(sharedSecret, callId)`. El que llama abre el stream tras el accept y manda un
  * "hello" cifrado; el receptor lo valida (autentica la llamada) antes de arrancar el audio.
@@ -549,6 +549,6 @@ class CallService @Inject constructor(
          */
         const val VIDEO_CONGESTION_FRAMES = 12
 
-        val CALL_KEY_SALT = "krypta-call-v1".toByteArray(Charsets.UTF_8)
+        val CALL_KEY_SALT = "nyx-call-v1".toByteArray(Charsets.UTF_8)
     }
 }

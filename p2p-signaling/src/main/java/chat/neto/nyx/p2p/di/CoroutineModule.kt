@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p.di
+package chat.neto.nyx.p2p.di
 
 import dagger.Module
 import dagger.Provides

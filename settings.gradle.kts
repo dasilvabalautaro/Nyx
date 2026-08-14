@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Krypta"
+rootProject.name = "Nyx"
 include(":app")
 include(":core")
 include(":data")

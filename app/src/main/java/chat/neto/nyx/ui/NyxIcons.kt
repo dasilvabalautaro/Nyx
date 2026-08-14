@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
  */
 private fun materialIcon(name: String, pathData: String): ImageVector =
     ImageVector.Builder(
-        name = "Krypta.$name",
+        name = "Nyx.$name",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -23,12 +23,12 @@ private fun materialIcon(name: String, pathData: String): ImageVector =
     ).addPath(addPathNodes(pathData), fill = SolidColor(Color.Black)).build()
 
 /** Flecha atrás (equivalente a `ArrowBack`), para las barras superiores. */
-val KryptaBackIcon: ImageVector by lazy {
+val NyxBackIcon: ImageVector by lazy {
     materialIcon("Back", "M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z")
 }
 
 /** Engranaje de ajustes (equivalente a `Settings`). */
-val KryptaSettingsIcon: ImageVector by lazy {
+val NyxSettingsIcon: ImageVector by lazy {
     materialIcon(
         "Settings",
         "M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03," +
@@ -47,12 +47,12 @@ val KryptaSettingsIcon: ImageVector by lazy {
 }
 
 /** Cruz "añadir" (equivalente a `Add`), para el FAB de nuevo contacto. */
-val KryptaAddIcon: ImageVector by lazy {
+val NyxAddIcon: ImageVector by lazy {
     materialIcon("Add", "M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z")
 }
 
 /** Flecha hacia una bandeja (equivalente a `FileUpload`), para "Exportar copia". */
-val KryptaUploadIcon: ImageVector by lazy {
+val NyxUploadIcon: ImageVector by lazy {
     materialIcon(
         "Upload",
         "M9,16h6v-6h4L12,3L5,10h4V16z M5,18h14v2H5V18z",
@@ -60,7 +60,7 @@ val KryptaUploadIcon: ImageVector by lazy {
 }
 
 /** Flecha desde una bandeja (equivalente a `FileDownload`), para "Importar copia". */
-val KryptaDownloadIcon: ImageVector by lazy {
+val NyxDownloadIcon: ImageVector by lazy {
     materialIcon(
         "Download",
         "M19,9h-4V3H9v6H5l7,7L19,9z M5,18h14v2H5V18z",
@@ -68,7 +68,7 @@ val KryptaDownloadIcon: ImageVector by lazy {
 }
 
 /** Campana (equivalente a `Notifications`), para "Probar aviso". */
-val KryptaBellIcon: ImageVector by lazy {
+val NyxBellIcon: ImageVector by lazy {
     materialIcon(
         "Bell",
         "M12,22c1.1,0 2,-0.9 2,-2h-4C10,21.1 10.9,22 12,22z M18,16v-5c0,-3.07 -1.64,-5.64 " +
@@ -78,12 +78,12 @@ val KryptaBellIcon: ImageVector by lazy {
 }
 
 /** Check sencillo (enviado). */
-val KryptaCheckIcon: ImageVector by lazy {
+val NyxCheckIcon: ImageVector by lazy {
     materialIcon("Check", "M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41,-1.41z")
 }
 
 /** Interrogante en un círculo (equivalente a `Help`), para el acceso a la Ayuda. */
-val KryptaHelpIcon: ImageVector by lazy {
+val NyxHelpIcon: ImageVector by lazy {
     materialIcon(
         "Help",
         "M11,18h2v-2h-2v2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12," +
@@ -94,7 +94,7 @@ val KryptaHelpIcon: ImageVector by lazy {
 }
 
 /** "i" en un círculo (equivalente a `Info`), para las ayudas contextuales. */
-val KryptaInfoIcon: ImageVector by lazy {
+val NyxInfoIcon: ImageVector by lazy {
     materialIcon(
         "Info",
         "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10," +
@@ -104,12 +104,12 @@ val KryptaInfoIcon: ImageVector by lazy {
 }
 
 /** Chevron hacia abajo (equivalente a `ExpandMore`), para las tarjetas desplegables del FAQ. */
-val KryptaExpandMoreIcon: ImageVector by lazy {
+val NyxExpandMoreIcon: ImageVector by lazy {
     materialIcon("ExpandMore", "M16.59,8.59L12,13.17 7.41,8.59 6,10l6,6 6,-6z")
 }
 
 /** Tres puntos verticales (equivalente a `MoreVert`), para el menú del chat. */
-val KryptaMoreIcon: ImageVector by lazy {
+val NyxMoreIcon: ImageVector by lazy {
     materialIcon(
         "More",
         "M12,8c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zM12,10c-1.1,0 -2,0.9 " +
@@ -119,7 +119,7 @@ val KryptaMoreIcon: ImageVector by lazy {
 }
 
 /** Papelera (equivalente a `Delete`), para vaciar chat / eliminar contacto. */
-val KryptaDeleteIcon: ImageVector by lazy {
+val NyxDeleteIcon: ImageVector by lazy {
     materialIcon(
         "Delete",
         "M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z",
@@ -127,7 +127,7 @@ val KryptaDeleteIcon: ImageVector by lazy {
 }
 
 /** Check doble (entregado; teñido de primary = leído). */
-val KryptaDoubleCheckIcon: ImageVector by lazy {
+val NyxDoubleCheckIcon: ImageVector by lazy {
     materialIcon(
         "DoubleCheck",
         "M18,7l-1.41,-1.41 -6.34,6.34 1.41,1.41L18,7zM22.24,5.59L11.66,16.17 7.48,12l-1.41," +
@@ -136,7 +136,7 @@ val KryptaDoubleCheckIcon: ImageVector by lazy {
 }
 
 /** Reloj (mensaje pendiente de envío). */
-val KryptaClockIcon: ImageVector by lazy {
+val NyxClockIcon: ImageVector by lazy {
     materialIcon(
         "Clock",
         "M11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2z" +
@@ -146,7 +146,7 @@ val KryptaClockIcon: ImageVector by lazy {
 }
 
 /** Burbuja de chat (el glifo de marca, sin candado), para estados vacíos. */
-val KryptaChatBubbleIcon: ImageVector by lazy {
+val NyxChatBubbleIcon: ImageVector by lazy {
     materialIcon(
         "ChatBubble",
         "M20,2H4C2.9,2 2,2.9 2,4v18l4,-4h14c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2z" +
@@ -155,7 +155,7 @@ val KryptaChatBubbleIcon: ImageVector by lazy {
 }
 
 /** Micrófono tachado (silenciar), para los controles de llamada. */
-val KryptaMicOffIcon: ImageVector by lazy {
+val NyxMicOffIcon: ImageVector by lazy {
     materialIcon(
         "MicOff",
         "M19,11h-1.7c0,0.74 -0.16,1.43 -0.43,2.05l1.23,1.23c0.56,-0.98 0.9,-2.09 0.9,-3.28z" +
@@ -168,7 +168,7 @@ val KryptaMicOffIcon: ImageVector by lazy {
 }
 
 /** Altavoz (volumen alto), para el toggle de manos libres. */
-val KryptaSpeakerIcon: ImageVector by lazy {
+val NyxSpeakerIcon: ImageVector by lazy {
     materialIcon(
         "Speaker",
         "M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05" +
@@ -178,7 +178,7 @@ val KryptaSpeakerIcon: ImageVector by lazy {
 }
 
 /** Cámara de vídeo, para el toggle de vídeo en llamada. */
-val KryptaVideocamIcon: ImageVector by lazy {
+val NyxVideocamIcon: ImageVector by lazy {
     materialIcon(
         "Videocam",
         "M17,10.5V7c0,-0.55 -0.45,-1 -1,-1H4C3.45,6 3,6.45 3,7v10c0,0.55 0.45,1 1,1h12" +
@@ -187,7 +187,7 @@ val KryptaVideocamIcon: ImageVector by lazy {
 }
 
 /** Flechas circulares (cambiar de cámara frontal/trasera). */
-val KryptaFlipCameraIcon: ImageVector by lazy {
+val NyxFlipCameraIcon: ImageVector by lazy {
     materialIcon(
         "FlipCamera",
         "M12,5V1L7,6l5,5V7c3.31,0 6,2.69 6,6c0,1.01 -0.25,1.97 -0.7,2.8l1.46,1.46" +
@@ -198,7 +198,7 @@ val KryptaFlipCameraIcon: ImageVector by lazy {
 }
 
 /** Teléfono colgando (fin de llamada), para el botón rojo de colgar. */
-val KryptaCallEndIcon: ImageVector by lazy {
+val NyxCallEndIcon: ImageVector by lazy {
     materialIcon(
         "CallEnd",
         "M12,9c-1.6,0 -3.15,0.25 -4.6,0.72v3.1c0,0.39 -0.23,0.74 -0.56,0.9" +
@@ -217,9 +217,9 @@ val KryptaCallEndIcon: ImageVector by lazy {
  * vectores de Compose para **no** depender de `material-icons-extended` (miles de iconos) solo
  * por este. El de compartir sí viene en `material-icons-core` (`Icons.Default.Share`).
  */
-val KryptaCopyIcon: ImageVector by lazy {
+val NyxCopyIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Copy",
+        name = "Nyx.Copy",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -263,9 +263,9 @@ val KryptaCopyIcon: ImageVector by lazy {
  * de `material-icons-extended` (`VerifiedUser`). Se pinta relleno cuando el contacto está
  * verificado y con menos énfasis cuando no.
  */
-val KryptaShieldIcon: ImageVector by lazy {
+val NyxShieldIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Shield",
+        name = "Nyx.Shield",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -297,9 +297,9 @@ val KryptaShieldIcon: ImageVector by lazy {
  * Icono "imagen" (equivalente a `Image` de Material), local para no depender de
  * `material-icons-extended`. Un marco con montaña + sol, la silueta clásica de foto.
  */
-val KryptaImageIcon: ImageVector by lazy {
+val NyxImageIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Image",
+        name = "Nyx.Image",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -331,9 +331,9 @@ val KryptaImageIcon: ImageVector by lazy {
 /**
  * Icono "clip" (adjuntar archivo), local para no depender de `material-icons-extended`.
  */
-val KryptaAttachIcon: ImageVector by lazy {
+val NyxAttachIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Attach",
+        name = "Nyx.Attach",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -372,9 +372,9 @@ val KryptaAttachIcon: ImageVector by lazy {
  * Icono "micrófono" (equivalente a `Mic` de Material), local para no depender de
  * `material-icons-extended`. Para grabar notas de voz.
  */
-val KryptaMicIcon: ImageVector by lazy {
+val NyxMicIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Mic",
+        name = "Nyx.Mic",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -411,9 +411,9 @@ val KryptaMicIcon: ImageVector by lazy {
 /**
  * Icono "reproducir" (triángulo `PlayArrow`), local. Para la burbuja de nota de voz.
  */
-val KryptaPlayIcon: ImageVector by lazy {
+val NyxPlayIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Play",
+        name = "Nyx.Play",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -431,9 +431,9 @@ val KryptaPlayIcon: ImageVector by lazy {
 /**
  * Icono "pausa" (dos barras `Pause`), local. Para la burbuja de nota de voz.
  */
-val KryptaPauseIcon: ImageVector by lazy {
+val NyxPauseIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Pause",
+        name = "Nyx.Pause",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -457,9 +457,9 @@ val KryptaPauseIcon: ImageVector by lazy {
 /**
  * Icono "teléfono" (equivalente a `Call` de Material), local. Para iniciar llamadas.
  */
-val KryptaPhoneIcon: ImageVector by lazy {
+val NyxPhoneIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Phone",
+        name = "Nyx.Phone",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
@@ -487,7 +487,7 @@ val KryptaPhoneIcon: ImageVector by lazy {
 }
 
 /** Candado cerrado (equivalente a `Lock`), para el bloqueo de acceso a la app. */
-val KryptaLockIcon: ImageVector by lazy {
+val NyxLockIcon: ImageVector by lazy {
     materialIcon(
         "Lock",
         "M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9," +
@@ -501,9 +501,9 @@ val KryptaLockIcon: ImageVector by lazy {
  * Icono "compartir" (equivalente a `Share` de Material), también local para no añadir
  * `material-icons-core`/`-extended` solo por dos iconos.
  */
-val KryptaShareIcon: ImageVector by lazy {
+val NyxShareIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Krypta.Share",
+        name = "Nyx.Share",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,

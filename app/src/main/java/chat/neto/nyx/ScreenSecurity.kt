@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Activity
 import android.content.ContentValues
@@ -17,12 +17,12 @@ import java.util.Locale
 
 /**
  * Bloqueo de captura y grabación de pantalla, y la única vía que queda para capturar: la
- * propia Krypta.
+ * propia Nyx.
  *
  * **El bloqueo** es `FLAG_SECURE` en la ventana de la Activity ([protect]): el sistema se
  * niega a hacer capturas, el grabador de pantalla graba negro, la miniatura de "recientes" sale
  * en blanco y la ventana no se puede volcar a una pantalla no segura (ni a `adb screencap`).
- * Como Krypta tiene una sola Activity, con marcarla una vez queda cubierta toda la app; los
+ * Como Nyx tiene una sola Activity, con marcarla una vez queda cubierta toda la app; los
  * diálogos y las hojas inferiores de Compose viven en ventanas propias pero **heredan** el flag
  * (`SecureFlagPolicy.Inherit` es el valor por defecto de `DialogProperties`, y
  * `ModalBottomSheet` copia el flag de la ventana padre), así que no hay que marcarlos uno a uno.
@@ -43,7 +43,7 @@ object ScreenSecurity {
     }
 
     /**
-     * Captura la pantalla actual y la guarda en la galería (`Pictures/Krypta`). Devuelve la
+     * Captura la pantalla actual y la guarda en la galería (`Pictures/Nyx`). Devuelve la
      * URI o el error. El dibujo va en el hilo principal (es la jerarquía de vistas viva) y la
      * compresión/escritura en E/S.
      *
@@ -70,13 +70,13 @@ object ScreenSecurity {
     }
 
     private fun save(context: Context, bitmap: Bitmap): Uri {
-        val name = "Krypta_" +
+        val name = "Nyx_" +
             SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".png"
         val resolver = context.contentResolver
         val pending = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Krypta")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Nyx")
             // IS_PENDING: la galería no enseña el archivo hasta que está entero.
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }

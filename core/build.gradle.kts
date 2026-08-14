@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "chat.neto.krypta.core"
+    namespace = "chat.neto.nyx.core"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1

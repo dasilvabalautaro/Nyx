@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.content.Context
 import android.content.Intent

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Krypta" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/krypta_window_background_night</item>
+    <style name="Theme.Nyx" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/nyx_window_background_night</item>
     </style>
 </resources>

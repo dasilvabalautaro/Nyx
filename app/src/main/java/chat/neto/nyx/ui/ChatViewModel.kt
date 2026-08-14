@@ -1,18 +1,18 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import chat.neto.krypta.KryptaNotifications
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.MessageContent
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.p2p.BootstrapResult
-import chat.neto.krypta.p2p.CallPhase
-import chat.neto.krypta.p2p.CallService
-import chat.neto.krypta.p2p.CallState
-import chat.neto.krypta.p2p.ChatService
-import chat.neto.krypta.p2p.WanStatus
+import chat.neto.nyx.NyxNotifications
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.MessageContent
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.p2p.BootstrapResult
+import chat.neto.nyx.p2p.CallPhase
+import chat.neto.nyx.p2p.CallService
+import chat.neto.nyx.p2p.CallState
+import chat.neto.nyx.p2p.ChatService
+import chat.neto.nyx.p2p.WanStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -63,9 +63,9 @@ data class ConversationItem(
 class ChatViewModel @Inject constructor(
     private val chat: ChatService,
     private val calls: CallService,
-    private val video: chat.neto.krypta.video.MediaCodecVideoEngine,
-    private val backup: chat.neto.krypta.p2p.BackupManager,
-    private val notifier: chat.neto.krypta.IncomingNotifier,
+    private val video: chat.neto.nyx.video.MediaCodecVideoEngine,
+    private val backup: chat.neto.nyx.p2p.BackupManager,
+    private val notifier: chat.neto.nyx.IncomingNotifier,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -242,7 +242,7 @@ class ChatViewModel @Inject constructor(
                 BootstrapResult.INVALID ->
                     _bootstrapError.value =
                         "Multiaddr inválido (uno por línea). " +
-                            "Ej: /dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>"
+                            "Ej: /dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>"
                 else -> {
                     _bootstrapError.value = null
                     _bootstrap.value = addr.trim()
@@ -334,7 +334,7 @@ class ChatViewModel @Inject constructor(
         val name = picked.name.takeIf { it.contains('.') } ?: "animacion.$extension"
         val localPath = withContext(Dispatchers.IO) {
             runCatching {
-                val dir = java.io.File(context.filesDir, "krypta_files/sent").apply { mkdirs() }
+                val dir = java.io.File(context.filesDir, "nyx_files/sent").apply { mkdirs() }
                 java.io.File(dir, "${java.util.UUID.randomUUID()}.$extension")
                     .apply { writeBytes(picked.bytes) }
                     .absolutePath
@@ -397,7 +397,7 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Declara la conversación que se está mirando (null al salir del chat): limpia su
-     * notificación y hace que [chat.neto.krypta.IncomingNotifier] silencie **solo** ese
+     * notificación y hace que [chat.neto.nyx.IncomingNotifier] silencie **solo** ese
      * contacto. Antes bastaba con tener la app abierta en cualquier pantalla para no recibir
      * ningún aviso, así que un mensaje de otro contacto llegaba sin sonar.
      */
@@ -441,7 +441,7 @@ class ChatViewModel @Inject constructor(
             runCatching { chat.clearConversation(contact) }
                 .onFailure { _error.value = "No se pudo vaciar el chat" }
             // Sin mensajes ya no hay nada que anunciar de esta conversación.
-            KryptaNotifications.cancel(context, contact.id)
+            NyxNotifications.cancel(context, contact.id)
         }
     }
 
@@ -450,7 +450,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { chat.deleteContact(contact) }
                 .onFailure { _error.value = "No se pudo eliminar el contacto" }
-            KryptaNotifications.cancel(context, contact.id)
+            NyxNotifications.cancel(context, contact.id)
         }
     }
 
@@ -474,7 +474,7 @@ class ChatViewModel @Inject constructor(
     fun clearBackupMessage() { _backupMessage.value = null }
 
     private val _restoredPeerId = MutableStateFlow<String?>(null)
-    /** PeerID recién importado, pendiente de reiniciar Krypta (dispara el diálogo). */
+    /** PeerID recién importado, pendiente de reiniciar Nyx (dispara el diálogo). */
     val restoredPeerId: StateFlow<String?> = _restoredPeerId.asStateFlow()
 
     /** Cifra identidad + contactos con [passphrase] y lo escribe en [uri] (SAF). */
@@ -504,7 +504,7 @@ class ChatViewModel @Inject constructor(
                 _restoredPeerId.value = result.peerId
             }.onFailure {
                 _backupMessage.value =
-                    if (it is chat.neto.krypta.p2p.IdentityBackup.InvalidBackup) {
+                    if (it is chat.neto.nyx.p2p.IdentityBackup.InvalidBackup) {
                         "Passphrase incorrecta o archivo no válido"
                     } else {
                         "No se pudo importar la copia"

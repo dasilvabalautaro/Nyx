@@ -1,10 +1,10 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import chat.neto.krypta.p2p.CallService
+import chat.neto.nyx.p2p.CallService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +46,8 @@ class CallActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_ANSWER = "chat.neto.krypta.CALL_ANSWER"
-        const val ACTION_DECLINE = "chat.neto.krypta.CALL_DECLINE"
+        const val ACTION_ANSWER = "chat.neto.nyx.CALL_ANSWER"
+        const val ACTION_DECLINE = "chat.neto.nyx.CALL_DECLINE"
 
         fun pendingIntent(context: Context, action: String): PendingIntent =
             PendingIntent.getBroadcast(

@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui.theme
+package chat.neto.nyx.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
@@ -7,7 +7,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Escala tipográfica Krypta: la de Material 3 con dos ajustes de mensajería —
+ * Escala tipográfica Nyx: la de Material 3 con dos ajustes de mensajería —
  * títulos algo más firmes (SemiBold, para nombres de contacto y barras) y el
  * cuerpo grande con menos tracking (los mensajes largos leen mejor compactos).
  */

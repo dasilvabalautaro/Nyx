@@ -1,9 +1,9 @@
-package chat.neto.krypta.data
+package chat.neto.nyx.data
 
 import android.content.Context
-import chat.neto.krypta.core.AssembledFile
-import chat.neto.krypta.core.FileStore
-import chat.neto.krypta.core.IncomingFileMeta
+import chat.neto.nyx.core.AssembledFile
+import chat.neto.nyx.core.FileStore
+import chat.neto.nyx.core.IncomingFileMeta
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -29,7 +29,7 @@ import javax.inject.Singleton
 class DiskFileStore(private val baseDir: File) : FileStore {
 
     @Inject constructor(@ApplicationContext context: Context) :
-        this(File(context.filesDir, "krypta_files"))
+        this(File(context.filesDir, "nyx_files"))
 
     private val mutex = Mutex()
     private val stagingRoot get() = File(baseDir, "staging")

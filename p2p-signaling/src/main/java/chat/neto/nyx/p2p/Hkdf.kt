@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec

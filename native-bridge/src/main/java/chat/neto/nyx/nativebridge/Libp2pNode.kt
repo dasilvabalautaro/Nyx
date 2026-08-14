@@ -1,4 +1,4 @@
-package chat.neto.krypta.nativebridge
+package chat.neto.nyx.nativebridge
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -19,7 +19,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Wrapper Kotlin sobre el nodo go-libp2p empaquetado con gomobile (krypta-p2p.aar).
+ * Wrapper Kotlin sobre el nodo go-libp2p empaquetado con gomobile (nyx-p2p.aar).
  *
  * STUB: la Fase 0 (spike) y la Fase 2 del plan sustituirán los TODO por llamadas reales
  * al AAR (Noise, DHT client, relay client v2, DCUtR, AutoNAT). Se mantiene como clase
@@ -39,7 +39,7 @@ class Libp2pNode @Inject constructor(
     // Identidad libp2p persistente: estable entre arranques para que el PeerID y los
     // secretos compartidos derivados de él no cambien. (TODO: cifrar en reposo.)
     private val identity: ByteArray by lazy {
-        val prefs = context.getSharedPreferences("krypta_identity", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("nyx_identity", Context.MODE_PRIVATE)
         prefs.getString("ed25519", null)?.let { Base64.decode(it, Base64.NO_WRAP) }
             ?: Bridge.generateIdentity().also { fresh ->
                 prefs.edit().putString("ed25519", Base64.encodeToString(fresh, Base64.NO_WRAP)).apply()
@@ -47,10 +47,10 @@ class Libp2pNode @Inject constructor(
     }
 
     private val settings get() =
-        context.getSharedPreferences("krypta_settings", Context.MODE_PRIVATE)
+        context.getSharedPreferences("nyx_settings", Context.MODE_PRIVATE)
 
     /**
-     * Multiaddr del nodo bootstrap WAN. Por defecto el nodo de infraestructura de Krypta
+     * Multiaddr del nodo bootstrap WAN. Por defecto el nodo de infraestructura de Nyx
      * ([DEFAULT_BOOTSTRAP]), de modo que la app se une a la WAN sola en el primer arranque
      * sin que el usuario pegue nada. Un valor vacío guardado (`""`) significa "solo LAN/mDNS"
      * y se respeta — solo la *ausencia* de la pref cae al default.
@@ -83,13 +83,13 @@ class Libp2pNode @Inject constructor(
      */
     fun importIdentityBytes(bytes: ByteArray): String {
         val peerId = Bridge.peerIDForIdentity(bytes) // lanza si no es una identidad válida
-        context.getSharedPreferences("krypta_identity", Context.MODE_PRIVATE)
+        context.getSharedPreferences("nyx_identity", Context.MODE_PRIVATE)
             .edit().putString("ed25519", Base64.encodeToString(bytes, Base64.NO_WRAP)).apply()
         return peerId
     }
 
     // --- Fase 0: pipeline gomobile -> AAR -> JNI ---------------------------------
-    // Llamadas reales al AAR de Go (krypta-p2p.aar). Cargan libgojni.so y prueban que
+    // Llamadas reales al AAR de Go (nyx-p2p.aar). Cargan libgojni.so y prueban que
     // el bridge nativo funciona en el dispositivo antes de meter go-libp2p.
 
     /** Saludo desde el lado Go. Prueba la llamada JNI. */
@@ -167,13 +167,13 @@ class Libp2pNode @Inject constructor(
 
     /**
      * Activa el descubrimiento en LAN por mDNS (SOLO para pruebas en la misma WiFi). El
-     * descubrimiento real de Krypta es WAN por DHT + rendezvous; esto es un atajo de test.
+     * descubrimiento real de Nyx es WAN por DHT + rendezvous; esto es un atajo de test.
      * Requiere un MulticastLock o Android ignora el multicast de mDNS.
      */
-    suspend fun startMdns(serviceTag: String = "krypta-lan") = withContext(Dispatchers.IO) {
+    suspend fun startMdns(serviceTag: String = "nyx-lan") = withContext(Dispatchers.IO) {
         if (multicastLock == null) {
             val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            multicastLock = wifi.createMulticastLock("krypta-mdns").apply {
+            multicastLock = wifi.createMulticastLock("nyx-mdns").apply {
                 setReferenceCounted(false)
                 runCatching { acquire() }
             }
@@ -287,19 +287,19 @@ class Libp2pNode @Inject constructor(
     private fun ByteArray.toHex(): String =
         joinToString("") { b -> "%02x".format(b) }
 
-    // --- Llamadas (Fase 7b): streams full-duplex /krypta/call/1.0.0 -------------------
+    // --- Llamadas (Fase 7b): streams full-duplex /nyx/call/1.0.0 -------------------
 
     /**
      * Abre un stream de llamada hacia [peerId] (directo por DCUtR o relayed). Los frames
-     * van con framing uint16 en Go; aquí solo se envuelve como [chat.neto.krypta.core.CallStream].
+     * van con framing uint16 en Go; aquí solo se envuelve como [chat.neto.nyx.core.CallStream].
      */
-    suspend fun openCallStream(peerId: String): chat.neto.krypta.core.CallStream =
+    suspend fun openCallStream(peerId: String): chat.neto.nyx.core.CallStream =
         withContext(Dispatchers.IO) {
             GoCallStream(checkNotNull(node) { "nodo no iniciado" }.openCallStream(peerId))
         }
 
     /** Abre un stream de vídeo (Fase 7c) hacia [peerId]; framing uint32 (frames ≤ 1 MiB). */
-    suspend fun openVideoStream(peerId: String): chat.neto.krypta.core.CallStream =
+    suspend fun openVideoStream(peerId: String): chat.neto.nyx.core.CallStream =
         withContext(Dispatchers.IO) {
             GoVideoStream(checkNotNull(node) { "nodo no iniciado" }.openVideoStream(peerId))
         }
@@ -307,7 +307,7 @@ class Libp2pNode @Inject constructor(
     /** Adapta el CallStream del AAR (lecturas bloqueantes JNI) a la interfaz de dominio. */
     private class GoCallStream(
         private val s: chat.neto.krypta.bridge.CallStream,
-    ) : chat.neto.krypta.core.CallStream {
+    ) : chat.neto.nyx.core.CallStream {
         override suspend fun sendFrame(frame: ByteArray) = withContext(Dispatchers.IO) {
             s.writeFrame(frame)
         }
@@ -326,7 +326,7 @@ class Libp2pNode @Inject constructor(
     /** Ídem para el stream de vídeo del AAR (misma interfaz de dominio, framing uint32). */
     private class GoVideoStream(
         private val s: chat.neto.krypta.bridge.VideoStream,
-    ) : chat.neto.krypta.core.CallStream {
+    ) : chat.neto.nyx.core.CallStream {
         override suspend fun sendFrame(frame: ByteArray) = withContext(Dispatchers.IO) {
             s.writeFrame(frame)
         }
@@ -350,7 +350,7 @@ class Libp2pNode @Inject constructor(
          * Latinoamérica para el relay de voz/vídeo — validado con
          * `TestMailboxFetchAgainstLiveNode`/`TestWakeAgainstLiveNode` antes de entrar aquí.
          * Los otros dos quedan como **respaldo doméstico**, expuestos vía Cloudflare Tunnel
-         * como `wss` sobre el 443: el Mac (`krypta`) y el PC Windows (`krypta2`). Es
+         * como `wss` sobre el 443: el Mac (`nyx`) y el PC Windows (`nyx2`). Es
          * infraestructura compartida (igual para todos los usuarios) y pública, no identidad
          * de nadie. El bridge retira/escucha de TODOS los nodos (`MailboxFetch`,
          * `StartWake`), así que la caída de cualquiera —incluido el VPS— no corta la
@@ -359,8 +359,8 @@ class Libp2pNode @Inject constructor(
          */
         const val DEFAULT_BOOTSTRAP =
             "/ip4/216.128.169.83/tcp/4001/p2p/12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5\n" +
-                "/dns4/krypta.neto.chat/tcp/443/wss/p2p/12D3KooWPTUUREfK1dqiEmppLy3ycyFxCvuCbK6s1TPqaQm2UBog\n" +
-                "/dns4/krypta2.neto.chat/tcp/443/wss/p2p/12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm"
+                "/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooWPTUUREfK1dqiEmppLy3ycyFxCvuCbK6s1TPqaQm2UBog\n" +
+                "/dns4/nyx2.neto.chat/tcp/443/wss/p2p/12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm"
     }
 }
 
@@ -372,8 +372,8 @@ sealed interface NodeEvent {
     data object WakePing : NodeEvent
 
     /** Stream de llamada entrante: [peerId] autenticado + el stream ya envuelto. */
-    data class IncomingCall(val peerId: String, val stream: chat.neto.krypta.core.CallStream) : NodeEvent
+    data class IncomingCall(val peerId: String, val stream: chat.neto.nyx.core.CallStream) : NodeEvent
 
     /** Stream de vídeo entrante (Fase 7c): [peerId] autenticado + el stream ya envuelto. */
-    data class IncomingVideo(val peerId: String, val stream: chat.neto.krypta.core.CallStream) : NodeEvent
+    data class IncomingVideo(val peerId: String, val stream: chat.neto.nyx.core.CallStream) : NodeEvent
 }

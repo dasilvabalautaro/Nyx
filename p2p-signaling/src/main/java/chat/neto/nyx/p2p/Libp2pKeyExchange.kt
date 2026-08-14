@@ -1,7 +1,7 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.KeyExchange
-import chat.neto.krypta.nativebridge.Libp2pNode
+import chat.neto.nyx.core.KeyExchange
+import chat.neto.nyx.nativebridge.Libp2pNode
 import javax.inject.Inject
 import javax.inject.Singleton
 

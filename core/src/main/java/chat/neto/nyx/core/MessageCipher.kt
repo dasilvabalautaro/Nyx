@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /**
  * Cifrado autenticado extremo a extremo de los payloads. La clave de sesión se deriva del

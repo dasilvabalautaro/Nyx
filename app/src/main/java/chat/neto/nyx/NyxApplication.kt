@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
@@ -11,7 +11,7 @@ import javax.inject.Inject
  * que postea el aviso de un mensaje o de una llamada entrante.
  */
 @HiltAndroidApp
-class KryptaApplication : Application() {
+class NyxApplication : Application() {
 
     @Inject
     lateinit var notifier: IncomingNotifier

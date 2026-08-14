@@ -2,6 +2,6 @@
 <resources>
     <!-- Fondo de ventana pre-Compose (evita el destello al arrancar). Debe coincidir con
          background del tema Compose (ui/theme/Color.kt): claro F4FBF8 / oscuro 0E1513. -->
-    <color name="krypta_window_background">#FFF4FBF8</color>
-    <color name="krypta_window_background_night">#FF0E1513</color>
+    <color name="nyx_window_background">#FFF4FBF8</color>
+    <color name="nyx_window_background_night">#FF0E1513</color>
 </resources>

@@ -1,4 +1,4 @@
-package chat.neto.krypta.audio
+package chat.neto.nyx.audio
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -12,7 +12,7 @@ import android.media.MediaFormat
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
-import chat.neto.krypta.core.AudioEngine
+import chat.neto.nyx.core.AudioEngine
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -62,10 +62,10 @@ class MediaCodecAudioEngine @Inject constructor(
             previousMode = audioManager.mode
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         }
-        captureThread = thread(name = "krypta-call-tx") {
+        captureThread = thread(name = "nyx-call-tx") {
             runCatching { captureLoop(onFrame) }
         }
-        playThread = thread(name = "krypta-call-rx") {
+        playThread = thread(name = "nyx-call-rx") {
             runCatching { playLoop() }
         }
     }

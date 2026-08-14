@@ -1,8 +1,8 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import chat.neto.krypta.nativebridge.Libp2pNode
+import chat.neto.nyx.nativebridge.Libp2pNode
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,7 +21,7 @@ class Libp2pBridgeTest {
 
     @Test
     fun nativePing_returnsGreetingFromGo() {
-        assertEquals("pong from krypta go-libp2p bridge", node.nativePing())
+        assertEquals("pong from nyx go-libp2p bridge", node.nativePing())
     }
 
     @Test

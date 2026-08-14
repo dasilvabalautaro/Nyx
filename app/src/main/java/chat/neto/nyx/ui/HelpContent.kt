@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 /**
  * Ayuda in-app: un resumen corto y orientado a tareas de lo que el manual explica en largo.
@@ -24,14 +24,14 @@ object HelpContent {
         HelpItem(
             category = "Primeros pasos",
             question = "¿Necesito un número de teléfono o registrarme?",
-            answer = "No. Krypta no pide teléfono, correo ni ninguna cuenta. Tu identidad se " +
+            answer = "No. Nyx no pide teléfono, correo ni ninguna cuenta. Tu identidad se " +
                 "crea sola en este móvil la primera vez que abres la app y vive únicamente en " +
                 "tu dispositivo.",
         ),
         HelpItem(
             category = "Primeros pasos",
             question = "¿Qué es un PeerID y cómo lo comparto?",
-            answer = "Tu PeerID es tu única seña de contacto en Krypta: es tu clave pública, no " +
+            answer = "Tu PeerID es tu única seña de contacto en Nyx: es tu clave pública, no " +
                 "un teléfono ni un correo. Compártelo desde Ajustes → Copiar o Compartir con " +
                 "quien quiera escribirte. Quien lo tenga puede añadirte, pero no revela ningún " +
                 "otro dato personal tuyo.",
@@ -40,7 +40,7 @@ object HelpContent {
             category = "Privacidad y seguridad",
             question = "¿Quién puede leer mis mensajes y llamadas?",
             answer = "Solo tú y tu contacto. Todo va cifrado de extremo a extremo con una clave " +
-                "que solo tenéis vosotros dos. Los nodos de Krypta y cualquier intermediario " +
+                "que solo tenéis vosotros dos. Los nodos de Nyx y cualquier intermediario " +
                 "ven únicamente datos cifrados: nunca el texto, las fotos ni el audio.",
         ),
         HelpItem(
@@ -63,11 +63,11 @@ object HelpContent {
         HelpItem(
             category = "Privacidad y seguridad",
             question = "¿Se pueden hacer capturas de pantalla de mis chats?",
-            answer = "No con las herramientas del móvil: Krypta bloquea la captura y la " +
+            answer = "No con las herramientas del móvil: Nyx bloquea la captura y la " +
                 "grabación de pantalla, su ventana sale en negro si alguien graba, y tampoco " +
                 "aparece en la vista de apps recientes. Si quieres guardar una conversación, " +
                 "usa ⋮ → Capturar pantalla dentro del chat; la imagen se guarda en Galería › " +
-                "Krypta. Ojo: esa imagen ya está fuera del cifrado, así que trátala como " +
+                "Nyx. Ojo: esa imagen ya está fuera del cifrado, así que trátala como " +
                 "cualquier foto de tu móvil.",
         ),
         HelpItem(
@@ -103,19 +103,19 @@ object HelpContent {
         HelpItem(
             category = "Problemas frecuentes",
             question = "¿Puedo quitar el aviso fijo de “Conectado — recibiendo mensajes”?",
-            answer = "Ese aviso es lo que mantiene a Krypta conectada con la app cerrada: sin él, " +
+            answer = "Ese aviso es lo que mantiene a Nyx conectada con la app cerrada: sin él, " +
                 "Android detendría el servicio y dejarías de recibir mensajes y llamadas al " +
-                "instante (Krypta no usa los servidores de notificaciones de Google). El sistema " +
+                "instante (Nyx no usa los servidores de notificaciones de Google). El sistema " +
                 "obliga a mostrarlo mientras el servicio funciona. Sí puedes ocultarlo tú: " +
                 "deslízalo para descartarlo, o mantenlo pulsado y desactiva el canal “Servicio en " +
-                "segundo plano”. Krypta seguirá funcionando igual; solo dejarás de ver el aviso.",
+                "segundo plano”. Nyx seguirá funcionando igual; solo dejarás de ver el aviso.",
         ),
         HelpItem(
             category = "Problemas frecuentes",
             question = "No me llegan los mensajes con la app cerrada, ¿qué hago?",
             answer = "Muchos móviles “congelan” las apps para ahorrar batería y eso corta la " +
                 "recepción. Ve a Ajustes → Recepción en segundo plano, pulsa “Ajustes del " +
-                "sistema” y permite a Krypta: batería sin restricciones, inicio automático y " +
+                "sistema” y permite a Nyx: batería sin restricciones, inicio automático y " +
                 "notificaciones. Con eso los avisos llegan aunque no tengas la app abierta.",
         ),
     )

@@ -1,6 +1,6 @@
-package chat.neto.krypta.data
+package chat.neto.nyx.data
 
-import chat.neto.krypta.core.IncomingFileMeta
+import chat.neto.nyx.core.IncomingFileMeta
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -23,7 +23,7 @@ class DiskFileStoreTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun store() = DiskFileStore(File(tmp.root, "krypta_files"))
+    private fun store() = DiskFileStore(File(tmp.root, "nyx_files"))
 
     private val meta = IncomingFileMeta("doc.pdf", "application/pdf", 10L, 3)
     private val chunks = listOf("0123".toByteArray(), "4567".toByteArray(), "89".toByteArray())
@@ -39,7 +39,7 @@ class DiskFileStoreTest {
         assertEquals("doc.pdf", f.name)
         assertArrayEquals("0123456789".toByteArray(), File(f.path).readBytes())
         // staging limpiado al completar
-        assertFalse(File(tmp.root, "krypta_files/staging/f1").exists())
+        assertFalse(File(tmp.root, "nyx_files/staging/f1").exists())
     }
 
     @Test
@@ -74,7 +74,7 @@ class DiskFileStoreTest {
         assertNull(s.onMeta("../f4", evil))
         val f = s.onChunk("../f4", 0, "data".toByteArray())!!
 
-        val base = File(tmp.root, "krypta_files").canonicalFile
+        val base = File(tmp.root, "nyx_files").canonicalFile
         assertTrue(File(f.path).canonicalPath.startsWith(base.path)) // no escapa del dir
         assertArrayEquals("data".toByteArray(), File(f.path).readBytes())
     }
@@ -100,7 +100,7 @@ class DiskFileStoreTest {
         assertNull(s.onMeta("f7", meta))
         assertNull(s.onChunk("f7", 0, chunks[0]))
         // Copia propia (p. ej. nota de voz enviada) dentro del almacén.
-        val sent = File(tmp.root, "krypta_files/sent/nota.m4a").apply {
+        val sent = File(tmp.root, "nyx_files/sent/nota.m4a").apply {
             parentFile!!.mkdirs(); writeBytes("audio".toByteArray())
         }
 
@@ -109,7 +109,7 @@ class DiskFileStoreTest {
         s.deleteLocal("nota-id", sent.absolutePath)
 
         assertFalse(File(done.path).exists())
-        assertFalse(File(tmp.root, "krypta_files/staging/f7").exists())
+        assertFalse(File(tmp.root, "nyx_files/staging/f7").exists())
         assertFalse(sent.exists())
         // Idempotente: repetir un borrado no lanza.
         s.deleteLocal("f6", done.path)

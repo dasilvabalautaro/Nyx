@@ -21,7 +21,7 @@ val hasReleaseKeystore = listOf("storeFile", "storePassword", "keyAlias", "keyPa
     .all { !keystoreProperties.getProperty(it).isNullOrBlank() }
 
 android {
-    namespace = "chat.neto.krypta"
+    namespace = "chat.neto.nyx"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -34,11 +34,11 @@ android {
     ndkVersion = "26.1.10909125"
 
     defaultConfig {
-        applicationId = "chat.neto.krypta"
+        applicationId = "chat.neto.nyx"
         minSdk = 30
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 1
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

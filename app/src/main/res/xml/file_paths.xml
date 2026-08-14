@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <!-- Archivos recibidos, reensamblados en el almacenamiento interno de la app. -->
-    <files-path name="krypta_files" path="krypta_files/" />
+    <files-path name="nyx_files" path="nyx_files/" />
 </paths>

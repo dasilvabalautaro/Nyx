@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.content.Context
 import android.media.MediaRecorder
@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * Grabadora de notas de voz (MediaRecorder → AAC en contenedor MP4). Graba directamente en
- * `filesDir/krypta_files/sent/` para que la copia del emisor sobreviva (y su burbuja sea
+ * `filesDir/nyx_files/sent/` para que la copia del emisor sobreviva (y su burbuja sea
  * reproducible); si se cancela o falla, el archivo se borra. Una instancia = una grabación.
  */
 class AudioRecorder(private val context: Context) {
@@ -18,7 +18,7 @@ class AudioRecorder(private val context: Context) {
     /** Empieza a grabar. Lanza si el micro no está disponible (la UI lo captura). */
     fun start() {
         check(recorder == null) { "ya grabando" }
-        val dir = File(context.filesDir, "krypta_files/sent").apply { mkdirs() }
+        val dir = File(context.filesDir, "nyx_files/sent").apply { mkdirs() }
         val file = File(dir, "nota-voz-${System.currentTimeMillis()}.m4a")
         @Suppress("DEPRECATION")
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()

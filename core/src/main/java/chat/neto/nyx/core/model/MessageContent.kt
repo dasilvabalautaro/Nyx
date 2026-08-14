@@ -1,4 +1,4 @@
-package chat.neto.krypta.core.model
+package chat.neto.nyx.core.model
 
 /**
  * Contenido de un mensaje ya descifrado, listo para pintar. Distingue el tipo (texto vs

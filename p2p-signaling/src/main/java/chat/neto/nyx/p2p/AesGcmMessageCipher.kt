@@ -1,6 +1,6 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.MessageCipher
+import chat.neto.nyx.core.MessageCipher
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 /**
  * AEAD con AES-256-GCM. La clave de sesión (32 bytes) se deriva del secreto compartido con
- * `HKDF(sharedSecret, info="krypta-msg-key-v1")`. Cada mensaje usa un nonce aleatorio de
+ * `HKDF(sharedSecret, info="nyx-msg-key-v1")`. Cada mensaje usa un nonce aleatorio de
  * 12 bytes que se antepone al texto cifrado: `salida = nonce(12) || ciphertext+tag(16)`.
  *
  * Nota: v1 deriva la clave directamente del secreto compartido estático (sin ratchet/PFS).
@@ -43,7 +43,7 @@ class AesGcmMessageCipher @Inject constructor() : MessageCipher {
         val key = Hkdf.derive(
             ikm = sharedSecret,
             salt = ByteArray(0),
-            info = "krypta-msg-key-v1".toByteArray(Charsets.UTF_8),
+            info = "nyx-msg-key-v1".toByteArray(Charsets.UTF_8),
             length = KEY_BYTES,
         )
         return SecretKeySpec(key, "AES")

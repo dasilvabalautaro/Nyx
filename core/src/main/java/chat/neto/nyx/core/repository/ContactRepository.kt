@@ -1,6 +1,6 @@
-package chat.neto.krypta.core.repository
+package chat.neto.nyx.core.repository
 
-import chat.neto.krypta.core.model.Contact
+import chat.neto.nyx.core.model.Contact
 import kotlinx.coroutines.flow.Flow
 
 interface ContactRepository {

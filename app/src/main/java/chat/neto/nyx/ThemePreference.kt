@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,8 +12,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
  * es el comportamiento previo: la app seguía `isSystemInDarkTheme()` sin opción propia.
  *
  * Mismo patrón que [AppLock]: estado en el proceso (singleton), preferencia en
- * `krypta_settings`. La decisión "¿oscuro?" se resuelve con [resolveDark] (pura, testeable);
- * `MainActivity` combina el modo elegido con el tema del sistema y lo pasa a `KryptaTheme`, así
+ * `nyx_settings`. La decisión "¿oscuro?" se resuelve con [resolveDark] (pura, testeable);
+ * `MainActivity` combina el modo elegido con el tema del sistema y lo pasa a `NyxTheme`, así
  * "Sistema" sigue cambiando en caliente si el móvil alterna claro/oscuro.
  */
 object ThemePreference {
@@ -26,7 +26,7 @@ object ThemePreference {
     private var initialized = false
 
     private fun settings(context: Context) =
-        context.getSharedPreferences("krypta_settings", Context.MODE_PRIVATE)
+        context.getSharedPreferences("nyx_settings", Context.MODE_PRIVATE)
 
     /** Carga la preferencia guardada. Idempotente. */
     fun init(context: Context) {

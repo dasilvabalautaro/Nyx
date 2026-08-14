@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /**
  * Motor de audio full-duplex de una llamada: captura y codifica el micro local (los paquetes

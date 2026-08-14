@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import java.security.SecureRandom
 import java.util.Base64
@@ -27,7 +27,7 @@ object IdentityBackup {
 
     class Data(val identity: ByteArray, val contacts: List<BackupContact>)
 
-    /** El archivo no es un respaldo Krypta, está corrupto o la passphrase no es la suya. */
+    /** El archivo no es un respaldo Nyx, está corrupto o la passphrase no es la suya. */
     class InvalidBackup(message: String) : Exception(message)
 
     fun encode(passphrase: CharArray, data: Data): ByteArray {
@@ -49,7 +49,7 @@ object IdentityBackup {
         if (blob.size < MAGIC.size + SALT_LEN + NONCE_LEN + TAG_BITS / 8 ||
             !blob.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)
         ) {
-            throw InvalidBackup("no es un respaldo de Krypta")
+            throw InvalidBackup("no es un respaldo de Nyx")
         }
         val salt = blob.copyOfRange(MAGIC.size, MAGIC.size + SALT_LEN)
         val nonce = blob.copyOfRange(MAGIC.size + SALT_LEN, MAGIC.size + SALT_LEN + NONCE_LEN)

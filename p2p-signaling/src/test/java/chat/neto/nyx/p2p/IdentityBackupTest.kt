@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -49,7 +49,7 @@ class IdentityBackupTest {
     }
 
     @Test
-    fun `un archivo ajeno o truncado se rechaza como no-Krypta`() {
+    fun `un archivo ajeno o truncado se rechaza como no-Nyx`() {
         assertThrows(IdentityBackup.InvalidBackup::class.java) {
             IdentityBackup.decode("x".toCharArray(), "no soy un backup".toByteArray())
         }

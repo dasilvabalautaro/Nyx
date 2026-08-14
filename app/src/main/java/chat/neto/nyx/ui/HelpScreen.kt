@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -47,7 +47,7 @@ fun HelpScreen(onBack: () -> Unit) {
                 title = { Text("Ayuda") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(KryptaBackIcon, contentDescription = "Atrás")
+                        Icon(NyxBackIcon, contentDescription = "Atrás")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -107,7 +107,7 @@ private fun FaqCard(item: HelpItem) {
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
-                    KryptaExpandMoreIcon,
+                    NyxExpandMoreIcon,
                     contentDescription = if (expanded) "Contraer" else "Desplegar",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp).rotate(rotation),

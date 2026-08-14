@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /**
  * Acuerdo de claves basado en la identidad libp2p. El secreto compartido con un contacto

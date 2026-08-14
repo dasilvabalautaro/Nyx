@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.app.Activity
 import android.content.Context
@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * Pantalla que cubre toda la app mientras [chat.neto.krypta.AppLock] esté bloqueado. No
+ * Pantalla que cubre toda la app mientras [chat.neto.nyx.AppLock] esté bloqueado. No
  * muestra ningún contenido del usuario. Lanza el diálogo de autenticación nada más aparecer
  * (para no exigir un toque extra) y deja el botón por si el usuario lo cancela.
  */
@@ -37,14 +37,14 @@ fun LockScreen(onRequestUnlock: () -> Unit) {
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                KryptaLockIcon,
+                NyxLockIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp),
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Krypta está bloqueada",
+                "Nyx está bloqueada",
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
             )

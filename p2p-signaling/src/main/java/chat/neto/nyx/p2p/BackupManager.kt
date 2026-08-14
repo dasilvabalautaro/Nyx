@@ -1,8 +1,8 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.repository.ContactRepository
-import chat.neto.krypta.nativebridge.Libp2pNode
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.nativebridge.Libp2pNode
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton

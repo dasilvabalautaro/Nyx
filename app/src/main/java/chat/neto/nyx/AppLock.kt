@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Activity
 import android.content.Context
@@ -13,10 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Bloqueo de acceso a la app con la credencial del sistema (huella/cara o el PIN/patrón del
- * propio móvil, vía [BiometricPrompt]). Krypta no guarda ningún secreto de desbloqueo: si el
+ * propio móvil, vía [BiometricPrompt]). Nyx no guarda ningún secreto de desbloqueo: si el
  * sistema reconoce al usuario, se entra — mismo modelo que Signal/WhatsApp.
  *
- * El estado vive en el proceso (singleton) y la preferencia en `krypta_settings`. El
+ * El estado vive en el proceso (singleton) y la preferencia en `nyx_settings`. El
  * re-bloqueo usa [ProcessLifecycleOwner] (no el ciclo de la Activity): así una rotación o un
  * cambio de configuración no cuentan como "salir de la app", solo pasar de verdad a segundo
  * plano, y al volver se re-bloquea si pasó el período de gracia configurado.
@@ -57,7 +57,7 @@ object AppLock {
     }
 
     private fun settings(context: Context) =
-        context.getSharedPreferences("krypta_settings", Context.MODE_PRIVATE)
+        context.getSharedPreferences("nyx_settings", Context.MODE_PRIVATE)
 
     /**
      * Carga la preferencia y arma el observador de visibilidad. Idempotente; llamar en el

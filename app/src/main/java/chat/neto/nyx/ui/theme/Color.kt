@@ -1,8 +1,8 @@
-package chat.neto.krypta.ui.theme
+package chat.neto.nyx.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Identidad Krypta: paleta Material 3 completa generada desde el verde-teal semilla
+// Identidad Nyx: paleta Material 3 completa generada desde el verde-teal semilla
 // #006A60 ("privacidad"). Tonos según el sistema de color M3 (Material Theme Builder);
 // si se cambia la semilla, regenerar TODOS los roles, no solo primary.
 

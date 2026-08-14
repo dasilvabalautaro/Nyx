@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

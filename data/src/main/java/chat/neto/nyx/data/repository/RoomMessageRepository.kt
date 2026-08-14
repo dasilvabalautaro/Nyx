@@ -1,10 +1,10 @@
-package chat.neto.krypta.data.repository
+package chat.neto.nyx.data.repository
 
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.core.repository.MessageRepository
-import chat.neto.krypta.data.dao.MessageDao
-import chat.neto.krypta.data.entity.MessageEntity
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.repository.MessageRepository
+import chat.neto.nyx.data.dao.MessageDao
+import chat.neto.nyx.data.entity.MessageEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject

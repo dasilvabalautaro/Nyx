@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 import kotlinx.coroutines.flow.Flow
 

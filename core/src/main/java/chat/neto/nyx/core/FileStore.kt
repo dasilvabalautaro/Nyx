@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /** Metadatos de un archivo entrante (llegan en el mensaje "meta", antes de los trozos). */
 data class IncomingFileMeta(

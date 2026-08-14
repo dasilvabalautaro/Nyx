@@ -1,11 +1,11 @@
-package chat.neto.krypta.data.dao
+package chat.neto.nyx.data.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.data.entity.MessageEntity
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.data.entity.MessageEntity
 import kotlinx.coroutines.flow.Flow
 
 /** Recuento de mensajes entrantes sin ver de una conversación (badge de no leídos). */

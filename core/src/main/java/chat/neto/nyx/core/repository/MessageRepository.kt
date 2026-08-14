@@ -1,7 +1,7 @@
-package chat.neto.krypta.core.repository
+package chat.neto.nyx.core.repository
 
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.core.model.MessageStatus
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageStatus
 import kotlinx.coroutines.flow.Flow
 
 interface MessageRepository {

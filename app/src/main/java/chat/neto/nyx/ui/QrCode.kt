@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -16,16 +16,16 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
  * coinciden, nadie sustituyó el PeerID en el canal por el que se compartió.
  *
  * Solo generación aquí (ZXing puro, sin cámara); el escaneo lo hace `zxing-android-embedded`
- * vía `ScanContract`. Es la contraparte visual de [chat.neto.krypta.p2p] SafetyNumber.
+ * vía `ScanContract`. Es la contraparte visual de [chat.neto.nyx.p2p] SafetyNumber.
  */
 object QrCode {
 
-    private const val SCHEME = "krypta:verify:"
+    private const val SCHEME = "nyx:verify:"
 
     /** Contenido del QR que muestra este dispositivo: su propio PeerID con esquema. */
     fun verifyPayload(peerId: String): String = SCHEME + peerId
 
-    /** Extrae el PeerID de un QR escaneado, o null si no es un QR de verificación de Krypta. */
+    /** Extrae el PeerID de un QR escaneado, o null si no es un QR de verificación de Nyx. */
     fun parseVerifyPayload(scanned: String): String? =
         scanned.trim().takeIf { it.startsWith(SCHEME) }?.removePrefix(SCHEME)?.takeIf { it.isNotBlank() }
 

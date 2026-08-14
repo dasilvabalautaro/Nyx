@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -59,8 +59,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import chat.neto.krypta.p2p.CallPhase
-import chat.neto.krypta.p2p.CallState
+import chat.neto.nyx.p2p.CallPhase
+import chat.neto.nyx.p2p.CallState
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -119,7 +119,7 @@ fun CallScreen(
             runCatching {
                 power.newWakeLock(
                     android.os.PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK,
-                    "krypta:proximity",
+                    "nyx:proximity",
                 ).apply {
                     setReferenceCounted(false)
                     acquire(4 * 60 * 60 * 1000L) // tope de seguridad: 4 h > cualquier llamada
@@ -327,7 +327,7 @@ private fun CallControls(
         when (state.phase) {
             CallPhase.RINGING -> Row(horizontalArrangement = Arrangement.spacedBy(56.dp)) {
                 RoundCallButton(
-                    icon = KryptaCallEndIcon,
+                    icon = NyxCallEndIcon,
                     label = "Rechazar",
                     container = MaterialTheme.colorScheme.error,
                     content = MaterialTheme.colorScheme.onError,
@@ -336,7 +336,7 @@ private fun CallControls(
                     onClick = onReject,
                 )
                 RoundCallButton(
-                    icon = KryptaPhoneIcon,
+                    icon = NyxPhoneIcon,
                     label = "Aceptar",
                     container = Color(0xFF43A047),
                     content = Color.White,
@@ -351,7 +351,7 @@ private fun CallControls(
                 if (state.phase == CallPhase.ACTIVE) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         RoundCallButton(
-                            icon = if (muted) KryptaMicOffIcon else KryptaMicIcon,
+                            icon = if (muted) NyxMicOffIcon else NyxMicIcon,
                             label = if (muted) "Activar" else "Silenciar",
                             container = if (muted) activeContainer else idleContainer,
                             content = if (muted) activeContent else idleContent,
@@ -359,7 +359,7 @@ private fun CallControls(
                             onClick = onToggleMute,
                         )
                         RoundCallButton(
-                            icon = KryptaSpeakerIcon,
+                            icon = NyxSpeakerIcon,
                             label = "Altavoz",
                             container = if (speaker) activeContainer else idleContainer,
                             content = if (speaker) activeContent else idleContent,
@@ -367,7 +367,7 @@ private fun CallControls(
                             onClick = onToggleSpeaker,
                         )
                         RoundCallButton(
-                            icon = KryptaVideocamIcon,
+                            icon = NyxVideocamIcon,
                             label = "Vídeo",
                             container = if (videoWanted) activeContainer else idleContainer,
                             content = if (videoWanted) activeContent else idleContent,
@@ -376,7 +376,7 @@ private fun CallControls(
                         )
                         if (videoWanted) {
                             RoundCallButton(
-                                icon = KryptaFlipCameraIcon,
+                                icon = NyxFlipCameraIcon,
                                 label = "Cámara",
                                 container = idleContainer,
                                 content = idleContent,
@@ -388,7 +388,7 @@ private fun CallControls(
                     Spacer(Modifier.height(20.dp))
                 }
                 RoundCallButton(
-                    icon = KryptaCallEndIcon,
+                    icon = NyxCallEndIcon,
                     label = "Colgar",
                     container = MaterialTheme.colorScheme.error,
                     content = MaterialTheme.colorScheme.onError,

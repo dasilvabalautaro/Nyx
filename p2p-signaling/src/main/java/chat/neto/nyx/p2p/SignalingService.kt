@@ -1,10 +1,10 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.SignalingEvent
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.nativebridge.Libp2pNode
-import chat.neto.krypta.nativebridge.NodeEvent
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.SignalingEvent
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.nativebridge.Libp2pNode
+import chat.neto.nyx.nativebridge.NodeEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +19,7 @@ import javax.inject.Singleton
  * Orquesta el nodo nativo libp2p ([Libp2pNode]) y el descubrimiento por rendezvous
  * ([RendezvousService]). Implementa la abstracción [ISignalingService] del módulo :core
  * (reemplaza el DiscoveryService mDNS). Los payloads viajan ya cifrados (E2EE); el cifrado
- * lo aplica la capa de mensajería por encima usando [chat.neto.krypta.core.MessageCipher].
+ * lo aplica la capa de mensajería por encima usando [chat.neto.nyx.core.MessageCipher].
  */
 @Singleton
 class SignalingService @Inject constructor(
@@ -32,13 +32,13 @@ class SignalingService @Inject constructor(
     override val events: Flow<SignalingEvent> = _events.asSharedFlow()
 
     private val _incomingCalls =
-        MutableSharedFlow<Pair<String, chat.neto.krypta.core.CallStream>>(extraBufferCapacity = 8)
-    override val incomingCallStreams: Flow<Pair<String, chat.neto.krypta.core.CallStream>> =
+        MutableSharedFlow<Pair<String, chat.neto.nyx.core.CallStream>>(extraBufferCapacity = 8)
+    override val incomingCallStreams: Flow<Pair<String, chat.neto.nyx.core.CallStream>> =
         _incomingCalls.asSharedFlow()
 
     private val _incomingVideo =
-        MutableSharedFlow<Pair<String, chat.neto.krypta.core.CallStream>>(extraBufferCapacity = 8)
-    override val incomingVideoStreams: Flow<Pair<String, chat.neto.krypta.core.CallStream>> =
+        MutableSharedFlow<Pair<String, chat.neto.nyx.core.CallStream>>(extraBufferCapacity = 8)
+    override val incomingVideoStreams: Flow<Pair<String, chat.neto.nyx.core.CallStream>> =
         _incomingVideo.asSharedFlow()
 
     init {
@@ -73,17 +73,17 @@ class SignalingService @Inject constructor(
         }
     }
 
-    override suspend fun openCallStream(contact: Contact): chat.neto.krypta.core.CallStream =
+    override suspend fun openCallStream(contact: Contact): chat.neto.nyx.core.CallStream =
         node.openCallStream(contact.peerId)
 
-    override suspend fun openVideoStream(contact: Contact): chat.neto.krypta.core.CallStream =
+    override suspend fun openVideoStream(contact: Contact): chat.neto.nyx.core.CallStream =
         node.openVideoStream(contact.peerId)
 
     override suspend fun start() {
         node.start()
         // mDNS es solo un atajo de pruebas en LAN; el descubrimiento WAN real es por DHT +
         // rendezvous. Si falla (p. ej. en datos móviles, sin interfaz multicast) NO debe
-        // impedir el host ni el arranque del bucle WAN, que es el camino principal de Krypta.
+        // impedir el host ni el arranque del bucle WAN, que es el camino principal de Nyx.
         runCatching { node.startMdns() }
     }
 

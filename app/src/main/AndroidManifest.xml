@@ -36,13 +36,13 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Sin copia automática de Google: los datos de la app son la identidad Ed25519
-         (krypta_identity.xml), la base de mensajes y los adjuntos. Con allowBackup="true"
+         (nyx_identity.xml), la base de mensajes y los adjuntos. Con allowBackup="true"
          (el valor de la plantilla) todo eso acababa en el Drive del usuario, fuera del E2EE
          y en contradicción con la §7 de la política de privacidad, que promete que la única
          copia es el .krbk cifrado con la frase-clave del usuario. Las reglas XML quedan como
          defensa en profundidad por si alguien reactiva la bandera. -->
     <application
-        android:name=".KryptaApplication"
+        android:name=".NyxApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -51,13 +51,13 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
-        android:theme="@style/Theme.Krypta">
+        android:theme="@style/Theme.Nyx">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Krypta"
+            android:theme="@style/Theme.Nyx"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -68,7 +68,7 @@
 
         <!-- Mantiene el nodo libp2p + wake vivos con la app cerrada (Fase 5). -->
         <service
-            android:name=".KryptaForegroundService"
+            android:name=".NyxForegroundService"
             android:exported="false"
             android:foregroundServiceType="specialUse|microphone">
             <property
@@ -95,8 +95,8 @@
             android:name=".CallActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="chat.neto.krypta.CALL_ANSWER" />
-                <action android:name="chat.neto.krypta.CALL_DECLINE" />
+                <action android:name="chat.neto.nyx.CALL_ANSWER" />
+                <action android:name="chat.neto.nyx.CALL_DECLINE" />
             </intent-filter>
         </receiver>
 

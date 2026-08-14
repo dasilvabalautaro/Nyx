@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 /**
  * Sobre de aplicación que viaja **dentro** del cifrado E2EE (el nodo/relay nunca lo ve). Lleva

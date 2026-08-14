@@ -6,7 +6,7 @@
     <!-- Solo para el descubrimiento mDNS en LAN (pruebas); WAN usa DHT + rendezvous. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <!-- El Foreground Service (KryptaForegroundService) vive en :app, que es quien puede
+    <!-- El Foreground Service (NyxForegroundService) vive en :app, que es quien puede
          inyectar ChatService (:p2p-signaling); este módulo no lo ve por el grafo de deps. -->
     <application />
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Glifo del launcher: la burbuja de chat con candado de Krypta (el mismo de
-     ic_stat_krypta), en blanco, escalado ×2 y centrado en la zona segura (66/108). -->
+<!-- Glifo del launcher: la burbuja de chat con candado de Nyx (el mismo de
+     ic_stat_nyx), en blanco, escalado ×2 y centrado en la zona segura (66/108). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

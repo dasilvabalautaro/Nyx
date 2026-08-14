@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Service
 import android.content.Context
@@ -8,10 +8,10 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.IBinder
-import chat.neto.krypta.p2p.CallPhase
-import chat.neto.krypta.p2p.CallService
-import chat.neto.krypta.p2p.CallState
-import chat.neto.krypta.p2p.ChatService
+import chat.neto.nyx.p2p.CallPhase
+import chat.neto.nyx.p2p.CallService
+import chat.neto.nyx.p2p.CallState
+import chat.neto.nyx.p2p.ChatService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,18 +21,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Servicio en primer plano que mantiene Krypta recibiendo **con la app cerrada** (Fase 5):
+ * Servicio en primer plano que mantiene Nyx recibiendo **con la app cerrada** (Fase 5):
  * sostiene el nodo libp2p (host + bucle WAN + stream de wake). Sobrevive al swipe de la UI
  * (`START_STICKY`); junto con el wake integrado del nodo, un depósito en el buzón llega al
  * móvil en segundos.
  *
  * **Los avisos ya no se postean aquí**: los dueños de la notificación de mensaje y del timbre
- * de llamada son [IncomingNotifier] + [KryptaNotifications], enganchados desde
- * [KryptaApplication], porque este servicio puede no existir en un proceso revivido solo por
+ * de llamada son [IncomingNotifier] + [NyxNotifications], enganchados desde
+ * [NyxApplication], porque este servicio puede no existir en un proceso revivido solo por
  * el latido de entrega — y ahí se perdían avisos en silencio.
  */
 @AndroidEntryPoint
-class KryptaForegroundService : Service() {
+class NyxForegroundService : Service() {
 
     @Inject
     lateinit var chat: ChatService
@@ -59,12 +59,12 @@ class KryptaForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        KryptaNotifications.ensureChannels(this)
+        NyxNotifications.ensureChannels(this)
         // specialUse (no dataSync): Android 15 corta los FGS dataSync a las 6 h — fatal
         // para una conexión de mensajería persistente.
         startForeground(
-            KryptaNotifications.ONGOING_ID,
-            KryptaNotifications.serviceNotification(this),
+            NyxNotifications.ONGOING_ID,
+            NyxNotifications.serviceNotification(this),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
         scope.launch { runCatching { chat.start() } }
@@ -81,7 +81,7 @@ class KryptaForegroundService : Service() {
             @Suppress("DEPRECATION") // FULL_HIGH_PERF: el único modo que mantiene el radio
             // despierto con la pantalla apagada (LOW_LATENCY solo aplica en primer plano).
             wifiLock = getSystemService(WifiManager::class.java)
-                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "krypta:wifi")
+                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "nyx:wifi")
                 .apply { setReferenceCounted(false); acquire() }
         }
         // Latido de entrega: red de seguridad para OEM que suspenden la red en 2.º plano.
@@ -120,8 +120,8 @@ class KryptaForegroundService : Service() {
         }
         val ok = runCatching {
             startForeground(
-                KryptaNotifications.ONGOING_ID,
-                KryptaNotifications.serviceNotification(this),
+                NyxNotifications.ONGOING_ID,
+                NyxNotifications.serviceNotification(this),
                 types,
             )
         }.isSuccess
@@ -136,7 +136,7 @@ class KryptaForegroundService : Service() {
     companion object {
         /** Arranca el servicio (idempotente: si ya corre, Android reutiliza la instancia). */
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, KryptaForegroundService::class.java))
+            context.startForegroundService(Intent(context, NyxForegroundService::class.java))
         }
     }
 }

@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -12,12 +12,12 @@ import android.os.VibratorManager
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.Message
-import chat.neto.krypta.p2p.CallPhase
-import chat.neto.krypta.p2p.CallService
-import chat.neto.krypta.p2p.CallState
-import chat.neto.krypta.p2p.ChatService
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.p2p.CallPhase
+import chat.neto.nyx.p2p.CallService
+import chat.neto.nyx.p2p.CallState
+import chat.neto.nyx.p2p.ChatService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +28,8 @@ import javax.inject.Singleton
 
 /**
  * Dueño único de los **avisos al usuario** (mensajes y llamadas entrantes). Lo instancia
- * [KryptaApplication] en `onCreate`, así que existe **siempre que exista el proceso**, venga
- * de donde venga: la Activity, el [KryptaForegroundService] o un simple `BroadcastReceiver`
+ * [NyxApplication] en `onCreate`, así que existe **siempre que exista el proceso**, venga
+ * de donde venga: la Activity, el [NyxForegroundService] o un simple `BroadcastReceiver`
  * ([HeartbeatReceiver], [BootReceiver]).
  *
  * Ese "siempre" es justo el arreglo. Antes el aviso lo posteaba el servicio en primer plano
@@ -67,11 +67,11 @@ class IncomingNotifier @Inject constructor(
     private var ringtone: Ringtone? = null
     private var attached = false
 
-    /** Llamado una vez desde [KryptaApplication.onCreate]. Idempotente. */
+    /** Llamado una vez desde [NyxApplication.onCreate]. Idempotente. */
     fun attach() {
         if (attached) return
         attached = true
-        KryptaNotifications.ensureChannels(context)
+        NyxNotifications.ensureChannels(context)
         main.post {
             ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
                 override fun onStart(owner: LifecycleOwner) {
@@ -79,7 +79,7 @@ class IncomingNotifier @Inject constructor(
                     // Abrir la app limpia la bandeja y el conteo del icono de una vez. Los no
                     // leídos por contacto NO se tocan: viven en Room y solo los borra entrar
                     // en la conversación, así que la lista sigue mostrando su badge.
-                    KryptaNotifications.cancelAllMessages(context)
+                    NyxNotifications.cancelAllMessages(context)
                 }
 
                 override fun onStop(owner: LifecycleOwner) {
@@ -97,7 +97,7 @@ class IncomingNotifier @Inject constructor(
     /** La pantalla de chat declara qué conversación se está mirando (null al salir). */
     fun setVisibleConversation(contactId: String?) {
         visibleConversationId = contactId
-        if (contactId != null) KryptaNotifications.cancel(context, contactId)
+        if (contactId != null) NyxNotifications.cancel(context, contactId)
     }
 
     private fun onIncoming(contact: Contact, message: Message) {
@@ -107,7 +107,7 @@ class IncomingNotifier @Inject constructor(
         val text = runCatching { chat.notificationText(contact, message) }
             .getOrDefault("Mensaje nuevo")
         runCatching {
-            KryptaNotifications.notifyMessage(
+            NyxNotifications.notifyMessage(
                 context, contact.id, contact.displayName, text, message.timestamp,
             )
         }
@@ -120,12 +120,12 @@ class IncomingNotifier @Inject constructor(
      */
     private fun onCallState(state: CallState) {
         if (state.phase == CallPhase.RINGING) {
-            runCatching { KryptaForegroundService.start(context) }
+            runCatching { NyxForegroundService.start(context) }
             startRinging()
-            KryptaNotifications.notifyIncomingCall(context, state.contact?.displayName ?: "Contacto")
+            NyxNotifications.notifyIncomingCall(context, state.contact?.displayName ?: "Contacto")
         } else {
             stopRinging()
-            KryptaNotifications.cancelCall(context)
+            NyxNotifications.cancelCall(context)
         }
     }
 

@@ -1,4 +1,4 @@
-package chat.neto.krypta.core
+package chat.neto.nyx.core
 
 /**
  * Tipos de frame del canal de vídeo (Fase 7c): 1 byte de cabecera antes del payload

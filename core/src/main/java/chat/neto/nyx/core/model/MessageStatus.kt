@@ -1,4 +1,4 @@
-package chat.neto.krypta.core.model
+package chat.neto.nyx.core.model
 
 /**
  * Estados del ciclo de vida de un mensaje, alineados con el modelo de buzón

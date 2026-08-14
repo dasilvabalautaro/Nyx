@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui.theme
+package chat.neto.nyx.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -13,7 +13,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import chat.neto.krypta.ui.findActivity
+import chat.neto.nyx.ui.findActivity
 
 private val DarkColorScheme = darkColorScheme(
     primary = md_dark_primary,
@@ -86,12 +86,12 @@ private val LightColorScheme = lightColorScheme(
 )
 
 /**
- * Tema Krypta: identidad propia verde-teal (marca reconocible, misma cara en todos los
+ * Tema Nyx: identidad propia verde-teal (marca reconocible, misma cara en todos los
  * móviles) por defecto. [dynamicColor] permite optar por Material You (colores del fondo
  * de pantalla, Android 12+) si algún día se expone como ajuste de usuario.
  */
 @Composable
-fun KryptaTheme(
+fun NyxTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit

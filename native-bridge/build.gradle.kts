@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "chat.neto.krypta.nativebridge"
+    namespace = "chat.neto.nyx.nativebridge"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1

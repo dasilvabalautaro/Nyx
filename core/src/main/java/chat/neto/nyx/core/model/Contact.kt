@@ -1,4 +1,4 @@
-package chat.neto.krypta.core.model
+package chat.neto.nyx.core.model
 
 /**
  * Contacto. `sharedSecret` se obtiene tras intercambiar claves públicas y es la semilla

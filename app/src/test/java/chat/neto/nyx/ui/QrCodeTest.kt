@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,9 +19,9 @@ class QrCodeTest {
     }
 
     @Test
-    fun `parse rejects non-krypta QR content`() {
+    fun `parse rejects non-nyx QR content`() {
         assertNull(QrCode.parseVerifyPayload("https://example.com"))
-        assertNull(QrCode.parseVerifyPayload(peerId)) // sin el esquema krypta:verify:
-        assertNull(QrCode.parseVerifyPayload("krypta:verify:")) // vacío
+        assertNull(QrCode.parseVerifyPayload(peerId)) // sin el esquema nyx:verify:
+        assertNull(QrCode.parseVerifyPayload("nyx:verify:")) // vacío
     }
 }

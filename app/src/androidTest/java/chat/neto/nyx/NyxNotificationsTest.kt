@@ -1,4 +1,4 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import android.app.Notification
 import android.app.NotificationManager
@@ -25,7 +25,7 @@ import org.junit.runner.RunWith
  * queda todo lo demás (servicio en primer plano, llamada sonando).
  */
 @RunWith(AndroidJUnit4::class)
-class KryptaNotificationsTest {
+class NyxNotificationsTest {
 
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
     private val nm = context.getSystemService(NotificationManager::class.java)
@@ -34,25 +34,25 @@ class KryptaNotificationsTest {
 
     @Before
     fun setUp() {
-        KryptaNotifications.ensureChannels(context)
+        NyxNotifications.ensureChannels(context)
         cleanUp()
     }
 
     @After
     fun cleanUp() {
-        KryptaNotifications.cancelAllMessages(context)
-        KryptaNotifications.cancelCall(context)
+        NyxNotifications.cancelAllMessages(context)
+        NyxNotifications.cancelCall(context)
     }
 
     @Test
     fun messageNotificationsAccumulatePerContact() {
-        KryptaNotifications.notifyMessage(context, "peer-A", "Ana", "hola", 1_000L)
-        KryptaNotifications.notifyMessage(context, "peer-A", "Ana", "¿estás?", 2_000L)
-        KryptaNotifications.notifyMessage(context, "peer-B", "Beto", "📷 Foto", 3_000L)
+        NyxNotifications.notifyMessage(context, "peer-A", "Ana", "hola", 1_000L)
+        NyxNotifications.notifyMessage(context, "peer-A", "Ana", "¿estás?", 2_000L)
+        NyxNotifications.notifyMessage(context, "peer-B", "Beto", "📷 Foto", 3_000L)
 
         val ana = active("peer-A".hashCode())
         assertNotNull("el aviso de Ana debería estar en la bandeja", ana)
-        assertEquals(KryptaNotifications.CHANNEL_MESSAGES, ana!!.notification.channelId)
+        assertEquals(NyxNotifications.CHANNEL_MESSAGES, ana!!.notification.channelId)
         // Los dos mensajes se acumulan en UNA notificación (MessagingStyle), no se pisan —
         // que es lo que pasaba antes: cada mensaje nuevo borraba el texto del anterior.
         val style = androidx.core.app.NotificationCompat.MessagingStyle
@@ -65,10 +65,10 @@ class KryptaNotificationsTest {
     /** Abrir un chat retira solo su aviso; el del otro contacto sigue. */
     @Test
     fun cancelRemovesOnlyThatContact() {
-        KryptaNotifications.notifyMessage(context, "peer-A", "Ana", "hola")
-        KryptaNotifications.notifyMessage(context, "peer-B", "Beto", "hey")
+        NyxNotifications.notifyMessage(context, "peer-A", "Ana", "hola")
+        NyxNotifications.notifyMessage(context, "peer-B", "Beto", "hey")
 
-        KryptaNotifications.cancel(context, "peer-A")
+        NyxNotifications.cancel(context, "peer-A")
 
         assertNull(active("peer-A".hashCode()))
         assertNotNull(active("peer-B".hashCode()))
@@ -81,19 +81,19 @@ class KryptaNotificationsTest {
      */
     @Test
     fun cancelAllMessagesClearsTheChannelAndNothingElse() {
-        repeat(5) { i -> KryptaNotifications.notifyMessage(context, "peer-$i", "C$i", "m$i") }
-        nm.notify(KryptaNotifications.ONGOING_ID, KryptaNotifications.serviceNotification(context))
+        repeat(5) { i -> NyxNotifications.notifyMessage(context, "peer-$i", "C$i", "m$i") }
+        nm.notify(NyxNotifications.ONGOING_ID, NyxNotifications.serviceNotification(context))
 
-        KryptaNotifications.cancelAllMessages(context)
+        NyxNotifications.cancelAllMessages(context)
 
         val visibles = nm.activeNotifications.filter {
-            it.notification.channelId == KryptaNotifications.CHANNEL_MESSAGES &&
+            it.notification.channelId == NyxNotifications.CHANNEL_MESSAGES &&
                 it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0
         }
         assertTrue("no debe quedar ningún aviso de mensaje: $visibles", visibles.isEmpty())
         assertNotNull(
             "el permanente del servicio debe sobrevivir",
-            active(KryptaNotifications.ONGOING_ID),
+            active(NyxNotifications.ONGOING_ID),
         )
     }
 
@@ -103,9 +103,9 @@ class KryptaNotificationsTest {
      */
     @Test
     fun incomingCallNotificationIsAccepted() {
-        KryptaNotifications.notifyIncomingCall(context, "Ana")
+        NyxNotifications.notifyIncomingCall(context, "Ana")
 
-        val call = active(KryptaNotifications.CALL_ID)
+        val call = active(NyxNotifications.CALL_ID)
         assertNotNull("la llamada entrante no llegó a la bandeja", call)
         assertEquals(Notification.CATEGORY_CALL, call!!.notification.category)
         assertNotNull(
@@ -113,7 +113,7 @@ class KryptaNotificationsTest {
             call.notification.fullScreenIntent,
         )
 
-        KryptaNotifications.cancelCall(context)
-        assertNull(active(KryptaNotifications.CALL_ID))
+        NyxNotifications.cancelCall(context)
+        assertNull(active(NyxNotifications.CALL_ID))
     }
 }

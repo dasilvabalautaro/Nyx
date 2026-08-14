@@ -1,4 +1,4 @@
-package chat.neto.krypta.ui
+package chat.neto.nyx.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -88,11 +88,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import chat.neto.krypta.AppLock
-import chat.neto.krypta.ScreenSecurity
-import chat.neto.krypta.core.model.Contact
-import chat.neto.krypta.core.model.MessageStatus
-import chat.neto.krypta.p2p.WanStatus
+import chat.neto.nyx.AppLock
+import chat.neto.nyx.ScreenSecurity
+import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.p2p.WanStatus
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import java.text.SimpleDateFormat
@@ -101,7 +101,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun KryptaApp(
+fun NyxApp(
     viewModel: ChatViewModel = hiltViewModel(),
     openContactId: String? = null,
     onOpenConsumed: () -> Unit = {},
@@ -135,7 +135,7 @@ fun KryptaApp(
     val videoWanted by viewModel.videoWanted.collectAsState()
     val remoteRotation by viewModel.remoteVideoRotation.collectAsState()
     val localRotation by viewModel.localVideoRotation.collectAsState()
-    if (callState.phase != chat.neto.krypta.p2p.CallPhase.IDLE) {
+    if (callState.phase != chat.neto.nyx.p2p.CallPhase.IDLE) {
         CallScreen(
             state = callState,
             muted = callMuted,
@@ -164,7 +164,7 @@ fun KryptaApp(
         LockScreen(
             onRequestUnlock = {
                 activity?.let { act ->
-                    AppLock.authenticate(act, "Desbloquear Krypta") { ok ->
+                    AppLock.authenticate(act, "Desbloquear Nyx") { ok ->
                         if (ok) AppLock.unlock()
                     }
                 }
@@ -319,7 +319,7 @@ private fun ChatScreen(
                 "No se pudo capturar la pantalla"
             } else {
                 ScreenSecurity.captureToGallery(activity).fold(
-                    onSuccess = { "Captura guardada en Galería › Krypta" },
+                    onSuccess = { "Captura guardada en Galería › Nyx" },
                     onFailure = { "No se pudo guardar la captura" },
                 )
             }
@@ -461,7 +461,7 @@ private fun ChatScreen(
             androidx.compose.material3.TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(KryptaBackIcon, contentDescription = "Atrás")
+                        Icon(NyxBackIcon, contentDescription = "Atrás")
                     }
                 },
                 title = {
@@ -485,12 +485,12 @@ private fun ChatScreen(
                     }
                 },
                 actions = {
-                    TooltipIconButton("Llamar", KryptaPhoneIcon, enabled = true) {
+                    TooltipIconButton("Llamar", NyxPhoneIcon, enabled = true) {
                         startCall()
                     }
                     TooltipIconButton(
                         tooltip = if (contact.verified) "Identidad verificada" else "Verificar identidad",
-                        icon = KryptaShieldIcon,
+                        icon = NyxShieldIcon,
                         enabled = true,
                         onClick = { showVerify = true },
                         tint = if (contact.verified) MaterialTheme.colorScheme.primary
@@ -498,24 +498,24 @@ private fun ChatScreen(
                     )
                     Box {
                         IconButton(onClick = { showMenu = true }) {
-                            Icon(KryptaMoreIcon, contentDescription = "Más opciones")
+                            Icon(NyxMoreIcon, contentDescription = "Más opciones")
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
                                 text = { Text("Capturar pantalla") },
-                                leadingIcon = { Icon(KryptaImageIcon, contentDescription = null) },
+                                leadingIcon = { Icon(NyxImageIcon, contentDescription = null) },
                                 onClick = { showMenu = false; captureRequested = true },
                             )
                             DropdownMenuItem(
                                 text = { Text("Vaciar chat") },
-                                leadingIcon = { Icon(KryptaDeleteIcon, contentDescription = null) },
+                                leadingIcon = { Icon(NyxDeleteIcon, contentDescription = null) },
                                 onClick = { showMenu = false; confirmClear = true },
                             )
                             DropdownMenuItem(
                                 text = { Text("Eliminar contacto") },
                                 leadingIcon = {
                                     Icon(
-                                        KryptaDeleteIcon,
+                                        NyxDeleteIcon,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.error,
                                     )
@@ -573,7 +573,7 @@ private fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (recordMode == RecordMode.NONE) {
-                    TooltipIconButton("Adjuntar", KryptaAttachIcon, enabled = true) {
+                    TooltipIconButton("Adjuntar", NyxAttachIcon, enabled = true) {
                         showAttach = true
                     }
                     // Campo con relleno propio y esquinas redondeadas a juego con las
@@ -612,7 +612,7 @@ private fun ChatScreen(
                     )
                 } else {
                     Icon(
-                        KryptaMicIcon,
+                        NyxMicIcon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(24.dp),
@@ -674,7 +674,7 @@ private fun ChatScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            KryptaMicIcon,
+                            NyxMicIcon,
                             contentDescription = "Grabar nota de voz",
                             tint = if (recordMode == RecordMode.HELD) MaterialTheme.colorScheme.primary
                             else LocalContentColor.current,
@@ -701,7 +701,7 @@ private fun ChatScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
             AttachOption(
-                icon = KryptaImageIcon,
+                icon = NyxImageIcon,
                 title = "Foto o imagen",
                 subtitle = "De la galería; se comprime para enviarla al instante",
             ) {
@@ -711,7 +711,7 @@ private fun ChatScreen(
                 )
             }
             AttachOption(
-                icon = KryptaAttachIcon,
+                icon = NyxAttachIcon,
                 title = "Archivo",
                 subtitle = "Cualquier tipo, hasta 8 MB",
             ) {
@@ -735,7 +735,7 @@ private fun ChatScreen(
                     viewModel.setVerified(contact, true)
                     Toast.makeText(context, "✓ Identidad verificada", Toast.LENGTH_SHORT).show()
                 }
-                null -> Toast.makeText(context, "Ese QR no es de Krypta", Toast.LENGTH_SHORT).show()
+                null -> Toast.makeText(context, "Ese QR no es de Nyx", Toast.LENGTH_SHORT).show()
                 else -> Toast.makeText(
                     context,
                     "⚠ El QR NO coincide con ${contact.displayName} (posible suplantación)",
@@ -952,7 +952,7 @@ private fun UnverifiedBanner(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            KryptaShieldIcon,
+            NyxShieldIcon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onTertiaryContainer,
             modifier = Modifier.size(18.dp),
@@ -1101,7 +1101,7 @@ private fun FileAttachment(file: FileInfo) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            KryptaAttachIcon,
+            NyxAttachIcon,
             contentDescription = null,
             modifier = Modifier.size(24.dp),
             tint = LocalContentColor.current,
@@ -1162,7 +1162,7 @@ private fun AudioNote(file: FileInfo) {
             }
         }) {
             Icon(
-                if (playing) KryptaPauseIcon else KryptaPlayIcon,
+                if (playing) NyxPauseIcon else NyxPlayIcon,
                 contentDescription = if (playing) "Pausar" else "Reproducir",
                 tint = LocalContentColor.current,
             )

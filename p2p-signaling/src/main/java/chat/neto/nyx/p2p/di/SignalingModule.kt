@@ -1,11 +1,11 @@
-package chat.neto.krypta.p2p.di
+package chat.neto.nyx.p2p.di
 
-import chat.neto.krypta.core.ISignalingService
-import chat.neto.krypta.core.KeyExchange
-import chat.neto.krypta.core.MessageCipher
-import chat.neto.krypta.p2p.AesGcmMessageCipher
-import chat.neto.krypta.p2p.Libp2pKeyExchange
-import chat.neto.krypta.p2p.SignalingService
+import chat.neto.nyx.core.ISignalingService
+import chat.neto.nyx.core.KeyExchange
+import chat.neto.nyx.core.MessageCipher
+import chat.neto.nyx.p2p.AesGcmMessageCipher
+import chat.neto.nyx.p2p.Libp2pKeyExchange
+import chat.neto.nyx.p2p.SignalingService
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

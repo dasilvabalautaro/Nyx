@@ -1,10 +1,10 @@
-package chat.neto.krypta.data.dao
+package chat.neto.nyx.data.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import chat.neto.krypta.data.entity.ContactEntity
+import chat.neto.nyx.data.entity.ContactEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao

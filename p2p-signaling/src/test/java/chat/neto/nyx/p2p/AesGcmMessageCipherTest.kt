@@ -1,4 +1,4 @@
-package chat.neto.krypta.p2p
+package chat.neto.nyx.p2p
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -9,7 +9,7 @@ class AesGcmMessageCipherTest {
 
     private val cipher = AesGcmMessageCipher()
     private val secret = "shared-secret-between-alice-and-bob".toByteArray()
-    private val message = "mensaje secreto de krypta".toByteArray()
+    private val message = "mensaje secreto de nyx".toByteArray()
 
     @Test
     fun `encrypt then decrypt recovers the plaintext`() {

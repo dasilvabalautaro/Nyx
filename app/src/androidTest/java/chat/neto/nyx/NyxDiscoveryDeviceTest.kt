@@ -1,9 +1,9 @@
-package chat.neto.krypta
+package chat.neto.nyx
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import chat.neto.krypta.nativebridge.Libp2pNode
-import chat.neto.krypta.p2p.AesGcmMessageCipher
+import chat.neto.nyx.nativebridge.Libp2pNode
+import chat.neto.nyx.p2p.AesGcmMessageCipher
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -17,12 +17,12 @@ import org.junit.runner.RunWith
  *
  *   adb reverse tcp:4101 tcp:4101
  *   ./gradlew :app:connectedDebugAndroidTest \
- *     -Pandroid.testInstrumentationRunnerArguments.class=chat.neto.krypta.KryptaDiscoveryDeviceTest \
+ *     -Pandroid.testInstrumentationRunnerArguments.class=chat.neto.nyx.NyxDiscoveryDeviceTest \
  *     -Pandroid.testInstrumentationRunnerArguments.bootstrap="/ip4/127.0.0.1/tcp/4101/p2p/<PeerID>" \
  *     -Pandroid.testInstrumentationRunnerArguments.rendezvous="<hex>"
  */
 @RunWith(AndroidJUnit4::class)
-class KryptaDiscoveryDeviceTest {
+class NyxDiscoveryDeviceTest {
 
     private val args = InstrumentationRegistry.getArguments()
 
@@ -68,7 +68,7 @@ class KryptaDiscoveryDeviceTest {
 
         val sharedSecret = ByteArray(32) { it.toByte() } // fija para el demo
         val ciphertext = AesGcmMessageCipher()
-            .encrypt(sharedSecret, "hola E2EE desde el movil krypta".toByteArray())
+            .encrypt(sharedSecret, "hola E2EE desde el movil nyx".toByteArray())
 
         val node = Libp2pNode(InstrumentationRegistry.getInstrumentation().targetContext)
         node.start()

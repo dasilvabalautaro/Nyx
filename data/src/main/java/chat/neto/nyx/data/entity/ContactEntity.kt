@@ -1,4 +1,4 @@
-package chat.neto.krypta.data.entity
+package chat.neto.nyx.data.entity
 
 import androidx.room.Entity
 import androidx.room.Index

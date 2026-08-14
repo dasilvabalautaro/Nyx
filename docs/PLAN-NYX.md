@@ -405,7 +405,10 @@ separados.
    en un estado **peor que roto** — hostnames `nyx*.neto.chat` que aún no existen
    apuntando a los **PeerID de los nodos de Krypta**. Un multiaddr con PeerID equivocado
    no falla claro, falla en el handshake Noise; hasta cerrar el paso 1.13 hay que asumir
-   que "sin conexión WAN" es lo esperado, no un bug.
+   que "sin conexión WAN" es lo esperado, no un bug. *Cerrado el 14 ago*: el valor quedó
+   vacío en el rebrand y hoy es la línea única del nodo propio
+   (`/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooW…ziY3`), así que "sin conexión WAN" vuelve a
+   ser síntoma de problema, no estado esperado.
 8-bis. **Firma de release** (*corrección 14 ago, ausente del plan original*):
    `keystore.properties` y el comentario del `.gitignore` apuntan a
    `~/keystores/krypta/krypta.jks`, y `hasReleaseKeystore` en `app/build.gradle.kts`
@@ -882,11 +885,11 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
 - [ ] 0.6 **Formulario Child Safety Standards** en Play Console (trámite aparte).
 
 ### 1. Rebrand mecánico
-- [~] 1.0 **Primero de todo**: hecha la mitad protectora — `origin` (que apuntaba a
-      `dasilvabalautaro/Krypta`, en producción) se renombró a `upstream` con
-      `--push no_push`, así que **no hay `origin` y un push a Krypta falla al resolver
-      la URL**. Falta lo que depende del autor: crear el repo de Nyx y
-      `git remote add origin <url>`.
+- [x] 1.0 **Primero de todo**: `origin` (que apuntaba a `dasilvabalautaro/Krypta`, en
+      producción) se renombró a `upstream` con `--push no_push`, así que un push a Krypta
+      falla al resolver la URL. **Cerrado el 14 ago**: el autor creó
+      `https://github.com/dasilvabalautaro/Nyx.git` y se añadió como `origin` (repo vacío,
+      `git ls-remote` sin refs — el primer push sube la rama `feat/rebrand-nyx`).
 - [x] 1.1 Rama nueva, `git status` limpio.
 - [x] 1.2 `git mv` de los 5 subárboles de paquete (`app` main/test/androidTest, `core`,
       `data`, `native-bridge`, `p2p-signaling`) de `chat/neto/krypta` a `chat/neto/nyx`.
@@ -929,27 +932,46 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       es AAD), extensión `.krbk`→`.nybk`, nombre por defecto, menciones en
       `AndroidManifest.xml:42`/`backup_rules.xml`/`data_extraction_rules.xml`, y
       actualizar `IdentityBackupTest`.
-- [~] 1.10c Keystore propio. El comentario del `.gitignore` ya apunta a
-      `~/keystores/nyx/nyx.jks`, pero **`keystore.properties` sigue apuntando al keystore
-      de Krypta y se ha dejado intacto a propósito**: contiene contraseñas del autor y
-      crear el `.jks` nuevo exige elegir una contraseña, así que es acción suya. Mientras
-      tanto, un `assembleRelease` desde este árbol **firmaría Nyx con la clave de
-      Krypta** — no romperlo, pero acopla los dos productos en Play App Signing. Hacerlo
-      antes del primer release; no bloquea nada de la Fase 1.
+- [x] 1.10c Keystore propio, **cerrado el 14 ago**: el autor creó
+      `~/keys/keys_apk/nyx.jks` (ruta suya, distinta de la que sugería el plan) y
+      `keystore.properties` apunta ya ahí — Nyx deja de poder firmarse con la clave de
+      Krypta, que habría acoplado los dos productos en Play App Signing. Verificado con un
+      `:app:assembleRelease -PslimAbi` real: el APK sale firmado con el certificado de
+      producción (`CN=Arturo Silva`, SHA-256 `f83a8f2b…19d1`), no con el de depuración.
+      El `.jks` es irremplazable: sin él no se puede volver a publicar bajo el mismo
+      `applicationId`, así que necesita copia fuera de esta máquina.
 - [x] 1.11 (cubierto por 1.7 — el rename de `infra/node`, no una copia).
-- [ ] 1.12 ⚠️ **Depende de una acción externa del autor: contratar el VPS.** Al llegar
-      aquí hay que parar y avisarle; nada de esta tarea se puede adelantar sin la caja.
-      Lo anterior (1.0–1.11, 1.15, 1.15b con nodo local) no depende de ella.
-      Aprovisionar el **VPS propio de Nyx** (Vultr São Paulo, ≥2 GB — 4 GB si el
-      presupuesto lo permite), usuario `nyx`, `/var/lib/nyx`, `nyx-node.service`,
-      puertos 4001 TCP/UDP + ws 8081, `nyx.neto.chat` apuntando a su IP. Capturar el
-      PeerID real.
-- [ ] 1.12b En el aprovisionamiento, no después: `net.core.rmem_max` subido, copia de
-      `node.key` fuera de la caja, límites finitos en el relay, y `deploy-vps.sh` con
-      host destino explícito (imposible apuntarlo a Krypta por defecto).
-- [ ] 1.13 Actualizar `DEFAULT_BOOTSTRAP` en `Libp2pNode.kt`: **una sola línea**, el
-      multiaddr directo del nodo propio de 1.12 (sin Cloudflare), manteniendo el formato
-      de lista para el segundo nodo futuro.
+- [x] 1.12 **VPS propio desplegado el 14 ago 2026**: Vultr São Paulo, `216.238.104.36`,
+      hostname `nyx-node-saopaulo`, Ubuntu 24.04.4, 1 vCPU / 2 GB / 47 GB. Usuario de
+      sistema `nyx`, estado en `/var/lib/nyx`, `nyx-node.service` (enabled + active),
+      escuchando 4001 tcp+udp y 8081 ws, `ufw` abierto en 4001 tcp/udp y 443. PeerID
+      **`12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`**. Con DNS propio:
+      `nyx.neto.chat` → registro **A** a esa IP con **proxy desactivado** (nube gris; el
+      proxy de Cloudflare solo entiende HTTP y rompería el TCP+Noise del 4001).
+- [x] 1.12b Hecho **en el aprovisionamiento**: `net.core.rmem_max`/`wmem_max` = 7,5 MB en
+      `/etc/sysctl.d/99-nyx-quic.conf` (persistente; quic-go ya no avisa al arrancar) y
+      copia de `node.key` en `~/keys/nyx-node/node.key` (`600`), verificada por SHA-256
+      **y** por derivación del PeerID real. `deploy-vps.sh` ya exigía host destino
+      explícito. **Falta lo único que no sale gratis: los topes finitos del relay**
+      (sigue con `WithInfiniteLimits`) — no bloquea el desarrollo, sí bloquea abrir a
+      público, y se dimensiona con los caudales reales (43 MB/h voz, 225 MB/h vídeo)
+      más límites de `Resources`, no solo por circuito.
+- [x] 1.13 `DEFAULT_BOOTSTRAP` = **una sola línea**,
+      `/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooW…ziY3` (TCP directo, sin proxy),
+      manteniendo el formato de lista para el segundo nodo futuro. Validado antes de
+      fijarlo con las cuatro sondas desde la Mac, **por IP y por nombre**:
+      `TestMailboxFetchAgainstLiveNode`, `TestMailboxRoundTripAgainstLiveNode` (payload y
+      remitente verificados), `TestWakeAgainstLiveNode` y `TestPingAgainstLiveNode`
+      (p50 ≈ 105 ms, 50/50 sin pérdidas desde La Paz).
+      *Corrección respecto al plan, que daba por hecha una IP literal*: el multiaddr viaja
+      compilado en cada APK instalado, así que con IP literal un cambio de caja o de
+      proveedor dejaría a todo el parque sin buzón, wake ni relay hasta publicar otra
+      versión en Play — y con un solo nodo no hay failover que lo tape. Por nombre, mover
+      el nodo cuesta un registro DNS. No debilita el modelo de amenaza: la autenticación
+      la da el `/p2p/<PeerID>`, y un DNS secuestrado hace fallar el handshake Noise (puede
+      tirar el servicio, nunca suplantar al nodo). Contrapartida asumida: el arranque en
+      frío pasa a depender de la resolución DNS del operador, y el nombre revela la marca
+      en el tráfico DNS más que una IP suelta.
 - [x] 1.14 Verificación: cero `krypta` en `*.kt`/`*.xml`/`*.go`/`*.kts`/`*.pro`/`*.sh`/
       `*.plist`/`*.service`/`*.json` (excluyendo `build/`, `.git/`, `.gradle/`); las
       únicas menciones restantes son las históricas de `CLAUDE.md`/`docs/`.

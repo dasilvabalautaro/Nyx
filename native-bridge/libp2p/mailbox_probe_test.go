@@ -33,11 +33,11 @@ func TestMailboxPutAgainstLiveNode(t *testing.T) {
 }
 
 // TestMailboxFetchAgainstLiveNode sondea el buzón de un nodo REAL (p. ej. el de infra en
-// producción, vía wss/Cloudflare): crea una identidad efímera y retira su buzón (vacío).
+// producción): crea una identidad efímera y retira su buzón (vacío).
 // Si el nodo no expone /nyx/mbx/get/1.0.0 (binario viejo), falla con "protocols not
 // supported". Se auto-omite sin MBX_ADDR:
 //
-//	MBX_ADDR="/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestMailboxFetchAgainstLiveNode -v .
+//	MBX_ADDR="/dns4/nyx.neto.chat/tcp/4001/p2p/<PeerID>" go test -run TestMailboxFetchAgainstLiveNode -v .
 func TestMailboxFetchAgainstLiveNode(t *testing.T) {
 	addr := os.Getenv("MBX_ADDR")
 	if addr == "" {

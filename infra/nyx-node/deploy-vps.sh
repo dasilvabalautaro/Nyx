@@ -30,7 +30,7 @@ UNIT_SRC="$SRC_DIR/nyx-node.service"
 echo "==> binario origen: $BIN_SRC"
 [ -f "$BIN_SRC" ] || {
   echo "ERROR: no existe $BIN_SRC. Compílalo con:"
-  echo "  cd infra/node && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \\"
+  echo "  cd infra/nyx-node && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \\"
   echo "    go1.22.12 build -o dist/nyx-node-linux-$ARCH ."
   exit 1
 }

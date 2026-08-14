@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// TestPingAgainstLiveNode mide el RTT contra el nodo REAL (producción, vía wss/Cloudflare)
-// con la sonda de Fase 7a (llamadas). Un RTT ida-y-vuelta a través de Cloudflare ≈ la
-// latencia one-way de un frame de audio relayed entre dos móviles (dos travesías de CF en
-// ambos casos). Se auto-omite sin PING_ADDR:
+// TestPingAgainstLiveNode mide el RTT contra el nodo REAL de infra con la sonda de
+// Fase 7a (llamadas). Un RTT ida-y-vuelta al nodo ≈ la latencia one-way de un frame de
+// audio relayed entre dos móviles (dos travesías del nodo en ambos casos). Se auto-omite
+// sin PING_ADDR:
 //
-//	PING_ADDR="/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestPingAgainstLiveNode -v .
+//	PING_ADDR="/dns4/nyx.neto.chat/tcp/4001/p2p/<PeerID>" go test -run TestPingAgainstLiveNode -v .
 func TestPingAgainstLiveNode(t *testing.T) {
 	addr := os.Getenv("PING_ADDR")
 	if addr == "" {
@@ -30,5 +30,5 @@ func TestPingAgainstLiveNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PingProbe: %v", err)
 	}
-	t.Logf("RTT vía Cloudflare: %s", stats)
+	t.Logf("RTT al nodo de infra: %s", stats)
 }

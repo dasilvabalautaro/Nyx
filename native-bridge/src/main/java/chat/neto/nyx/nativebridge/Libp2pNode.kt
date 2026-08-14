@@ -349,20 +349,40 @@ class Libp2pNode @Inject constructor(
          * `StartWake`), así que la caída de uno no corta la entrega. Es infraestructura
          * compartida (igual para todos los usuarios) y pública, no identidad de nadie.
          *
-         * **Vacío a propósito hasta que exista el nodo de Nyx** (tarea 1.13 del plan). Un
-         * default vacío significa "solo LAN/mDNS" — ver [savedBootstrap] — que es el estado
-         * honesto mientras no haya a qué conectarse; para probar WAN antes de eso, se mete
-         * el multiaddr de un nodo local por el campo "Nodo WAN (bootstrap)" de Ajustes.
+         * **Nodo propio de Nyx** (`nyx-node-saopaulo`, Vultr São Paulo, desplegado el
+         * 14 ago 2026, tarea 1.13 del plan): una sola línea, **TCP directo sin proxy** — la
+         * caja tiene IP pública, así que no hay túnel que recicle WebSockets ni latencia de
+         * intermediario (sonda `TestPingAgainstLiveNode` desde La Paz: p50 ~105 ms). El nodo
+         * también escucha QUIC en `udp/4001` y `ws` en `8081`; no hacen falta aquí porque
+         * libp2p aprende esas direcciones por identify tras el primer dial. Se mantiene el
+         * formato de lista para el segundo nodo (aún pendiente: hoy este es punto único de
+         * fallo del buzón, el wake y el relay).
          *
-         * Aquí estaban los tres nodos de **Krypta**. Se han quitado, no renombrado: el
+         * **Por nombre (`/dns4/`), no por IP literal, a propósito**: el multiaddr va
+         * compilado en cada APK instalado, así que con una IP literal un cambio de caja o de
+         * proveedor dejaría sin buzón/wake/relay a todo el parque hasta publicar otra versión
+         * en Play. Con nombre, mover el nodo es un registro DNS. No debilita nada: la
+         * seguridad la da el `/p2p/<PeerID>` (la clave pública del nodo), y un DNS
+         * secuestrado hace fallar el handshake Noise — puede tirar el servicio, nunca
+         * suplantar al nodo ni leer tráfico. El registro es un **A con proxy desactivado**
+         * (nube gris en Cloudflare): el proxy solo entiende HTTP y rompería el TCP+Noise
+         * del 4001.
+         *
+         * Validado antes de fijarlo, por IP y por nombre, con
+         * `TestMailboxFetchAgainstLiveNode`, `TestMailboxRoundTripAgainstLiveNode` y
+         * `TestWakeAgainstLiveNode`.
+         *
+         * Aquí estaban los tres nodos de **Krypta**. Se quitaron, no se renombraron: el
          * primario era `/ip4/216.128.169.83/...`, una IP literal que la sustitución de marca
          * no toca, así que habría sobrevivido intacta y los móviles de Nyx se habrían
-         * conectado a la infraestructura de Krypta en producción. Al rellenarla con el nodo
-         * propio: multiaddr directo `/ip4/<IP>/tcp/4001/p2p/<PeerID>`, sin Cloudflare, y
-         * validado antes con las sondas `TestMailboxFetchAgainstLiveNode` /
-         * `TestWakeAgainstLiveNode`.
+         * conectado a la infraestructura de Krypta en producción.
+         *
+         * Un valor vacío aquí significaría "solo LAN/mDNS" — ver [savedBootstrap]; ojo, un
+         * móvil que ya guardó preferencia de bootstrap conserva la suya y NO hereda este
+         * default.
          */
-        const val DEFAULT_BOOTSTRAP = ""
+        const val DEFAULT_BOOTSTRAP =
+            "/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3"
     }
 }
 

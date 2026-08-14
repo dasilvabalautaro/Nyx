@@ -1,11 +1,8 @@
 # Operar el nodo de Nyx (VPS)
 
-> ⚠️ **La máquina todavía no existe.** Este documento viene del runbook de Krypta y conserva
-> su estructura porque es útil, pero **todos los datos concretos están vaciados a propósito**:
-> IP, hostname y PeerID se rellenan cuando se aprovisione el VPS propio de Nyx (tarea 1.12
-> del [plan](../../docs/PLAN-NYX.md)). No se han dejado los de Krypta: apuntar aquí a su caja
-> convertiría este runbook en una forma cómoda de desplegar Nyx encima de un producto en
-> producción.
+> ✅ **La máquina existe desde el 14 de agosto de 2026** (tarea 1.12 del
+> [plan](../../docs/PLAN-NYX.md)). Es una caja **propia de Nyx**, sin ninguna relación con la
+> infraestructura de Krypta: identidad, buzón y clientes son otros.
 
 Guía del día a día del nodo: dónde vive cada cosa, cómo entrar y qué mirar cuando algo va mal.
 El **despliegue** (compilar, instalar, systemd, puertos) está en la sección "Nodo primario en
@@ -13,11 +10,13 @@ un VPS Linux" de [README.md](README.md); aquí se da por hecho que ya está mont
 
 | | |
 |---|---|
-| Proveedor / región | Vultr, São Paulo *(previsto)* |
-| IP | `<IP-DEL-VPS>` |
-| Hostname | `<hostname>` |
-| SO | Ubuntu 24.04 LTS |
-| PeerID | `<PeerID>` |
+| Proveedor / región | Vultr, São Paulo |
+| IP | `216.238.104.36` |
+| DNS | `nyx.neto.chat` (registro A, **proxy desactivado**: nube gris) |
+| Hostname | `nyx-node-saopaulo` |
+| SO | Ubuntu 24.04.4 LTS (1 vCPU, 2 GB, 47 GB disco) |
+| PeerID | `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` |
+| Multiaddr | `/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` |
 
 Es la **única línea** de `Libp2pNode.DEFAULT_BOOTSTRAP`. A diferencia de Krypta, que acabó con
 tres nodos, Nyx arranca con uno solo: eso significa que **es punto único de fallo** del buzón,
@@ -40,8 +39,11 @@ Esto es todo; no hay base de datos ni nada más.
 Desde la terminal de la Mac, sin contraseña (la clave SSH ya está puesta):
 
 ```bash
-ssh root@<IP-DEL-VPS>
+ssh root@nyx.neto.chat
 ```
+
+(Es la **misma clave SSH** que se usa con el nodo de Krypta; el `authorized_keys` de la caja
+se aprovisionó con ella.)
 
 Si SSH no responde —por ejemplo, tras equivocarse con `ufw` y cerrarse la puerta—, el panel de
 Vultr tiene un botón **"View Console"** que abre una consola por navegador, conectada por debajo
@@ -91,7 +93,7 @@ primario (rutas **desde la raíz del repo**, no desde este directorio):
 ```bash
 export PATH="/usr/local/bin:$HOME/go/bin:$PATH"
 cd native-bridge/libp2p
-ADDR=/ip4/<IP-DEL-VPS>/tcp/4001/p2p/<PeerID>
+ADDR=/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3
 
 MBX_ADDR=$ADDR  go test -run TestMailboxFetchAgainstLiveNode -v ./...      # ¿responde el buzón?
 WAKE_ADDR=$ADDR go test -run TestWakeAgainstLiveNode -v ./...              # ¿responde el wake?
@@ -99,10 +101,16 @@ MBX_ADDR=$ADDR  go test -run TestMailboxRoundTripAgainstLiveNode -v ./...  # cic
 PING_ADDR=$ADDR go test -run TestPingAgainstLiveNode -v ./...              # latencia
 ```
 
-Referencia de latencia: **p50 = 107 ms, p95 = 119 ms** desde La Paz. El dato es del nodo
-equivalente de Krypta (Vultr São Paulo, TCP directo, medido el 7 ago 2026), así que sirve como
-expectativa para el de Nyx en el mismo proveedor y región — no como medición propia. Si al
-montarlo sale bastante peor, es señal de problema de red o de VPS saturado.
+Las cuatro pasaron el 14 ago 2026 antes de fijar el nodo en `DEFAULT_BOOTSTRAP`, **dos veces**:
+primero con `/ip4/216.238.104.36/…` y después con `/dns4/nyx.neto.chat/…`, que es la forma que
+llevan los móviles. Latencia desde La Paz: **p50 ≈ 105 ms, p95 ≤ 125 ms** (n=50, 0 pérdidas) —
+algo mejor que los 107/119 ms del nodo equivalente de Krypta, misma región y mismo camino TCP
+directo. Si en el futuro sale bastante peor, es señal de problema de red o de VPS saturado.
+
+Si una sonda falla, la primera pregunta es **si el problema es el nodo o el nombre**: repite con
+el multiaddr `/ip4/…` de la tabla de arriba. Si por IP funciona y por nombre no, el fallo está
+en el DNS (registro borrado, o alguien activó la nube naranja: el proxy de Cloudflare solo
+entiende HTTP y devolvería sus propias IP, rompiendo el TCP+Noise del 4001).
 
 ## Actualizar el binario
 
@@ -110,17 +118,17 @@ Desde la Mac, con el repo delante (rutas **desde la raíz del repo**). Es idempo
 toca `node.key`**, así que el PeerID se conserva:
 
 ```bash
-cd infra/node
+cd infra/nyx-node
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go1.22.12 build -o dist/nyx-node-linux-amd64 .
-bash deploy-vps.sh root@<IP-DEL-VPS>
+bash deploy-vps.sh root@nyx.neto.chat
 ```
 
-Ojo con una asimetría fácil de olvidar: el Mac y el PC Windows corren **el mismo `main.go`**. Un
-cambio de comportamiento del nodo (por ejemplo, ponerle topes al relay) desplegado solo aquí
-hace que una llamada se comporte distinto según por qué relay pase, y como no se controla cuál
-escoge, sale un fallo intermitente difícil de diagnosticar. O se despliegan los tres, o se
-asume la diferencia a propósito.
+Mientras Nyx tenga **un solo nodo** no hay asimetría posible entre relays. En cuanto exista el
+segundo, cuidado con desplegar un cambio de comportamiento (p. ej. topes al relay) en uno solo:
+la llamada se comportaría distinto según por qué relay pase, y no se controla cuál escoge el
+cliente — fallo intermitente difícil de diagnosticar. O se despliegan los dos, o se asume la
+diferencia a propósito.
 
 ## Tres cosas que conviene tener claras
 
@@ -132,9 +140,11 @@ ciphertext. Ni el dueño del servidor puede descifrarlo: es lo que promete la §
 **`node.key` es lo único irreemplazable de la máquina.** El binario se recompila, la unidad
 systemd está en el repo, el buzón es tránsito. Pero si esa clave se pierde el nodo cambia de
 PeerID y los móviles ya instalados dejan de encontrarlo: habría que publicar otra versión de la
-app. **Ya está respaldada (8 ago 2026)** en `~/keystores/nyx/<hostname>.key` en la
-Mac del autor, verificada (mismo SHA-256 y deriva el PeerID real, no es solo un fichero
-copiado). Para restaurar: ponerla en `/var/lib/nyx/node.key` con dueño `nyx:nyx` y
+app. **Ya está respaldada (14 ago 2026)** en `~/keys/nyx-node/node.key` (permisos `600`) en la
+Mac del autor, verificada de las dos formas: mismo SHA-256 que la de la caja
+(`691520f0…6678`) y, deserializándola, deriva el PeerID real — no es solo un fichero copiado.
+Conviene además una copia fuera de la Mac: hoy sigue habiendo un único soporte.
+Para restaurar: ponerla en `/var/lib/nyx/node.key` con dueño `nyx:nyx` y
 permisos `600` **antes** de arrancar el servicio — si arranca sin ella, se genera una identidad
 nueva y el PeerID cambia.
 
@@ -142,17 +152,19 @@ nueva y el PeerID cambia.
 sobrescribir lo que toques. Si hay que cambiar algo de `/var/lib/nyx/`: `systemctl stop
 nyx-node`, el cambio, y `systemctl start nyx-node`.
 
-## Hacer al aprovisionar, no después
+## Estado de la deuda heredada de Krypta
 
-Los tres puntos siguientes son deuda heredada del nodo de Krypta, donde se descubrieron sobre
-la marcha. En Nyx salen gratis si se hacen al montar la máquina, así que son parte de la tarea
-1.12 del plan y no "pendientes".
+Los tres puntos siguientes se descubrieron sobre la marcha en el nodo de Krypta. Dos se
+hicieron **al aprovisionar** esta caja (14 ago 2026); el tercero sigue abierto.
 
-- **Copia del `node.key` fuera de la caja**, verificada (que el SHA-256 coincida y que al
-  deserializarla derive el PeerID real, no solo que el archivo exista). Si esa clave se pierde
-  el nodo cambia de PeerID y **los móviles ya instalados dejan de encontrarlo**: haría falta
-  publicar otra versión de la app.
-- **Topes finitos al relay.** Hoy [main.go](main.go) usa
+- ✅ **Copia del `node.key` fuera de la caja**, verificada por SHA-256 y por derivación del
+  PeerID — ver el apartado anterior.
+- ✅ **`net.core.rmem_max`**: subido a 7 500 000 (y `wmem_max` igual) en
+  `/etc/sysctl.d/99-nyx-quic.conf`, así que sobrevive a reinicios. Comprobado en el arranque
+  siguiente: quic-go ya no emite el aviso *"failed to sufficiently increase receive buffer
+  size"*.
+- ❌ **Topes finitos al relay — pendiente, y bloqueante antes de abrir a público.**
+  Hoy [main.go](main.go) usa
   `EnableRelayService(relayv2.WithInfiniteLimits())` — necesario porque el tope por defecto
   (128 KiB / 2 min) cortaba las llamadas a los ~20 s, pero regala ancho de banda a cualquier
   nodo libp2p de internet, y ahora con factura de por medio. Al dimensionarlos hay que contar
@@ -160,6 +172,3 @@ la marcha. En Nyx salen gratis si se hacen al montar la máquina, así que son p
   vídeo. Y recordar que el tope por circuito no es por sí solo protección contra abuso: quien
   quiera abusar abre muchos circuitos, así que lo que acota el gasto son los límites de
   `Resources` (máximo de reservas y circuitos, y reservas por peer/IP).
-- **`net.core.rmem_max` bajo.** Al arrancar, quic-go avisa *"failed to sufficiently increase
-  receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB)"*. No bloquea nada, pero
-  puede limitar el rendimiento de QUIC bajo carga. Se arregla con un sysctl.

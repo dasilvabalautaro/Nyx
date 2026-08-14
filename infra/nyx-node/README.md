@@ -60,12 +60,14 @@ go-libp2p exige Go ≥ 1.25, cuyos binarios piden macOS ≥ 11. Por eso el nodo 
 **sí corre en Catalina**. Interopera con los móviles (go-libp2p v0.48): los protocolos
 libp2p (Kademlia, Noise, Relay v2) son compatibles entre versiones.
 
-Binario ya compilado (Intel x86_64): [`dist/nyx-node-catalina`](dist/nyx-node-catalina).
+`dist/` **no lleva binario de Catalina**: los que había eran los de Krypta y se borraron el
+14 ago 2026 (protocol IDs `/krypta/*`, otro producto). Nyx no usa hoy ningún nodo doméstico —
+si hiciera falta uno, se compila:
 
-Recompilar (en una Mac con Go 1.22 instalado vía `go install golang.org/dl/go1.22.12@latest && go1.22.12 download`):
+Compilar (en una Mac con Go 1.22 instalado vía `go install golang.org/dl/go1.22.12@latest && go1.22.12 download`):
 
 ```bash
-cd infra/node
+cd infra/nyx-node
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
   go1.22.12 build -o dist/nyx-node-catalina .
 # Verifica que pide macOS viejo:  otool -l dist/nyx-node-catalina | grep minos   → 10.13
@@ -195,32 +197,39 @@ cat ~/nyx/node.log     # ver el PeerID
 
 ## Nodo primario en un VPS Linux (systemd) — recomendado para producción
 
-> **Estado: PENDIENTE DE CONTRATAR** (tarea 1.12 del [plan](../../docs/PLAN-NYX.md)). Esta es
-> la sección que Nyx sí sigue. Perfil previsto: Vultr São Paulo, Ubuntu 24.04, 2 GB (4 GB si
-> el presupuesto lo permite — el tablón añade almacenamiento y consultas, y el relay moverá
-> vídeo desde el principio). Será la **única línea** de `Libp2pNode.DEFAULT_BOOTSTRAP`, por
-> `/ip4/…/tcp/4001` directo y QUIC en 4001/udp, **sin Cloudflare**. Al montarlo: validar con
-> las cuatro sondas de abajo y anotar aquí IP, hostname y PeerID reales.
+> **Estado: DESPLEGADO el 14 ago 2026** (tarea 1.12 del [plan](../../docs/PLAN-NYX.md)). Esta
+> es la sección que Nyx sí sigue. La caja: **Vultr São Paulo**, `216.238.104.36`, hostname
+> `nyx-node-saopaulo`, Ubuntu 24.04.4, 1 vCPU / 2 GB / 47 GB, PeerID
+> `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`. El día a día está en
+> [OPERACION.md](OPERACION.md).
 >
-> Referencia de lo que debería dar, medido en el nodo equivalente de Krypta el 7 ago 2026:
-> **p50 = 107 ms / p95 = 119 ms** desde La Paz, frente a los 146–163 ms de los nodos
-> domésticos vía Cloudflare.
+> Es la **única línea** de `Libp2pNode.DEFAULT_BOOTSTRAP`, como
+> `/dns4/nyx.neto.chat/tcp/4001/p2p/<PeerID>`: TCP directo (con QUIC en 4001/udp y `ws` en 8081
+> como caminos alternativos), **sin proxy** — el registro A de `nyx.neto.chat` está con la nube
+> **gris**, porque el proxy de Cloudflare solo entiende HTTP y rompería el TCP+Noise del 4001.
+> Va por nombre y no por IP literal a propósito: el multiaddr viaja compilado en cada APK, así
+> que mover el nodo debe costar un registro DNS y no una release de Play. La seguridad no se
+> apoya en el DNS — la da el `/p2p/<PeerID>`, y un nombre secuestrado hace fallar el handshake
+> Noise. Validado con las cuatro sondas de abajo antes de fijarlo, por IP y por nombre: buzón,
+> wake, ciclo completo y latencia **p50 ≈ 105 ms** desde La Paz — mejor que los 107/119 ms del
+> nodo equivalente de Krypta y que los 146–163 ms de los nodos domésticos vía Cloudflare.
 >
 > Se eligió Vultr porque **DigitalOcean no tiene ningún datacenter en Sudamérica** (NYC, San
 > Francisco, Toronto, Atlanta, Richmond, Kansas City, Amsterdam, Londres, Fráncfort,
 > Singapur, Bangalore, Sídney): para un relay de voz/vídeo la región manda sobre la marca.
 >
-> Copia de seguridad de la identidad **hecha (8 ago)**: `node.key` está respaldada en
-> `~/keystores/nyx/nyx-node-saopaulo.key` en la Mac del autor (`600`, fuera del repo).
-> Verificada de verdad: mismo SHA-256 que la del VPS y, al deserializarla, deriva el PeerID
-> real del nodo. Para restaurar, cópiala a `/var/lib/nyx/node.key` (dueño `nyx:nyx`,
-> permisos `600`) **antes** de arrancar el servicio; si el servicio arranca sin ella, se
-> genera una identidad nueva y el PeerID cambia.
+> Copia de seguridad de la identidad **hecha en el propio aprovisionamiento (14 ago)**:
+> `node.key` está respaldada en `~/keys/nyx-node/node.key` en la Mac del autor (`600`, fuera
+> del repo). Verificada de verdad: mismo SHA-256 que la del VPS y, al deserializarla, deriva
+> el PeerID real del nodo. Para restaurar, cópiala a `/var/lib/nyx/node.key` (dueño
+> `nyx:nyx`, permisos `600`) **antes** de arrancar el servicio; si el servicio arranca sin
+> ella, se genera una identidad nueva y el PeerID cambia.
 >
-> Pendiente en esta máquina: (a) `net.core.rmem_max` bajo → quic-go avisa
-> "failed to sufficiently increase receive buffer size" al arrancar (no bloquea, puede
-> limitar el throughput QUIC bajo carga); (b) poner topes finitos al relay antes de abrirlo
-> al público (ver el aviso de tráfico arriba).
+> `net.core.rmem_max`/`wmem_max` se subieron a 7,5 MB en el aprovisionamiento
+> (`/etc/sysctl.d/99-nyx-quic.conf`), así que quic-go ya no avisa al arrancar. Sigue
+> pendiente: **topes finitos al relay** antes de abrirlo al público (ver el aviso de tráfico
+> arriba) y un **segundo nodo** — hoy este es punto único de fallo del buzón, el wake y el
+> relay.
 
 ### Por qué un VPS cambia las cosas (no es solo uptime)
 
@@ -254,13 +263,13 @@ disco sobran**. Lo que importa de verdad:
 ### Despliegue (un comando)
 
 ```bash
-cd infra/node
+cd infra/nyx-node
 # 1. Compila el binario Linux (Go puro, no hace falta Go en el VPS)
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go1.22.12 build -o dist/nyx-node-linux-amd64 .
 
 # 2. Despliega (desde la Mac; pide sudo en el VPS)
-bash deploy-vps.sh root@<IP_DEL_VPS>          # o: usuario@host arm64
+bash deploy-vps.sh root@nyx.neto.chat         # o: usuario@host arm64
 ```
 
 [`deploy-vps.sh`](deploy-vps.sh) sube el binario a `/usr/local/bin/nyx-node`, crea el
@@ -333,11 +342,11 @@ dejando el de Windows de secundario. La Mac Catalina puede jubilarse a máquina 
 > del nodo de Krypta (hostname y PeerID) se han quitado a propósito.
 
 El nodo es Go puro: para Windows basta **cross-compilar un `.exe` y ejecutarlo** (no hay
-que instalar Go en el PC). Binario ya compilado (x64):
-[`dist/nyx-node-windows-amd64.exe`](dist/nyx-node-windows-amd64.exe). Recompilar:
+que instalar Go en el PC). `dist/` **no lleva binario de Windows** (ver la nota de Catalina
+arriba). Compilarlo:
 
 ```bash
-cd infra/node
+cd infra/nyx-node
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
   go1.22.12 build -o dist/nyx-node-windows-amd64.exe .
 ```

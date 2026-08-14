@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// TestWakeAgainstLiveNode sondea el wake de un nodo REAL (producción, vía wss/Cloudflare):
+// TestWakeAgainstLiveNode sondea el wake de un nodo REAL (el de infra en producción):
 // se suscribe con una identidad efímera y espera el OnWake de conexión. Si el nodo no
 // expone /nyx/wake/1.0.0 (binario viejo), no llega y falla. Se auto-omite sin WAKE_ADDR:
 //
-//	WAKE_ADDR="/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestWakeAgainstLiveNode -v .
+//	WAKE_ADDR="/dns4/nyx.neto.chat/tcp/4001/p2p/<PeerID>" go test -run TestWakeAgainstLiveNode -v .
 func TestWakeAgainstLiveNode(t *testing.T) {
 	addr := os.Getenv("WAKE_ADDR")
 	if addr == "" {

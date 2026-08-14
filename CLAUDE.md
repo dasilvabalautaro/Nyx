@@ -21,14 +21,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > GCM **AAD**) and extension `.krbk` → `.nybk`; `infra/node` → `infra/nyx-node`;
 > `infra/fdroid-repo` deleted (Nyx ships **only** through Play).
 >
-> **`DEFAULT_BOOTSTRAP` is deliberately empty** (= LAN-only) until Nyx's own node exists. It
-> held Krypta's VPS as a raw `/ip4/216.128.169.83/...` literal, which no brand substitution
-> touches — left alone, Nyx phones would have joined Krypta's production infrastructure.
+> **Nyx has its own infra node since 14 Aug 2026** — `nyx-node-saopaulo`, Vultr São Paulo,
+> `216.238.104.36`, Ubuntu 24.04, PeerID `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`,
+> deployed with `infra/nyx-node/deploy-vps.sh` (systemd, user `nyx`, state in `/var/lib/nyx`,
+> 4001 tcp+udp + 8081 ws). It is the **single line** of `Libp2pNode.DEFAULT_BOOTSTRAP`, as
+> `/dns4/nyx.neto.chat/tcp/4001/p2p/<PeerID>` — **direct TCP, no proxy** (p50 ≈ 105 ms from La
+> Paz), validated before being pinned with the mailbox/round-trip/wake/ping live probes, over
+> both the IP and the name. It goes **by name, not by IP literal**, because the multiaddr ships
+> compiled into every installed APK: with a literal, moving the box would strand the whole fleet
+> (no mailbox, no wake, no relay) until a new Play release propagated; by name it's a DNS record.
+> This costs no security — that comes from the `/p2p/<PeerID>`, so a hijacked name fails the
+> Noise handshake. The `A` record must stay **proxy-off (grey cloud)**: Cloudflare's proxy only
+> speaks HTTP and would both hand out its own IPs and break TCP+Noise on 4001.
+> `DEFAULT_BOOTSTRAP` had been
+> deliberately empty until then: it held Krypta's VPS as a raw `/ip4/216.128.169.83/...`
+> literal, which no brand substitution touches — left alone, Nyx phones would have joined
+> Krypta's production infrastructure. Day-to-day runbook:
+> [infra/nyx-node/OPERACION.md](infra/nyx-node/OPERACION.md). **One node = single point of
+> failure** for mailbox, wake and relay, and the relay still runs `WithInfiniteLimits()`; both
+> are blockers before opening to the public, not before developing.
 >
-> **Git remotes**: there is no `origin`. Krypta is wired as `upstream` with
+> **Git remotes**: `origin` is `https://github.com/dasilvabalautaro/Nyx.git` (Nyx's own repo,
+> still empty — nothing pushed yet). Krypta is wired as `upstream` with
 > `--push no_push`, so a push to Krypta fails by construction. Fixes made in Krypta that Nyx
 > also needs are ported with the patch-rewriting procedure in the plan's "Relación con Krypta
 > a largo plazo" section — the two repos share history.
+>
+> **Release signing** uses Nyx's own keystore (`~/keys/keys_apk/nyx.jks` via the git-ignored
+> `keystore.properties`) — never Krypta's, which would tie both products to one Play App
+> Signing key. Verified: `:app:assembleRelease -PslimAbi` signs with `CN=Arturo Silva`
+> (SHA-256 `f83a8f2b…19d1`), not the debug key.
 >
 > **Everything below this box still describes Krypta** and has not been rewritten yet; the
 > full pass is task 6.1 of the plan. Treat it as accurate about *how the machinery works* and

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TestWakeOnDeposit valida el wake integrado: B se suscribe a /krypta/wake y, cuando A
+// TestWakeOnDeposit valida el wake integrado: B se suscribe a /nyx/wake y, cuando A
 // deposita en su buzón, recibe `{"wake":true}` al instante. Un depósito para otro peer
 // no lo despierta.
 func TestWakeOnDeposit(t *testing.T) {

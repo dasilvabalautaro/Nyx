@@ -10,7 +10,7 @@ import (
 // latencia one-way de un frame de audio relayed entre dos móviles (dos travesías de CF en
 // ambos casos). Se auto-omite sin PING_ADDR:
 //
-//	PING_ADDR="/dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestPingAgainstLiveNode -v .
+//	PING_ADDR="/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestPingAgainstLiveNode -v .
 func TestPingAgainstLiveNode(t *testing.T) {
 	addr := os.Getenv("PING_ADDR")
 	if addr == "" {

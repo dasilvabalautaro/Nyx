@@ -1,15 +1,26 @@
-      # Krypta infra node — despliegue (sin Docker)
+      # Nyx infra node — despliegue (sin Docker)
 
 Nodo **bootstrap + DHT server + Circuit Relay v2 + buzón store-and-forward + wake** de
-Krypta (semilla de Fase 1). No lee mensajes (todo E2EE): es punto de encuentro, relé y
+Nyx (semilla de Fase 1). No lee mensajes (todo E2EE): es punto de encuentro, relé y
 buzón de blobs opacos. Los móviles se le conectan para descubrirse por WAN cuando no están
 en la misma LAN, para depositar/retirar mensajes cuando el destinatario está offline, y
 mantienen un stream ligero de **wake** por el que el nodo avisa al instante cuando llega
 un depósito (sin polling; la app recibe con la UI cerrada gracias a su Foreground Service).
 
-> Este README cubre el **despliegue**. Para el día a día del nodo primario de São Paulo —
-> dónde vive cada fichero, cómo entrar, qué mirar cuando algo va mal y cómo actualizarlo —
-> ver [OPERACION.md](OPERACION.md).
+> Este README cubre el **despliegue**. Para el día a día del nodo — dónde vive cada fichero,
+> cómo entrar, qué mirar cuando algo va mal y cómo actualizarlo — ver
+> [OPERACION.md](OPERACION.md).
+
+> ⚠️ **Qué de este documento aplica a Nyx.** Viene del README de Krypta y conserva secciones
+> que describen **la topología de Krypta**, no la de Nyx. Para Nyx solo aplica la sección
+> **"Nodo primario en un VPS Linux"**: caja propia, IP pública, TCP+QUIC directo, sin
+> Cloudflare Tunnel (decisión 2 del [plan](../../docs/PLAN-NYX.md)).
+>
+> Las secciones de **macOS Catalina**, **Cloudflare Tunnel / `wss`** y **segundo nodo en
+> Windows** se conservan como referencia técnica —el mecanismo es correcto y puede hacer falta
+> el día que Nyx monte su segundo nodo— pero **no se siguen tal cual**: describen desplegar en
+> el Mac y el PC del autor, que son las máquinas donde corre Krypta. Montar un nodo de Nyx ahí
+> viola el aislamiento acordado. El segundo nodo de Nyx será otra caja propia.
 
 > **Clave (relay tras Cloudflare):** el nodo se compila con `libp2p.ForceReachabilityPublic()`.
 > Tras Cloudflare Tunnel no tiene IP pública directa, así que AutoNAT lo creería "privado" y el
@@ -21,8 +32,8 @@ un depósito (sin polling; la app recibe con la UI cerrada gracias a su Foregrou
 ## Buzón E2EE store-and-forward (entrega offline)
 
 Si el destinatario no está conectado, el móvil emisor **deposita el ciphertext** en este
-nodo (`/krypta/mbx/put/1.0.0`) y el receptor lo **retira al conectarse**
-(`/krypta/mbx/get/1.0.0`, con ack — solo se borra lo confirmado). Propiedades:
+nodo (`/nyx/mbx/put/1.0.0`) y el receptor lo **retira al conectarse**
+(`/nyx/mbx/get/1.0.0`, con ack — solo se borra lo confirmado). Propiedades:
 
 - **E2EE intacto**: el nodo guarda blobs opacos (base64 de AES-256-GCM); no puede descifrar.
 - **Autenticación gratis por libp2p**: el GET solo entrega los sobres dirigidos al PeerID
@@ -30,11 +41,11 @@ nodo (`/krypta/mbx/put/1.0.0`) y el receptor lo **retira al conectarse**
 - **Anti-abuso**: blob ≤ 64 KiB; por destinatario ≤ 200 mensajes y ≤ 5 MiB; **TTL 7 días**
   (barrido horario).
 - **Almacenamiento**: archivos JSON en `-mailboxdir` (default: `<dir del node.key>/mailbox`,
-  o sea `~/krypta/mailbox` con el plist estándar — no hay que tocar nada al desplegar).
+  o sea `~/nyx/mailbox` con el plist estándar — no hay que tocar nada al desplegar).
 
 ## Wake integrado (aviso instantáneo de buzón)
 
-El móvil mantiene abierto un stream `/krypta/wake/1.0.0`; cuando alguien deposita en su
+El móvil mantiene abierto un stream `/nyx/wake/1.0.0`; cuando alguien deposita en su
 buzón, el nodo le escribe `{"wake":true}` y el móvil retira al segundo. El nodo envía
 `{"ping":true}` cada 50 s como keepalive (Cloudflare Free corta la wss a ~100 s de idle);
 el móvil reconecta solo cuando Cloudflare recicla la conexión (~10 min) y retira el buzón
@@ -49,15 +60,15 @@ go-libp2p exige Go ≥ 1.25, cuyos binarios piden macOS ≥ 11. Por eso el nodo 
 **sí corre en Catalina**. Interopera con los móviles (go-libp2p v0.48): los protocolos
 libp2p (Kademlia, Noise, Relay v2) son compatibles entre versiones.
 
-Binario ya compilado (Intel x86_64): [`dist/krypta-node-catalina`](dist/krypta-node-catalina).
+Binario ya compilado (Intel x86_64): [`dist/nyx-node-catalina`](dist/nyx-node-catalina).
 
 Recompilar (en una Mac con Go 1.22 instalado vía `go install golang.org/dl/go1.22.12@latest && go1.22.12 download`):
 
 ```bash
 cd infra/node
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
-  go1.22.12 build -o dist/krypta-node-catalina .
-# Verifica que pide macOS viejo:  otool -l dist/krypta-node-catalina | grep minos   → 10.13
+  go1.22.12 build -o dist/nyx-node-catalina .
+# Verifica que pide macOS viejo:  otool -l dist/nyx-node-catalina | grep minos   → 10.13
 ```
 
 > `GOTOOLCHAIN=local` es obligatorio: sin él, Go se auto-actualiza a una versión nueva y el
@@ -65,18 +76,18 @@ GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
 
 ## Pasos en la Mac Catalina
 
-1. **Copia** `krypta-node-catalina` a la Mac, p. ej. en `~/krypta/`:
+1. **Copia** `nyx-node-catalina` a la Mac, p. ej. en `~/nyx/`:
    ```bash
-   mkdir -p ~/krypta && cp krypta-node-catalina ~/krypta/ && chmod +x ~/krypta/krypta-node-catalina
+   mkdir -p ~/nyx && cp nyx-node-catalina ~/nyx/ && chmod +x ~/nyx/nyx-node-catalina
    ```
 2. **Arráncalo** en un puerto fijo (4001). La primera vez crea `node.key` (identidad estable):
    ```bash
-   cd ~/krypta
-   ./krypta-node-catalina -listen /ip4/0.0.0.0/tcp/4001 -key ~/krypta/node.key
+   cd ~/nyx
+   ./nyx-node-catalina -listen /ip4/0.0.0.0/tcp/4001 -key ~/nyx/node.key
    ```
    Anota el **PeerID** que imprime (`12D3KooW…`). No cambia entre reinicios.
 3. **Permiso de firewall**: Preferencias → Seguridad y privacidad → Firewall → permitir
-   conexiones entrantes para `krypta-node-catalina` (o desactívalo si la Mac está en una red
+   conexiones entrantes para `nyx-node-catalina` (o desactívalo si la Mac está en una red
    de confianza).
 4. **Puerto accesible desde internet**:
    - Si la Mac tiene IP pública directa: basta con el firewall de macOS.
@@ -101,7 +112,7 @@ transporte WebSocket).
 
 1. **Arranca el nodo** (escucha ws en 8081 además de tcp/quic):
    ```bash
-   ./krypta-node-catalina -key ~/krypta/node.key -wsport 8081
+   ./nyx-node-catalina -key ~/nyx/node.key -wsport 8081
    ```
 2. **Añade un Public Hostname al túnel apuntando DIRECTO al nodo** (sin pasar por Nginx).
 
@@ -109,7 +120,7 @@ transporte WebSocket).
    `tunnel run --token …` (vía `launchd`/plist), **no hay `config.yml`**: las rutas se
    configuran en el panel. En **Cloudflare → Zero Trust → Networks → Tunnels → (tu túnel) →
    Public Hostname → Add a public hostname**:
-   - Subdomain `krypta` · Domain `neto.chat`
+   - Subdomain `nyx` · Domain `neto.chat`
    - Service: **HTTP** → `localhost:8081`
 
    Eso es todo: cloudflared hace el upgrade de WebSocket automáticamente, **no tocas Nginx**
@@ -120,20 +131,20 @@ transporte WebSocket).
    Solo si gestionas el túnel con archivo (no es el caso del token):
    ```yaml
    ingress:
-     - hostname: krypta.neto.chat
+     - hostname: nyx.neto.chat
        service: http://localhost:8081
      # … tus otras reglas …
      - service: http_status:404
    ```
-   `cloudflared tunnel route dns <TU_TUNEL> krypta.neto.chat` y reinicia el túnel.
+   `cloudflared tunnel route dns <TU_TUNEL> nyx.neto.chat` y reinicia el túnel.
    </details>
 3. **Comprueba el camino** desde cualquier sitio (debe responder `101 Switching Protocols`):
    ```bash
-   npx wscat -c wss://krypta.neto.chat        # o:  websocat wss://krypta.neto.chat
+   npx wscat -c wss://nyx.neto.chat        # o:  websocat wss://nyx.neto.chat
    ```
 4. **Multiaddr de bootstrap** (lo que pones en "Nodo WAN" en la app):
    ```
-   /dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>
+   /dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>
    ```
 
 > **Timeouts de Cloudflare (Free):** ~100 s de inactividad y ~10 min por conexión. La app
@@ -153,53 +164,56 @@ bash infra/node/deploy-catalina.sh
 ```
 
 El script ([deploy-catalina.sh](deploy-catalina.sh)) copia el binario a
-`~/krypta`, instala/recarga el LaunchAgent ([chat.neto.krypta.node.plist](chat.neto.krypta.node.plist),
+`~/nyx`, instala/recarga el LaunchAgent ([chat.neto.nyx.node.plist](chat.neto.nyx.node.plist),
 ya relleno con `-wsport 8081` y `KeepAlive`), y al final verifica que el nodo
 escucha en `:8081` y que `node.log` lista la addr `.../tcp/8081/ws`. Aborta si el
 binario es viejo (sin `-wsport`). Tras correrlo, anota el **PeerID** del
-`node.log` — el bootstrap de la app es `/dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>`.
+`node.log` — el bootstrap de la app es `/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>`.
 
 > **Comprobación rápida del origen** (debe dar `HTTP 400`/`426`, **no** "connection
 > refused"):
 > ```bash
 > curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081
 > ```
-> Si da 400/426 pero `wss://krypta.neto.chat` sigue en 502, el problema está en la
+> Si da 400/426 pero `wss://nyx.neto.chat` sigue en 502, el problema está en la
 > regla del túnel (Cloudflare → Zero Trust → Tunnels → Public Hostname →
 > `HTTP localhost:8081`), no en el nodo.
 
-Para pararlo: `launchctl unload ~/Library/LaunchAgents/chat.neto.krypta.node.plist`.
+Para pararlo: `launchctl unload ~/Library/LaunchAgents/chat.neto.nyx.node.plist`.
 
 ### Manual (sin el script)
 
-El plist vive en [chat.neto.krypta.node.plist](chat.neto.krypta.node.plist) (ajusta
+El plist vive en [chat.neto.nyx.node.plist](chat.neto.nyx.node.plist) (ajusta
 las rutas si tu usuario no es `davidsilva`). Cópialo y cárgalo:
 
 ```bash
-cp infra/node/chat.neto.krypta.node.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/chat.neto.krypta.node.plist
-launchctl start chat.neto.krypta.node
-cat ~/krypta/node.log     # ver el PeerID
+cp infra/node/chat.neto.nyx.node.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/chat.neto.nyx.node.plist
+launchctl start chat.neto.nyx.node
+cat ~/nyx/node.log     # ver el PeerID
 ```
 
 ## Nodo primario en un VPS Linux (systemd) — recomendado para producción
 
-> **Estado (7 ago 2026): DESPLEGADO.** Vultr São Paulo, `216.128.169.83`, hostname
-> `krypta-node-saopaulo`, Ubuntu 24.04, plan compartido 2 GB. PeerID
-> `12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5`. Ya es la **primera línea** de
-> `Libp2pNode.DEFAULT_BOOTSTRAP` (nodo primario, por `/ip4/…/tcp/4001` directo — sin
-> Cloudflare); el Mac Catalina y el PC Windows quedan de respaldo. Validado con las cuatro
-> sondas de abajo: buzón, wake, ciclo completo y latencia **p50 = 107 ms / p95 = 119 ms**
-> desde La Paz, frente a los 146–163 ms que daban los nodos domésticos vía Cloudflare.
+> **Estado: PENDIENTE DE CONTRATAR** (tarea 1.12 del [plan](../../docs/PLAN-NYX.md)). Esta es
+> la sección que Nyx sí sigue. Perfil previsto: Vultr São Paulo, Ubuntu 24.04, 2 GB (4 GB si
+> el presupuesto lo permite — el tablón añade almacenamiento y consultas, y el relay moverá
+> vídeo desde el principio). Será la **única línea** de `Libp2pNode.DEFAULT_BOOTSTRAP`, por
+> `/ip4/…/tcp/4001` directo y QUIC en 4001/udp, **sin Cloudflare**. Al montarlo: validar con
+> las cuatro sondas de abajo y anotar aquí IP, hostname y PeerID reales.
+>
+> Referencia de lo que debería dar, medido en el nodo equivalente de Krypta el 7 ago 2026:
+> **p50 = 107 ms / p95 = 119 ms** desde La Paz, frente a los 146–163 ms de los nodos
+> domésticos vía Cloudflare.
 >
 > Se eligió Vultr porque **DigitalOcean no tiene ningún datacenter en Sudamérica** (NYC, San
 > Francisco, Toronto, Atlanta, Richmond, Kansas City, Amsterdam, Londres, Fráncfort,
 > Singapur, Bangalore, Sídney): para un relay de voz/vídeo la región manda sobre la marca.
 >
 > Copia de seguridad de la identidad **hecha (8 ago)**: `node.key` está respaldada en
-> `~/keystores/krypta/krypta-node-saopaulo.key` en la Mac del autor (`600`, fuera del repo).
+> `~/keystores/nyx/nyx-node-saopaulo.key` en la Mac del autor (`600`, fuera del repo).
 > Verificada de verdad: mismo SHA-256 que la del VPS y, al deserializarla, deriva el PeerID
-> real del nodo. Para restaurar, cópiala a `/var/lib/krypta/node.key` (dueño `krypta:krypta`,
+> real del nodo. Para restaurar, cópiala a `/var/lib/nyx/node.key` (dueño `nyx:nyx`,
 > permisos `600`) **antes** de arrancar el servicio; si el servicio arranca sin ella, se
 > genera una identidad nueva y el PeerID cambia.
 >
@@ -243,21 +257,21 @@ disco sobran**. Lo que importa de verdad:
 cd infra/node
 # 1. Compila el binario Linux (Go puro, no hace falta Go en el VPS)
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go1.22.12 build -o dist/krypta-node-linux-amd64 .
+  go1.22.12 build -o dist/nyx-node-linux-amd64 .
 
 # 2. Despliega (desde la Mac; pide sudo en el VPS)
 bash deploy-vps.sh root@<IP_DEL_VPS>          # o: usuario@host arm64
 ```
 
-[`deploy-vps.sh`](deploy-vps.sh) sube el binario a `/usr/local/bin/krypta-node`, crea el
-usuario de sistema `krypta` y `/var/lib/krypta`, instala
-[`krypta-node.service`](krypta-node.service) (`Restart=always`, arranca en el boot,
+[`deploy-vps.sh`](deploy-vps.sh) sube el binario a `/usr/local/bin/nyx-node`, crea el
+usuario de sistema `nyx` y `/var/lib/nyx`, instala
+[`nyx-node.service`](nyx-node.service) (`Restart=always`, arranca en el boot,
 `LimitNOFILE=65535` porque libp2p abre muchos sockets), abre los puertos en ufw si está
 activo, y al final imprime el PeerID y los multiaddrs para pegar en la app. Es **idempotente**:
 relanzarlo actualiza el binario sin tocar el `node.key`, así que **el PeerID se conserva**.
 
 > Si el `node.key` se pierde, el nodo cambia de PeerID y **los móviles ya instalados dejan de
-> encontrarlo**. Guárdalo (`/var/lib/krypta/node.key`) antes de reinstalar la máquina.
+> encontrarlo**. Guárdalo (`/var/lib/nyx/node.key`) antes de reinstalar la máquina.
 
 Puertos: **4001/tcp** y **4001/udp** (libp2p) al exterior; **8081** es WebSocket en claro y
 **no se abre**, lo consume el proxy TLS local.
@@ -276,12 +290,12 @@ Con IP pública el camino simple es TCP/QUIC en 4001 y listo. Aun así conviene 
 sea 443. Lo más corto es **Caddy** (Let's Encrypt automático) delante del `ws` en claro:
 
 ```caddyfile
-krypta3.tudominio.com {
+nyx3.tudominio.com {
     reverse_proxy localhost:8081
 }
 ```
 
-Con eso el bootstrap `wss` es `/dns4/krypta3.tudominio.com/tcp/443/wss/p2p/<PeerID>`, igual
+Con eso el bootstrap `wss` es `/dns4/nyx3.tudominio.com/tcp/443/wss/p2p/<PeerID>`, igual
 que el de Cloudflare pero sin el reciclado de conexiones.
 
 ### Validación antes de ponerlo en `DEFAULT_BOOTSTRAP`
@@ -312,19 +326,20 @@ dejando el de Windows de secundario. La Mac Catalina puede jubilarse a máquina 
 
 ## Segundo nodo en Windows (multi-nodo / failover)
 
-> **Estado (16 jul 2026): DESPLEGADO.** Corre en el PC Windows del autor, expuesto como
-> `krypta2.neto.chat`; PeerID `12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm`
-> (verificado con las sondas de buzón/wake desde la Mac). Su multiaddr ya viene de serie
-> en `Libp2pNode.DEFAULT_BOOTSTRAP`. Falta la prueba de failover con 2 móviles (Fase C).
+> ⚠️ **No aplica a Nyx tal cual.** Esta sección describe el segundo nodo **de Krypta**, que
+> corre en el PC Windows del autor. Se conserva porque el mecanismo (cross-compilar el `.exe`,
+> exponerlo, probar el failover) es el mismo que hará falta cuando Nyx monte su segundo nodo
+> — pero ese irá en **otra caja propia**, no en una máquina que ya sirve a Krypta. Los datos
+> del nodo de Krypta (hostname y PeerID) se han quitado a propósito.
 
 El nodo es Go puro: para Windows basta **cross-compilar un `.exe` y ejecutarlo** (no hay
 que instalar Go en el PC). Binario ya compilado (x64):
-[`dist/krypta-node-windows-amd64.exe`](dist/krypta-node-windows-amd64.exe). Recompilar:
+[`dist/nyx-node-windows-amd64.exe`](dist/nyx-node-windows-amd64.exe). Recompilar:
 
 ```bash
 cd infra/node
 GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-  go1.22.12 build -o dist/krypta-node-windows-amd64.exe .
+  go1.22.12 build -o dist/nyx-node-windows-amd64.exe .
 ```
 
 > Cada nodo tiene su **propia identidad**: el `node.key` de Windows se crea solo la primera
@@ -332,12 +347,12 @@ GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
 
 ### Fase A — arrancarlo en la LAN
 
-1. Copia el `.exe` al PC, p. ej. a `C:\krypta\`.
+1. Copia el `.exe` al PC, p. ej. a `C:\nyx\`.
 2. (Recomendado) Reserva la IP del PC en el router (DHCP reservation) para que no cambie.
 3. Ábrelo desde `cmd`/PowerShell:
    ```bat
-   cd C:\krypta
-   krypta-node-windows-amd64.exe -key C:\krypta\node.key -wsport 8081
+   cd C:\nyx
+   nyx-node-windows-amd64.exe -key C:\nyx\node.key -wsport 8081
    ```
    Windows Defender Firewall preguntará al primer arranque: **permite redes privadas**
    (si no pregunta: Panel de control → Firewall → permitir una aplicación, o abre los
@@ -356,28 +371,28 @@ GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
 Dos variantes; la B2 es la de verdad redundante:
 
 - **B1 (rápida, reutiliza el túnel de la Mac):** en Cloudflare → Zero Trust → Tunnels →
-  (túnel existente) → Public Hostname → Add: Subdomain `krypta2` · Domain `neto.chat` ·
+  (túnel existente) → Public Hostname → Add: Subdomain `nyx2` · Domain `neto.chat` ·
   Service **HTTP** → `http://<IP_LAN_DEL_PC>:8081`. No se instala nada en Windows, pero si
   la Mac (cloudflared) cae, caen ambos nodos — vale para probar failover del *proceso* nodo.
 - **B2 (independiente):** instala cloudflared en el PC (`winget install Cloudflare.cloudflared`),
   crea un **segundo túnel** en el dashboard (Zero Trust → Tunnels → Create), instálalo como
   servicio con el token que te da (`cloudflared service install <TOKEN>`, arranca con
-  Windows) y añádele el Public Hostname `krypta2.neto.chat` → **HTTP** → `http://localhost:8081`.
+  Windows) y añádele el Public Hostname `nyx2.neto.chat` → **HTTP** → `http://localhost:8081`.
 
 Comprobación desde cualquier red (debe responder `101` + saludo multistream):
 ```bash
-npx wscat -c wss://krypta2.neto.chat
+npx wscat -c wss://nyx2.neto.chat
 ```
 Multiaddr del segundo nodo para la app:
 ```
-/dns4/krypta2.neto.chat/tcp/443/wss/p2p/<PeerID_windows>
+/dns4/nyx2.neto.chat/tcp/443/wss/p2p/<PeerID_windows>
 ```
 
 ### Fase C — la prueba de failover (PRUEBAS-PENDIENTES, multi-nodo)
 
 1. En **ambos** móviles, "Nodos WAN (bootstrap)" con las dos líneas (Mac + Windows) → Aplicar.
 2. Verifica el caso normal: mensaje con el receptor cerrado → llega (por cualquiera).
-3. **Apaga el nodo de la Mac** (`launchctl unload ~/Library/LaunchAgents/chat.neto.krypta.node.plist`).
+3. **Apaga el nodo de la Mac** (`launchctl unload ~/Library/LaunchAgents/chat.neto.nyx.node.plist`).
 4. Con la app del receptor cerrada, envía un mensaje: debe salir **SENT** (buzón del nodo
    Windows) y llegar con notificación al abrir/despertar el receptor.
 5. Reactiva el nodo de la Mac (`launchctl load …`).
@@ -388,8 +403,8 @@ Cuando el nodo Windows quede estable, añadir su multiaddr a `Libp2pNode.DEFAULT
 ### Mantenerlo vivo al arrancar Windows (opcional)
 
 Programador de tareas → Crear tarea básica → Desencadenador "Al iniciar el equipo" →
-Acción "Iniciar un programa" → `C:\krypta\krypta-node-windows-amd64.exe` con argumentos
-`-key C:\krypta\node.key -wsport 8081`. En Propiedades: "Ejecutar tanto si el usuario
+Acción "Iniciar un programa" → `C:\nyx\nyx-node-windows-amd64.exe` con argumentos
+`-key C:\nyx\node.key -wsport 8081`. En Propiedades: "Ejecutar tanto si el usuario
 inició sesión como si no" y desmarcar "Detener si se ejecuta más de…".
 
 ## En la app (ambos móviles)

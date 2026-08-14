@@ -1,4 +1,4 @@
-module chat.neto.krypta/nativego
+module chat.neto.nyx/nativego
 
 go 1.26
 

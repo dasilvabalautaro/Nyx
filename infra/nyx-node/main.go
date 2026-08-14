@@ -1,4 +1,4 @@
-// Command node is Krypta's minimal self-hosted infrastructure node (Phase 1 seed):
+// Command node is Nyx's minimal self-hosted infrastructure node (Phase 1 seed):
 // a libp2p bootstrap + Kademlia DHT *server*. Later phases add Circuit Relay v2, the
 // E2EE store-and-forward mailbox and the wake server to this same binary/fleet.
 //
@@ -33,7 +33,7 @@ import (
 	relayv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 )
 
-const kryptaProtocol = protocol.ID("/krypta/msg/1.0.0")
+const nyxProtocol = protocol.ID("/nyx/msg/1.0.0")
 
 func main() {
 	listen := flag.String("listen", "/ip4/0.0.0.0/tcp/4001", "listen multiaddr")
@@ -67,12 +67,12 @@ func main() {
 		// Circuit Relay v2: este nodo reenvía tráfico (E2EE) cuando DCUtR no perfora el NAT.
 		// Sin WithInfiniteLimits, go-libp2p corta cada conexión relayada a los 128 KiB o
 		// 2 min (por defecto) — una llamada de voz (~5-6 KB/s) moría a los ~20 s. Este nodo
-		// ES el relay de Krypta y el tráfico va E2EE, así que sin límites.
+		// ES el relay de Nyx y el tráfico va E2EE, así que sin límites.
 		libp2p.EnableRelayService(relayv2.WithInfiniteLimits()),
 		// El servicio de relay v2 solo ofrece el protocolo `hop` cuando el nodo se cree
 		// PÚBLICAMENTE alcanzable. Tras Cloudflare Tunnel (sin IP pública directa) AutoNAT no
 		// lo confirma y desactivaría el relay → los móviles no podrían reservar slot. Como este
-		// nodo ES el relay público de Krypta, forzamos reachability=public para que el hop
+		// nodo ES el relay público de Nyx, forzamos reachability=public para que el hop
 		// quede siempre activo.
 		libp2p.ForceReachabilityPublic(),
 	)
@@ -81,9 +81,9 @@ func main() {
 	}
 	defer h.Close()
 
-	// Print any inbound Krypta message (lets on-device tests verify the phone can dial
+	// Print any inbound Nyx message (lets on-device tests verify the phone can dial
 	// this node and deliver a message over a libp2p stream).
-	h.SetStreamHandler(kryptaProtocol, func(s network.Stream) {
+	h.SetStreamHandler(nyxProtocol, func(s network.Stream) {
 		defer s.Close()
 		data, _ := io.ReadAll(s)
 		// Print as hex: payloads are E2EE, so this node sees only opaque ciphertext.
@@ -122,7 +122,7 @@ func main() {
 		log.Fatalf("dht.Bootstrap: %v", err)
 	}
 
-	fmt.Println("Krypta infra node up (bootstrap + DHT server + relay v2). PeerID:", h.ID().String())
+	fmt.Println("Nyx infra node up (bootstrap + DHT server + relay v2). PeerID:", h.ID().String())
 	fmt.Println("Bootstrap addrs (use one of these from the phone):")
 	for _, a := range h.Addrs() {
 		fmt.Printf("  %s/p2p/%s\n", a, h.ID().String())

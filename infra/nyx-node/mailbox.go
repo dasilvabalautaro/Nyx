@@ -4,9 +4,9 @@
 //
 // Protocolo (JSON por líneas sobre streams libp2p, interop v0.38 nodo ↔ v0.48 móviles):
 //
-//	/krypta/mbx/put/1.0.0  cliente → {"v":1,"to":"<peerid>","blob":"<b64>"}\n
+//	/nyx/mbx/put/1.0.0  cliente → {"v":1,"to":"<peerid>","blob":"<b64>"}\n
 //	                       nodo    → {"ok":true} | {"err":"…"}
-//	/krypta/mbx/get/1.0.0  nodo    → {"id","from","ts","blob"}\n … {"done":true}\n
+//	/nyx/mbx/get/1.0.0  nodo    → {"id","from","ts","blob"}\n … {"done":true}\n
 //	                       cliente → {"ack":["id",…]}\n   (el nodo borra solo lo ack'eado)
 //
 // Autenticación gratis por libp2p: en GET solo se entregan los blobs cuyo `to` es el
@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	mbxPutProtocol = protocol.ID("/krypta/mbx/put/1.0.0")
-	mbxGetProtocol = protocol.ID("/krypta/mbx/get/1.0.0")
+	mbxPutProtocol = protocol.ID("/nyx/mbx/put/1.0.0")
+	mbxGetProtocol = protocol.ID("/nyx/mbx/get/1.0.0")
 )
 
 type mailbox struct {

@@ -36,7 +36,7 @@ func connect(t *testing.T, from, to host.Host) {
 	}
 }
 
-// mbxPut habla /krypta/mbx/put como lo hará el móvil.
+// mbxPut habla /nyx/mbx/put como lo hará el móvil.
 func mbxPut(t *testing.T, from host.Host, node peer.ID, to string, blob []byte) error {
 	t.Helper()
 	s, err := from.NewStream(context.Background(), node, mbxPutProtocol)
@@ -61,7 +61,7 @@ func mbxPut(t *testing.T, from host.Host, node peer.ID, to string, blob []byte) 
 	return nil
 }
 
-// mbxGet habla /krypta/mbx/get: retira los sobres y ack'ea los ids en ackIDs (nil = todos).
+// mbxGet habla /nyx/mbx/get: retira los sobres y ack'ea los ids en ackIDs (nil = todos).
 func mbxGet(t *testing.T, from host.Host, node peer.ID, ackIDs []string) []mbxEnvelope {
 	t.Helper()
 	s, err := from.NewStream(context.Background(), node, mbxGetProtocol)

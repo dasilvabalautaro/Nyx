@@ -1,4 +1,4 @@
-module chat.neto.krypta/infra/node
+module chat.neto.nyx/infra/node
 
 // Pinned to a go-libp2p line that builds with Go 1.22 so the binary runs on macOS 10.15
 // (Catalina). The phones run go-libp2p v0.48; libp2p wire protocols interoperate across

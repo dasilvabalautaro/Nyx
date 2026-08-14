@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenera native-bridge/libs/krypta-p2p.aar desde el módulo Go (go-libp2p) con gomobile.
+# Regenera native-bridge/libs/nyx-p2p.aar desde el módulo Go (go-libp2p) con gomobile.
 #
 # Requisitos:
 #   - Go >= 1.26 (brew install go)
@@ -28,9 +28,9 @@ gomobile bind \
   -target=android \
   -androidapi 30 \
   -ldflags="-checklinkname=0 -extldflags=-Wl,-z,max-page-size=16384" \
-  -javapkg=chat.neto.krypta \
-  -o ../libs/krypta-p2p.aar \
+  -javapkg=chat.neto.nyx \
+  -o ../libs/nyx-p2p.aar \
   .
 
-echo "AAR regenerado en native-bridge/libs/krypta-p2p.aar"
-ls -lh ../libs/krypta-p2p.aar
+echo "AAR regenerado en native-bridge/libs/nyx-p2p.aar"
+ls -lh ../libs/nyx-p2p.aar

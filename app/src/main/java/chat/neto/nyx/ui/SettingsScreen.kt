@@ -427,7 +427,7 @@ fun SettingsScreen(
             onConfirm = { pass ->
                 askExportPass = false
                 exportPass = pass
-                createBackup.launch("nyx-identidad.krbk")
+                createBackup.launch("nyx-identidad.nybk")
             },
         )
     }

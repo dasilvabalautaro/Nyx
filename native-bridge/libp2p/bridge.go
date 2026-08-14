@@ -1,4 +1,4 @@
-// Package bridge is the gomobile entry point for Krypta's native P2P layer.
+// Package bridge is the gomobile entry point for Nyx's native P2P layer.
 //
 // Phase 0/3 (spike): proves the gomobile -> AAR -> Kotlin/JNI pipeline, that a real
 // go-libp2p host runs on Android, that rendezvous discovery over a Kademlia DHT works,
@@ -40,12 +40,12 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-// ProtocolID is the libp2p protocol for Krypta one-shot E2EE message streams.
-const ProtocolID = protocol.ID("/krypta/msg/1.0.0")
+// ProtocolID is the libp2p protocol for Nyx one-shot E2EE message streams.
+const ProtocolID = protocol.ID("/nyx/msg/1.0.0")
 
 // --- Spike sanity checks (JNI marshalling) -----------------------------------
 
-func Ping() string     { return "pong from krypta go-libp2p bridge" }
+func Ping() string     { return "pong from nyx go-libp2p bridge" }
 func Sum(a, b int) int { return a + b }
 func Version() string  { return "0.0.17-multinode" }
 
@@ -160,7 +160,7 @@ func NewNode() (*Node, error) {
 
 // NewNodeWithIdentity creates a host using the persisted identity (so the PeerID — and thus
 // the shared secrets derived from it — stay stable across runs). relayAddrs is a newline-
-// separated list of relay multiaddrs (typically Krypta's infra node, which runs Circuit
+// separated list of relay multiaddrs (typically Nyx's infra node, which runs Circuit
 // Relay v2): when set, the host enables AutoRelay against them so it can be reached behind
 // NAT/CGNAT via a /p2p-circuit address. Pass "" to disable (LAN-only).
 func NewNodeWithIdentity(identity []byte, relayAddrs string) (*Node, error) {
@@ -202,7 +202,7 @@ func newNode(priv crypto.PrivKey, relayAddrs string) (*Node, error) {
 
 // circuitAddrsFactory devuelve un AddrsFactory que AÑADE, a las direcciones anunciadas del
 // host, una dirección `/p2p-circuit` por cada relay conocido (p. ej.
-// `/dns4/krypta.neto.chat/tcp/443/wss/p2p/<relayID>/p2p-circuit`). Así el contacto que nos
+// `/dns4/nyx.neto.chat/tcp/443/wss/p2p/<relayID>/p2p-circuit`). Así el contacto que nos
 // descubre por rendezvous obtiene una addr alcanzable tras NAT y dial a través del relay
 // (que debe tener una reserva activa nuestra, renovada por ReserveRelay).
 func circuitAddrsFactory(relays []peer.AddrInfo) func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
@@ -253,7 +253,7 @@ func parseAddrInfos(s string) []peer.AddrInfo {
 func (n *Node) SetPeerHandler(h PeerHandler) { n.peerHandler = h }
 
 // StartMdns enables LAN peer discovery over mDNS: peers on the same Wi-Fi advertising the
-// same serviceTag are found and auto-connected (no bootstrap/DHT needed). This is Krypta's
+// same serviceTag are found and auto-connected (no bootstrap/DHT needed). This is Nyx's
 // optional LAN path; WAN discovery still goes through the DHT + rendezvous.
 func (n *Node) StartMdns(serviceTag string) error {
 	svc := mdns.NewMdnsService(n.h, serviceTag, &mdnsNotifee{n: n})
@@ -292,7 +292,7 @@ func (n *Node) SetMessageHandler(h MessageHandler) {
 }
 
 // SendMessage dials peerID (reusing existing connections / peerstore addrs) and writes
-// data on a fresh Krypta stream, half-closing so the receiver gets a clean EOF.
+// data on a fresh Nyx stream, half-closing so the receiver gets a clean EOF.
 func (n *Node) SendMessage(peerID string, data []byte) error {
 	pid, err := peer.Decode(peerID)
 	if err != nil {
@@ -301,7 +301,7 @@ func (n *Node) SendMessage(peerID string, data []byte) error {
 	// Las conexiones por Circuit Relay v2 son "limited" (transient). go-libp2p se niega a abrir
 	// un stream sobre ellas salvo que el contexto lo permita explícitamente; sin esto espera una
 	// conexión directa que (tras NAT) no llega → "context deadline exceeded".
-	ctx := network.WithAllowLimitedConn(n.ctx, "krypta-msg")
+	ctx := network.WithAllowLimitedConn(n.ctx, "nyx-msg")
 	s, err := n.h.NewStream(ctx, pid, ProtocolID)
 	if err != nil {
 		return err
@@ -449,8 +449,8 @@ func (n *Node) PingProbe(addrs string, count int, intervalMs int) (string, error
 
 // --- Llamadas (Fase 7b): stream full-duplex de frames de audio E2EE ------------------
 
-// CallProtocolID es el protocolo libp2p de los streams de llamada de Krypta.
-const CallProtocolID = protocol.ID("/krypta/call/1.0.0")
+// CallProtocolID es el protocolo libp2p de los streams de llamada de Nyx.
+const CallProtocolID = protocol.ID("/nyx/call/1.0.0")
 
 // CallStream envuelve un stream libp2p con framing binario: cada frame va precedido de su
 // longitud (uint16 big-endian). El payload es opaco para esta capa (viene cifrado E2EE de
@@ -523,7 +523,7 @@ func (n *Node) OpenCallStream(peerID string) (*CallStream, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := network.WithAllowLimitedConn(n.ctx, "krypta-call")
+	ctx := network.WithAllowLimitedConn(n.ctx, "nyx-call")
 	s, err := n.h.NewStream(ctx, pid, CallProtocolID)
 	if err != nil {
 		return nil, err
@@ -535,7 +535,7 @@ func (n *Node) OpenCallStream(peerID string) (*CallStream, error) {
 
 // VideoProtocolID es el protocolo libp2p de los streams de vídeo (canal aparte del audio:
 // si el vídeo se cae o se cierra, la voz no se ve afectada).
-const VideoProtocolID = protocol.ID("/krypta/video/1.0.0")
+const VideoProtocolID = protocol.ID("/nyx/video/1.0.0")
 
 // videoMaxFrame acota un frame de vídeo cifrado. Un keyframe H.264 a ~400 kbps ronda las
 // decenas de KiB; 1 MiB da margen de sobra y corta payloads absurdos de un peer hostil.
@@ -617,7 +617,7 @@ func (n *Node) OpenVideoStream(peerID string) (*VideoStream, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := network.WithAllowLimitedConn(n.ctx, "krypta-video")
+	ctx := network.WithAllowLimitedConn(n.ctx, "nyx-video")
 	s, err := n.h.NewStream(ctx, pid, VideoProtocolID)
 	if err != nil {
 		return nil, err
@@ -633,8 +633,8 @@ func (n *Node) OpenVideoStream(peerID string) (*VideoStream, error) {
 // el `from` desde la identidad del stream y solo entrega los sobres dirigidos a ella.
 
 const (
-	mbxPutProtocol = protocol.ID("/krypta/mbx/put/1.0.0")
-	mbxGetProtocol = protocol.ID("/krypta/mbx/get/1.0.0")
+	mbxPutProtocol = protocol.ID("/nyx/mbx/put/1.0.0")
+	mbxGetProtocol = protocol.ID("/nyx/mbx/get/1.0.0")
 )
 
 type mbxEnvelope struct {
@@ -822,7 +822,7 @@ func handleMailboxEnvelope(h MailboxHandler, id, from string, ts int64, data []b
 
 // --- Wake (aviso de buzón; el servidor vive integrado en infra/node) -----------------
 
-const wakeProtocol = protocol.ID("/krypta/wake/1.0.0")
+const wakeProtocol = protocol.ID("/nyx/wake/1.0.0")
 
 // WakeHandler is implemented on the Kotlin side. OnWake fires when the node signals
 // there is mail in our mailbox — and also right after each (re)connection of the wake

@@ -1,7 +1,7 @@
 // Wake integrado (Fase 5, decisión simplificada respecto al plan: sin servidor
 // UnifiedPush separado): como el buzón vive en este mismo nodo, el nodo ya sabe el
 // instante exacto en que llega un depósito para un PeerID. El móvil mantiene un stream
-// ligero `/krypta/wake/1.0.0` (lo sostiene su Foreground Service) y el nodo le escribe
+// ligero `/nyx/wake/1.0.0` (lo sostiene su Foreground Service) y el nodo le escribe
 // un aviso cuando hay correo — el móvil retira el buzón al segundo, sin polling.
 //
 // Protocolo (JSON por líneas, solo nodo→móvil):
@@ -24,7 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
-const wakeProtocol = protocol.ID("/krypta/wake/1.0.0")
+const wakeProtocol = protocol.ID("/nyx/wake/1.0.0")
 
 // wakeKeepalive debe quedar por debajo del corte por inactividad de Cloudflare (~100 s).
 const wakeKeepalive = 50 * time.Second

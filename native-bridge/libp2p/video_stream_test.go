@@ -23,7 +23,7 @@ func (h *echoVideoHandler) OnVideoStream(s *VideoStream) {
 	}()
 }
 
-// TestVideoStreamEcho valida el stream de vídeo (Fase 7c): A abre /krypta/video/1.0.0
+// TestVideoStreamEcho valida el stream de vídeo (Fase 7c): A abre /nyx/video/1.0.0
 // hacia B, manda frames con framing uint32 — incluido uno de 200 KiB (un keyframe H.264
 // no cabe en el framing uint16 del audio) — y los recibe de vuelta intactos.
 func TestVideoStreamEcho(t *testing.T) {

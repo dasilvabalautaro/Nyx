@@ -46,7 +46,7 @@ func TestRendezvousDiscovery(t *testing.T) {
 		t.Fatalf("B StartDHT: %v", err)
 	}
 
-	const rendezvous = "krypta-test-rendezvous-deadbeefcafe"
+	const rendezvous = "nyx-test-rendezvous-deadbeefcafe"
 	a.Advertise(rendezvous) // dutil.Advertise re-announces periodically in the background
 	b.Advertise(rendezvous)
 
@@ -111,7 +111,7 @@ func TestMessageExchange(t *testing.T) {
 	}
 	cap := &capture{ch: make(chan string, 1)}
 	a.SetMessageHandler(cap)
-	a.Advertise("krypta-msg-test")
+	a.Advertise("nyx-msg-test")
 
 	b, err := NewNode()
 	if err != nil {
@@ -125,7 +125,7 @@ func TestMessageExchange(t *testing.T) {
 	// discover A (also connects to it) before sending
 	deadline := time.Now().Add(40 * time.Second)
 	for time.Now().Before(deadline) {
-		ids, err := b.FindPeers("krypta-msg-test", 5)
+		ids, err := b.FindPeers("nyx-msg-test", 5)
 		if err != nil {
 			t.Fatalf("FindPeers: %v", err)
 		}
@@ -135,14 +135,14 @@ func TestMessageExchange(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	if err := b.SendMessage(a.PeerID(), []byte("hola krypta")); err != nil {
+	if err := b.SendMessage(a.PeerID(), []byte("hola nyx")); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	select {
 	case msg := <-cap.ch:
-		if msg != "hola krypta" {
-			t.Fatalf("A received %q, want %q", msg, "hola krypta")
+		if msg != "hola nyx" {
+			t.Fatalf("A received %q, want %q", msg, "hola nyx")
 		}
 		t.Logf("OK: A received message from B over libp2p stream")
 	case <-time.After(15 * time.Second):

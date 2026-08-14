@@ -39,7 +39,7 @@
          (nyx_identity.xml), la base de mensajes y los adjuntos. Con allowBackup="true"
          (el valor de la plantilla) todo eso acababa en el Drive del usuario, fuera del E2EE
          y en contradicción con la §7 de la política de privacidad, que promete que la única
-         copia es el .krbk cifrado con la frase-clave del usuario. Las reglas XML quedan como
+         copia es el .nybk cifrado con la frase-clave del usuario. Las reglas XML quedan como
          defensa en profundidad por si alguien reactiva la bandera. -->
     <application
         android:name=".NyxApplication"

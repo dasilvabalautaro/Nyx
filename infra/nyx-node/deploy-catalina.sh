@@ -1,20 +1,20 @@
 #!/bin/bash
-# Despliega/actualiza el nodo Krypta en la Mac Catalina bajo launchd (KeepAlive).
-# Ejecútalo EN la Catalina, desde el repo:  bash infra/node/deploy-catalina.sh
+# Despliega/actualiza el nodo Nyx en la Mac Catalina bajo launchd (KeepAlive).
+# Ejecútalo EN la Catalina, desde el repo:  bash infra/nyx-node/deploy-catalina.sh
 #
 # Qué hace:
-#   1. Copia el binario fresco (con listener WebSocket /ws) a ~/krypta
+#   1. Copia el binario fresco (con listener WebSocket /ws) a ~/nyx
 #   2. Instala/recarga el LaunchAgent (arranca solo y se reinicia si cae)
 #   3. Verifica que escucha en :8081 y que node.log lista la addr .../tcp/8081/ws
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN_SRC="$SRC_DIR/dist/krypta-node-catalina"
-PLIST_SRC="$SRC_DIR/chat.neto.krypta.node.plist"
+BIN_SRC="$SRC_DIR/dist/nyx-node-catalina"
+PLIST_SRC="$SRC_DIR/chat.neto.nyx.node.plist"
 
-DEST="$HOME/krypta"
-BIN_DEST="$DEST/krypta-node-catalina"
-LABEL="chat.neto.krypta.node"
+DEST="$HOME/nyx"
+BIN_DEST="$DEST/nyx-node-catalina"
+LABEL="chat.neto.nyx.node"
 PLIST_DEST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 echo "==> binario origen: $BIN_SRC"
@@ -23,7 +23,7 @@ echo "==> binario origen: $BIN_SRC"
 echo "==> verificando que el binario trae el listener ws y el buzón..."
 strings "$BIN_SRC" | grep -q wsport || { echo "ERROR: este binario NO tiene -wsport (es viejo)"; exit 1; }
 strings "$BIN_SRC" | grep -q mailboxdir || { echo "ERROR: este binario NO tiene buzón (-mailboxdir) — recompila dist/"; exit 1; }
-strings "$BIN_SRC" | grep -q "krypta/wake" || { echo "ERROR: este binario NO tiene wake (/krypta/wake) — recompila dist/"; exit 1; }
+strings "$BIN_SRC" | grep -q "nyx/wake" || { echo "ERROR: este binario NO tiene wake (/nyx/wake) — recompila dist/"; exit 1; }
 
 mkdir -p "$DEST"
 
@@ -61,7 +61,7 @@ curl -sS -m 5 -o /dev/null -w "  http://localhost:8081 -> HTTP %{http_code}\n" h
 echo
 echo "Si node.log muestra una línea  .../tcp/8081/ws/p2p/<PeerID>  y curl da 400/426,"
 echo "el origen está OK. Ahora prueba el camino completo de Cloudflare:"
-echo "  npx wscat -c wss://krypta.neto.chat      (debe dar 101 Switching Protocols)"
+echo "  npx wscat -c wss://nyx.neto.chat      (debe dar 101 Switching Protocols)"
 echo
 echo "Anota el PeerID del node.log -> el bootstrap de la app es:"
-echo "  /dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>"
+echo "  /dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>"

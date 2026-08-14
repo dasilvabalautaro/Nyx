@@ -2,7 +2,7 @@
    Copia automática en API <= 30. Nyx la desactiva del todo con allowBackup="false";
    estas exclusiones son defensa en profundidad por si la bandera se reactivara: nada de la
    app debe salir del dispositivo por esta vía (la identidad Ed25519 está en sharedpref, los
-   mensajes en database y los adjuntos en file). La copia legítima es la exportación .krbk,
+   mensajes en database y los adjuntos en file). La copia legítima es la exportación .nybk,
    cifrada con la frase-clave del usuario.
 -->
 <full-backup-content>

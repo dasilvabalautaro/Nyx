@@ -22,7 +22,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     // Fase 0/2: el .aar de go-libp2p (gomobile) se colocará en native-bridge/libs/
-    // y se consumirá con: implementation(files("libs/krypta-p2p.aar"))
+    // y se consumirá con: implementation(files("libs/nyx-p2p.aar"))
 }
 
 dependencies {
@@ -30,8 +30,8 @@ dependencies {
 
     // go-libp2p compilado con gomobile (Fase 0). Regenerar con:
     //   cd native-bridge/libp2p && gomobile bind -target=android -androidapi 30 \
-    //     -javapkg=chat.neto.krypta -o ../libs/krypta-p2p.aar .
-    api(files("libs/krypta-p2p.aar"))
+    //     -javapkg=chat.neto.nyx -o ../libs/nyx-p2p.aar .
+    api(files("libs/nyx-p2p.aar"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

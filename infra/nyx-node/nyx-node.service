@@ -1,26 +1,26 @@
 [Unit]
-Description=Krypta infra node (bootstrap DHT + Circuit Relay v2 + buzon E2EE + wake)
+Description=Nyx infra node (bootstrap DHT + Circuit Relay v2 + buzon E2EE + wake)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=krypta
-Group=krypta
+User=nyx
+Group=nyx
 
-# StateDirectory crea /var/lib/krypta con el dueño correcto y lo conserva entre reinicios.
+# StateDirectory crea /var/lib/nyx con el dueño correcto y lo conserva entre reinicios.
 # Ahí viven node.key (la IDENTIDAD del nodo: si se pierde, cambia el PeerID y los móviles
 # ya no lo encuentran) y mailbox/ (los blobs E2EE en tránsito).
-StateDirectory=krypta
-WorkingDirectory=/var/lib/krypta
+StateDirectory=nyx
+WorkingDirectory=/var/lib/nyx
 
 # -quicport 4001: en un VPS con IP pública el multiaddr QUIC tiene que ser estable para
 #   poder publicarlo como bootstrap (el default 0 es efímero, pensado para Cloudflare).
 # -wsport 8081: WebSocket en claro; el TLS de 443 lo termina delante Caddy/nginx
 #   (ver README). Deja el 8081 cerrado al exterior en el firewall.
-ExecStart=/usr/local/bin/krypta-node \
-    -key /var/lib/krypta/node.key \
-    -mailboxdir /var/lib/krypta/mailbox \
+ExecStart=/usr/local/bin/nyx-node \
+    -key /var/lib/nyx/node.key \
+    -mailboxdir /var/lib/nyx/mailbox \
     -listen /ip4/0.0.0.0/tcp/4001 \
     -quicport 4001 \
     -wsport 8081

@@ -13,7 +13,7 @@ local.properties
 
 # --- Secretos ---
 # Credenciales de firma de release. El keystore vive fuera del repo
-# (~/keystores/krypta/krypta.jks); ver hasReleaseKeystore en app/build.gradle.kts.
+# (~/keystores/nyx/nyx.jks); ver hasReleaseKeystore en app/build.gradle.kts.
 /keystore.properties
 *.jks
 *.keystore
@@ -29,9 +29,9 @@ local.properties
 /native-bridge/libs/*-sources.jar
 
 # Binarios del nodo infra (salida de `go build`, ~190 MB). Se regeneran con los
-# comandos de infra/node/README.md.
-/infra/node/node
-/infra/node/dist/
+# comandos de infra/nyx-node/README.md.
+/infra/nyx-node/node
+/infra/nyx-node/dist/
 
 # --- IDE (ficheros por usuario) ---
 /.idea/caches

@@ -9,12 +9,12 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Formato del **respaldo de identidad** (archivo `.krbk`): la identidad Ed25519 + los
+ * Formato del **respaldo de identidad** (archivo `.nybk`): la identidad Ed25519 + los
  * contactos (nombre, PeerID, verificado), cifrados con una passphrase del usuario.
  * Perder el móvil sin esto = perder el PeerID y que todos tus contactos tengan que
  * re-añadirte y re-verificarte.
  *
- * Binario: `"KRBK1"(5) ‖ salt(16) ‖ nonce(12) ‖ AES-256-GCM(payload)`, con el magic como
+ * Binario: `"NYXB1"(5) ‖ salt(16) ‖ nonce(12) ‖ AES-256-GCM(payload)`, con el magic como
  * AAD (un archivo truncado/ajeno falla la autenticación, no produce basura). La clave sale
  * de PBKDF2-HMAC-SHA256 con 310k iteraciones (coste OWASP 2023; ~1 s en un móvil — bien
  * para un archivo que se descifra una vez). El payload es texto por líneas:
@@ -103,7 +103,7 @@ object IdentityBackup {
             .generateSecret(PBEKeySpec(passphrase, salt, ITERATIONS, KEY_BITS))
             .encoded
 
-    private val MAGIC = "KRBK1".toByteArray(Charsets.US_ASCII)
+    private val MAGIC = "NYXB1".toByteArray(Charsets.US_ASCII)
     private val encoder = Base64.getEncoder()
     private val decoder = Base64.getDecoder()
 

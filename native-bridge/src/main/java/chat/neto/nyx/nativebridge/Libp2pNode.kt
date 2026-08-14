@@ -3,12 +3,12 @@ package chat.neto.nyx.nativebridge
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Base64
-import chat.neto.krypta.bridge.Bridge
-import chat.neto.krypta.bridge.MailboxHandler
-import chat.neto.krypta.bridge.MessageHandler
-import chat.neto.krypta.bridge.Node
-import chat.neto.krypta.bridge.PeerHandler
-import chat.neto.krypta.bridge.WakeHandler
+import chat.neto.nyx.bridge.Bridge
+import chat.neto.nyx.bridge.MailboxHandler
+import chat.neto.nyx.bridge.MessageHandler
+import chat.neto.nyx.bridge.Node
+import chat.neto.nyx.bridge.PeerHandler
+import chat.neto.nyx.bridge.WakeHandler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -306,7 +306,7 @@ class Libp2pNode @Inject constructor(
 
     /** Adapta el CallStream del AAR (lecturas bloqueantes JNI) a la interfaz de dominio. */
     private class GoCallStream(
-        private val s: chat.neto.krypta.bridge.CallStream,
+        private val s: chat.neto.nyx.bridge.CallStream,
     ) : chat.neto.nyx.core.CallStream {
         override suspend fun sendFrame(frame: ByteArray) = withContext(Dispatchers.IO) {
             s.writeFrame(frame)
@@ -325,7 +325,7 @@ class Libp2pNode @Inject constructor(
 
     /** Ídem para el stream de vídeo del AAR (misma interfaz de dominio, framing uint32). */
     private class GoVideoStream(
-        private val s: chat.neto.krypta.bridge.VideoStream,
+        private val s: chat.neto.nyx.bridge.VideoStream,
     ) : chat.neto.nyx.core.CallStream {
         override suspend fun sendFrame(frame: ByteArray) = withContext(Dispatchers.IO) {
             s.writeFrame(frame)
@@ -345,22 +345,24 @@ class Libp2pNode @Inject constructor(
         /**
          * Nodos bootstrap WAN por defecto (uno por línea), en orden de preferencia —
          * `MailboxPut` deposita en el primero vivo, así que quien esté primero aquí es el
-         * primario. Primero el **VPS de São Paulo** (31 jul 2026): IP pública dedicada, sin
-         * Cloudflare Tunnel de por medio (TCP directo, no `wss`), región cercana a
-         * Latinoamérica para el relay de voz/vídeo — validado con
-         * `TestMailboxFetchAgainstLiveNode`/`TestWakeAgainstLiveNode` antes de entrar aquí.
-         * Los otros dos quedan como **respaldo doméstico**, expuestos vía Cloudflare Tunnel
-         * como `wss` sobre el 443: el Mac (`nyx`) y el PC Windows (`nyx2`). Es
-         * infraestructura compartida (igual para todos los usuarios) y pública, no identidad
-         * de nadie. El bridge retira/escucha de TODOS los nodos (`MailboxFetch`,
-         * `StartWake`), así que la caída de cualquiera —incluido el VPS— no corta la
-         * entrega. Si cambia el PeerID de un nodo (p. ej. se pierde su `node.key`) o el
-         * dominio/IP, actualiza esta constante.
+         * primario. El bridge retira/escucha de TODOS los nodos (`MailboxFetch`,
+         * `StartWake`), así que la caída de uno no corta la entrega. Es infraestructura
+         * compartida (igual para todos los usuarios) y pública, no identidad de nadie.
+         *
+         * **Vacío a propósito hasta que exista el nodo de Nyx** (tarea 1.13 del plan). Un
+         * default vacío significa "solo LAN/mDNS" — ver [savedBootstrap] — que es el estado
+         * honesto mientras no haya a qué conectarse; para probar WAN antes de eso, se mete
+         * el multiaddr de un nodo local por el campo "Nodo WAN (bootstrap)" de Ajustes.
+         *
+         * Aquí estaban los tres nodos de **Krypta**. Se han quitado, no renombrado: el
+         * primario era `/ip4/216.128.169.83/...`, una IP literal que la sustitución de marca
+         * no toca, así que habría sobrevivido intacta y los móviles de Nyx se habrían
+         * conectado a la infraestructura de Krypta en producción. Al rellenarla con el nodo
+         * propio: multiaddr directo `/ip4/<IP>/tcp/4001/p2p/<PeerID>`, sin Cloudflare, y
+         * validado antes con las sondas `TestMailboxFetchAgainstLiveNode` /
+         * `TestWakeAgainstLiveNode`.
          */
-        const val DEFAULT_BOOTSTRAP =
-            "/ip4/216.128.169.83/tcp/4001/p2p/12D3KooWBwcbXveKDSf4LrH9DYnwMDAyagkzh2uPYZyWkeoVMuk5\n" +
-                "/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooWPTUUREfK1dqiEmppLy3ycyFxCvuCbK6s1TPqaQm2UBog\n" +
-                "/dns4/nyx2.neto.chat/tcp/443/wss/p2p/12D3KooWNGNzFsntPcabJ3DxmYKuXzSD6skeTaeepsnbntc6JTEm"
+        const val DEFAULT_BOOTSTRAP = ""
     }
 }
 

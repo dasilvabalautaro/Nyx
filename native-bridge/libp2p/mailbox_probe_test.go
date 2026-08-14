@@ -34,10 +34,10 @@ func TestMailboxPutAgainstLiveNode(t *testing.T) {
 
 // TestMailboxFetchAgainstLiveNode sondea el buzón de un nodo REAL (p. ej. el de infra en
 // producción, vía wss/Cloudflare): crea una identidad efímera y retira su buzón (vacío).
-// Si el nodo no expone /krypta/mbx/get/1.0.0 (binario viejo), falla con "protocols not
+// Si el nodo no expone /nyx/mbx/get/1.0.0 (binario viejo), falla con "protocols not
 // supported". Se auto-omite sin MBX_ADDR:
 //
-//	MBX_ADDR="/dns4/krypta.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestMailboxFetchAgainstLiveNode -v .
+//	MBX_ADDR="/dns4/nyx.neto.chat/tcp/443/wss/p2p/<PeerID>" go test -run TestMailboxFetchAgainstLiveNode -v .
 func TestMailboxFetchAgainstLiveNode(t *testing.T) {
 	addr := os.Getenv("MBX_ADDR")
 	if addr == "" {
@@ -57,7 +57,7 @@ func TestMailboxFetchAgainstLiveNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("el nodo no atiende el buzón: %v", err)
 	}
-	t.Logf("OK: el nodo habla /krypta/mbx/get/1.0.0 (buzón de identidad efímera: %d sobres)", got)
+	t.Logf("OK: el nodo habla /nyx/mbx/get/1.0.0 (buzón de identidad efímera: %d sobres)", got)
 }
 
 // TestMailboxRoundTripAgainstLiveNode cierra el ciclo completo contra un nodo REAL, que es

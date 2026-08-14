@@ -23,7 +23,7 @@ func (h *echoCallHandler) OnCallStream(s *CallStream) {
 	}()
 }
 
-// TestCallStreamEcho valida el stream de llamada (Fase 7b): A abre /krypta/call/1.0.0
+// TestCallStreamEcho valida el stream de llamada (Fase 7b): A abre /nyx/call/1.0.0
 // hacia B, manda frames binarios con framing uint16 y los recibe de vuelta intactos.
 func TestCallStreamEcho(t *testing.T) {
 	a, err := NewNode()

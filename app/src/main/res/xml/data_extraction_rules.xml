@@ -3,7 +3,7 @@
    Nyx desactiva ambas con allowBackup="false"; estas exclusiones son defensa en
    profundidad por si la bandera se reactivara. Ni la identidad Ed25519 (sharedpref) ni los
    mensajes (database) ni los adjuntos (file) deben salir del dispositivo por esta vía: la
-   migración soportada es la exportación .krbk, cifrada con la frase-clave del usuario.
+   migración soportada es la exportación .nybk, cifrada con la frase-clave del usuario.
 -->
 <data-extraction-rules>
     <cloud-backup>

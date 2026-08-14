@@ -1,13 +1,13 @@
 #!/bin/bash
-# Despliega/actualiza el nodo Krypta en un VPS Linux bajo systemd.
+# Despliega/actualiza el nodo Nyx en un VPS Linux bajo systemd.
 # Ejecútalo DESDE la Mac (no en el VPS), con el repo delante:
 #
-#   bash infra/node/deploy-vps.sh root@1.2.3.4            # amd64 (por defecto)
-#   bash infra/node/deploy-vps.sh usuario@mivps arm64     # VPS ARM (Ampere, Graviton…)
+#   bash infra/nyx-node/deploy-vps.sh root@1.2.3.4            # amd64 (por defecto)
+#   bash infra/nyx-node/deploy-vps.sh usuario@mivps arm64     # VPS ARM (Ampere, Graviton…)
 #
 # Requiere acceso SSH con sudo (o root). Qué hace:
-#   1. Sube el binario Linux de dist/ a /usr/local/bin/krypta-node
-#   2. Crea el usuario de sistema `krypta` y /var/lib/krypta (identidad + buzón)
+#   1. Sube el binario Linux de dist/ a /usr/local/bin/nyx-node
+#   2. Crea el usuario de sistema `nyx` y /var/lib/nyx (identidad + buzón)
 #   3. Instala/recarga la unidad systemd (Restart=always, arranca en el boot)
 #   4. Abre los puertos en ufw si está activo
 #   5. Imprime el PeerID y el multiaddr de bootstrap para pegar en la app
@@ -19,19 +19,19 @@ set -euo pipefail
 HOST="${1:-}"
 ARCH="${2:-amd64}"
 if [ -z "$HOST" ]; then
-  echo "uso: bash infra/node/deploy-vps.sh usuario@host [amd64|arm64]" >&2
+  echo "uso: bash infra/nyx-node/deploy-vps.sh usuario@host [amd64|arm64]" >&2
   exit 1
 fi
 
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN_SRC="$SRC_DIR/dist/krypta-node-linux-$ARCH"
-UNIT_SRC="$SRC_DIR/krypta-node.service"
+BIN_SRC="$SRC_DIR/dist/nyx-node-linux-$ARCH"
+UNIT_SRC="$SRC_DIR/nyx-node.service"
 
 echo "==> binario origen: $BIN_SRC"
 [ -f "$BIN_SRC" ] || {
   echo "ERROR: no existe $BIN_SRC. Compílalo con:"
   echo "  cd infra/node && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \\"
-  echo "    go1.22.12 build -o dist/krypta-node-linux-$ARCH ."
+  echo "    go1.22.12 build -o dist/nyx-node-linux-$ARCH ."
   exit 1
 }
 
@@ -39,36 +39,36 @@ echo "==> binario origen: $BIN_SRC"
 # `grep -a` sobre el fichero, sin tubería: `strings | grep -q` revienta con set -o pipefail
 # (grep cierra la tubería al primer acierto y strings muere con SIGPIPE).
 grep -a -q mailboxdir "$BIN_SRC"    || { echo "ERROR: binario sin buzón (-mailboxdir)"; exit 1; }
-grep -a -q "krypta/wake" "$BIN_SRC" || { echo "ERROR: binario sin wake (/krypta/wake)"; exit 1; }
+grep -a -q "nyx/wake" "$BIN_SRC" || { echo "ERROR: binario sin wake (/nyx/wake)"; exit 1; }
 grep -a -q quicport "$BIN_SRC"      || { echo "ERROR: binario sin -quicport (recompila dist/)"; exit 1; }
 
 echo "==> subiendo binario y unidad a $HOST"
-scp -q "$BIN_SRC" "$HOST:/tmp/krypta-node.new"
-scp -q "$UNIT_SRC" "$HOST:/tmp/krypta-node.service"
+scp -q "$BIN_SRC" "$HOST:/tmp/nyx-node.new"
+scp -q "$UNIT_SRC" "$HOST:/tmp/nyx-node.service"
 
 echo "==> instalando en el VPS (pide sudo)"
 ssh -t "$HOST" 'sudo bash -s' <<'REMOTE'
 set -euo pipefail
 
 # Usuario de sistema sin shell ni home: solo corre el proceso.
-if ! id krypta >/dev/null 2>&1; then
-  echo "  creando usuario de sistema krypta"
-  useradd --system --no-create-home --shell /usr/sbin/nologin krypta
+if ! id nyx >/dev/null 2>&1; then
+  echo "  creando usuario de sistema nyx"
+  useradd --system --no-create-home --shell /usr/sbin/nologin nyx
 fi
 
 # Para el servicio antes de reemplazar el binario en uso (si ya existía).
-systemctl stop krypta-node 2>/dev/null || true
+systemctl stop nyx-node 2>/dev/null || true
 
-install -m 0755 /tmp/krypta-node.new /usr/local/bin/krypta-node
-install -m 0644 /tmp/krypta-node.service /etc/systemd/system/krypta-node.service
-rm -f /tmp/krypta-node.new /tmp/krypta-node.service
+install -m 0755 /tmp/nyx-node.new /usr/local/bin/nyx-node
+install -m 0644 /tmp/nyx-node.service /etc/systemd/system/nyx-node.service
+rm -f /tmp/nyx-node.new /tmp/nyx-node.service
 
-mkdir -p /var/lib/krypta
-chown krypta:krypta /var/lib/krypta
-chmod 0700 /var/lib/krypta
+mkdir -p /var/lib/nyx
+chown nyx:nyx /var/lib/nyx
+chmod 0700 /var/lib/nyx
 
 systemctl daemon-reload
-systemctl enable --now krypta-node
+systemctl enable --now nyx-node
 
 # Firewall: TCP/UDP 4001 (libp2p) y 443 (wss, si pones Caddy/nginx delante).
 # El 8081 es ws EN CLARO: no se abre al exterior a propósito.
@@ -84,10 +84,10 @@ fi
 sleep 4
 echo
 echo "===== estado ====="
-systemctl is-active krypta-node && systemctl is-enabled krypta-node
+systemctl is-active nyx-node && systemctl is-enabled nyx-node
 echo
 echo "===== log (últimas líneas) ====="
-journalctl -u krypta-node -n 20 --no-pager
+journalctl -u nyx-node -n 20 --no-pager
 echo
 echo "===== ¿escucha? ====="
 (ss -lntup 2>/dev/null || netstat -lntup 2>/dev/null) | grep -E ":4001|:8081" || echo "(NADA escuchando — revisa el log)"

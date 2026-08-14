@@ -882,50 +882,61 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
 - [ ] 0.6 **Formulario Child Safety Standards** en Play Console (trámite aparte).
 
 ### 1. Rebrand mecánico
-- [ ] 1.0 **Primero de todo**: crear el repo de Nyx y repuntar `origin` (hoy apunta a
-      `dasilvabalautaro/Krypta`, en producción). Añadir Krypta como `upstream` de solo
-      lectura. `git remote -v` no debe permitir push a Krypta.
-- [ ] 1.1 Rama nueva, `git status` limpio.
-- [ ] 1.2 `git mv` de los 5 subárboles de paquete (`app` main/test/androidTest, `core`,
+- [~] 1.0 **Primero de todo**: hecha la mitad protectora — `origin` (que apuntaba a
+      `dasilvabalautaro/Krypta`, en producción) se renombró a `upstream` con
+      `--push no_push`, así que **no hay `origin` y un push a Krypta falla al resolver
+      la URL**. Falta lo que depende del autor: crear el repo de Nyx y
+      `git remote add origin <url>`.
+- [x] 1.1 Rama nueva, `git status` limpio.
+- [x] 1.2 `git mv` de los 5 subárboles de paquete (`app` main/test/androidTest, `core`,
       `data`, `native-bridge`, `p2p-signaling`) de `chat/neto/krypta` a `chat/neto/nyx`.
-- [ ] 1.3 Sustitución `Krypta`→`Nyx` / `krypta`→`nyx` sobre `.kt`/`.xml` en esos `src/`,
+- [x] 1.3 Sustitución `Krypta`→`Nyx` / `krypta`→`nyx` sobre `.kt`/`.xml` en esos `src/`,
       **excluyendo** el bloque de imports de `chat.neto.krypta.bridge.*` en
-      `Libp2pNode.kt` (se toca en 1.6). Tras el sed, `DEFAULT_BOOTSTRAP` queda con
-      hostnames nuevos y PeerID viejos: WAN caída hasta 1.13, es lo esperado.
-- [ ] 1.4 `settings.gradle.kts` → `rootProject.name = "Nyx"`.
-- [ ] 1.5 `app/build.gradle.kts` → `namespace`/`applicationId` = `chat.neto.nyx`,
+      `Libp2pNode.kt` (se toca en 1.6). **Corregido al ejecutarlo**: la previsión de que
+      `DEFAULT_BOOTSTRAP` quedaría con hostnames nuevos y PeerID viejos se quedó corta —
+      su primera línea era `/ip4/216.128.169.83/...`, la **IP literal del VPS de Krypta**,
+      que ninguna sustitución de marca toca, así que habría sobrevivido intacta y los
+      móviles de Nyx se habrían conectado a producción de Krypta. Se dejó la constante
+      **vacía** (= solo LAN, comportamiento ya soportado por `savedBootstrap`) hasta 1.13.
+- [x] 1.4 `settings.gradle.kts` → `rootProject.name = "Nyx"`.
+- [x] 1.5 `app/build.gradle.kts` → `namespace`/`applicationId` = `chat.neto.nyx`,
       `versionCode = 1`, `versionName = "1.0"` (sin tocar `compileSdk`/`minSdk`/
       `targetSdk`/`ndkVersion`/`libs.versions.toml`); namespaces de `core`/`data`/
       `native-bridge`/`p2p-signaling`.
-- [ ] 1.6 `native-bridge/libp2p/bridge.go`: renombrar protocol IDs (`msg`, `call`,
+- [x] 1.6 `native-bridge/libp2p/bridge.go`: renombrar protocol IDs (`msg`, `call`,
       `video`, `mailbox put/get`, `wake`), context tags y los strings de
       `discovery_test.go`; `build-aar.sh:31` → `-javapkg=chat.neto.nyx`, artefacto
       `nyx-p2p.aar`; regenerar AAR; actualizar el import excluido en 1.3 **y**
       `native-bridge/build.gradle.kts:34` (+ sus dos comentarios);
       `proguard-rules.pro:8` → keep rule nueva; smoke-test `nativePing()`.
-- [ ] 1.7 `git mv infra/node infra/nyx-node` + mismos renombrados de protocol ID en
+- [x] 1.7 `git mv infra/node infra/nyx-node` + mismos renombrados de protocol ID en
       `main.go:36`/`mailbox.go:39-40`/`wake.go:27`, verificados carácter a carácter
       contra `bridge.go`; actualizar las rutas `/infra/node/…` del `.gitignore`.
-- [ ] 1.7b `git rm -r infra/fdroid-repo` — limpieza de herramienta heredada de Krypta, no
+- [x] 1.7b `git rm -r infra/fdroid-repo` — limpieza de herramienta heredada de Krypta, no
       decisión de canal: Nyx se distribuye solo por Play (decisión 8). Sigue viva en el
       repo de Krypta.
-- [ ] 1.8 Separadores de dominio HKDF en `:p2p-signaling` (`SafetyNumber.DOMAIN`,
+- [x] 1.8 Separadores de dominio HKDF en `:p2p-signaling` (`SafetyNumber.DOMAIN`,
       `AesGcmMessageCipher` info, `RendezvousService` info, `CallService.CALL_KEY_SALT`)
       → `nyx-*`; actualizar tests con vectores hardcodeados.
-- [ ] 1.9 Identificadores de almacenamiento: SharedPreferences (`krypta_settings`,
+- [x] 1.9 Identificadores de almacenamiento: SharedPreferences (`krypta_settings`,
       `krypta_identity`), Room DB (`krypta.db`), directorio de adjuntos
       (`krypta_files`, + `file_paths.xml`) → `nyx_*`.
-- [ ] 1.10 Manifest, `CallActionReceiver`, `KryptaNotifications.kt`→
+- [x] 1.10 Manifest, `CallActionReceiver`, `KryptaNotifications.kt`→
       `NyxNotifications.kt` (canales nuevos en v1), esquema QR, tags de wake-lock/hilo,
       renombrar archivos `Krypta*.kt`→`Nyx*.kt`.
       `DEFAULT_BOOTSTRAP` se deja para el final (depende de 1.12).
-- [ ] 1.10b Respaldo de identidad: magic `"KRBK1"`→`"NYXB1"` (`IdentityBackup.kt:106`,
+- [x] 1.10b Respaldo de identidad: magic `"KRBK1"`→`"NYXB1"` (`IdentityBackup.kt:106`,
       es AAD), extensión `.krbk`→`.nybk`, nombre por defecto, menciones en
       `AndroidManifest.xml:42`/`backup_rules.xml`/`data_extraction_rules.xml`, y
       actualizar `IdentityBackupTest`.
-- [ ] 1.10c Keystore propio (`~/keystores/nyx/nyx.jks`), `keystore.properties` y el
-      comentario del `.gitignore` apuntando ahí; verificar que `assembleRelease` firma.
-- [ ] 1.11 (cubierto por 1.7 — el rename de `infra/node`, no una copia).
+- [~] 1.10c Keystore propio. El comentario del `.gitignore` ya apunta a
+      `~/keystores/nyx/nyx.jks`, pero **`keystore.properties` sigue apuntando al keystore
+      de Krypta y se ha dejado intacto a propósito**: contiene contraseñas del autor y
+      crear el `.jks` nuevo exige elegir una contraseña, así que es acción suya. Mientras
+      tanto, un `assembleRelease` desde este árbol **firmaría Nyx con la clave de
+      Krypta** — no romperlo, pero acopla los dos productos en Play App Signing. Hacerlo
+      antes del primer release; no bloquea nada de la Fase 1.
+- [x] 1.11 (cubierto por 1.7 — el rename de `infra/node`, no una copia).
 - [ ] 1.12 ⚠️ **Depende de una acción externa del autor: contratar el VPS.** Al llegar
       aquí hay que parar y avisarle; nada de esta tarea se puede adelantar sin la caja.
       Lo anterior (1.0–1.11, 1.15, 1.15b con nodo local) no depende de ella.
@@ -939,16 +950,24 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
 - [ ] 1.13 Actualizar `DEFAULT_BOOTSTRAP` en `Libp2pNode.kt`: **una sola línea**, el
       multiaddr directo del nodo propio de 1.12 (sin Cloudflare), manteniendo el formato
       de lista para el segundo nodo futuro.
-- [ ] 1.14 Verificación: cero `krypta` en `*.kt`/`*.xml`/`*.go`/`*.kts`/`*.pro`/`*.sh`/
+- [x] 1.14 Verificación: cero `krypta` en `*.kt`/`*.xml`/`*.go`/`*.kts`/`*.pro`/`*.sh`/
       `*.plist`/`*.service`/`*.json` (excluyendo `build/`, `.git/`, `.gradle/`); las
       únicas menciones restantes son las históricas de `CLAUDE.md`/`docs/`.
-- [ ] 1.15 `./gradlew clean :app:assembleDebug` + `./gradlew testDebugUnitTest` verdes.
-- [ ] 1.15b Smoke test funcional **contra un nodo local** (`go run .` + `adb reverse` +
-      bootstrap por el campo de Ajustes): host arranca, DHT conecta, buzón entrega — sin
-      depender de 1.12/1.13.
+- [x] 1.15 `./gradlew clean :app:assembleDebug` + `./gradlew testDebugUnitTest` verdes.
+- [x] 1.15b Smoke test funcional **contra un nodo local**, hecho en el TECNO el 14 ago:
+      nodo `infra/nyx-node` en `tcp/4101` + `adb reverse` + bootstrap escrito en
+      `nyx_settings.xml` con `run-as`. Nyx se instaló **junto a** Krypta (applicationId
+      distinto, Krypta intacta), generó identidad Ed25519 propia y el estado WAN pasó a
+      "conectado". Verificado por falsación además de por observación: al matar el nodo
+      el estado cayó a "sin conexión" (~195 s, un ciclo completo de `wanLoop`) y al
+      revivirlo volvió a "conectado" — o sea que el estado seguía de verdad a este nodo y
+      no era un residuo. Prueba de que el AAR nuevo y los protocol IDs `/nyx/*` casan
+      extremo a extremo.
 - [ ] 1.16 Prueba en vivo de emparejamiento/mensaje entre dos dispositivos contra el
       nuevo nodo desplegado.
-- [ ] 1.17 Cerrar con entrada en `CLAUDE.md` documentando el rebrand completo.
+- [x] 1.17 Entrada en `CLAUDE.md`: recuadro de cabecera con qué cambió el rebrand, que
+      Krypta sigue viva, por qué `DEFAULT_BOOTSTRAP` está vacío, el estado de los remotos
+      y el aviso de que el resto del archivo aún describe Krypta (pase completo en 6.1).
 
 ### 2. Modelo de datos
 - [ ] 2.1 `MyProfilePrefs.kt` (SharedPreferences): `nickname`, `ageMin`/`ageMax`,

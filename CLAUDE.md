@@ -2,6 +2,38 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> ## ⚠️ This repo is **Nyx** now, not Krypta (14 Aug 2026)
+>
+> **Phase 1 of [docs/PLAN-NYX.md](docs/PLAN-NYX.md) is done**: this repository was forked from
+> Krypta and rebranded to **Nyx**, an 18+ dating/relationships app that keeps Krypta's entire
+> security and transport stack. **Krypta is not dead and is not superseded** — it stays in
+> production and in development in its own repo; Nyx is a sibling project with its own
+> resources. Read [docs/PLAN-NYX.md](docs/PLAN-NYX.md) and
+> [docs/NYX-POLITICA-CONTENIDO.md](docs/NYX-POLITICA-CONTENIDO.md) before working here.
+>
+> **What the rebrand changed** — package `chat.neto.krypta` → `chat.neto.nyx` across all 5
+> modules; `applicationId` `chat.neto.nyx` (so Nyx installs *alongside* Krypta, verified on the
+> TECNO), `versionCode` 1 / `versionName` 1.0; libp2p protocol IDs `/krypta/*` → `/nyx/*` in
+> both `bridge.go` and the node — **the two networks cannot talk to each other, by design**;
+> AAR is now `libs/nyx-p2p.aar` with `-javapkg=chat.neto.nyx` (page alignment re-verified at
+> `0x4000`); HKDF domain separators `krypta-*` → `nyx-*`; storage ids `nyx_settings` /
+> `nyx_identity` / `nyx.db` / `nyx_files`; identity-backup magic `KRBK1` → `NYXB1` (it is the
+> GCM **AAD**) and extension `.krbk` → `.nybk`; `infra/node` → `infra/nyx-node`;
+> `infra/fdroid-repo` deleted (Nyx ships **only** through Play).
+>
+> **`DEFAULT_BOOTSTRAP` is deliberately empty** (= LAN-only) until Nyx's own node exists. It
+> held Krypta's VPS as a raw `/ip4/216.128.169.83/...` literal, which no brand substitution
+> touches — left alone, Nyx phones would have joined Krypta's production infrastructure.
+>
+> **Git remotes**: there is no `origin`. Krypta is wired as `upstream` with
+> `--push no_push`, so a push to Krypta fails by construction. Fixes made in Krypta that Nyx
+> also needs are ported with the patch-rewriting procedure in the plan's "Relación con Krypta
+> a largo plazo" section — the two repos share history.
+>
+> **Everything below this box still describes Krypta** and has not been rewritten yet; the
+> full pass is task 6.1 of the plan. Treat it as accurate about *how the machinery works* and
+> stale about *names, paths and product framing*.
+
 ## What Krypta is
 
 Krypta is a **WAN, decentralized, E2EE P2P messenger for Android** (Kotlin + Jetpack
@@ -800,3 +832,10 @@ result there instead of blocking on the live test; move items to its "ya verific
 once confirmed. **Deploy routine:** keep the author's phone on the latest build
 (`:app:installDebug`) and refresh `~/Desktop/krypta-arm64-debug.apk`
 (`:app:assembleDebug -PslimAbi` + copy) after any code change, so the author can share it.
+
+**User/technical manual:** [docs/MANUAL.md](docs/MANUAL.md) (Spanish) is the end-user-facing
+manual + WhatsApp/Signal comparison + Play Store requirements checklist — a different
+audience than this file. It self-declares a snapshot date and defers to this file and
+[docs/architecture.md](docs/architecture.md) for the latest state, so it doesn't need
+updating on every change, but revise it when user-facing behavior or the Play Store section
+goes stale.

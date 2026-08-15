@@ -13,10 +13,13 @@ local.properties
 
 # --- Secretos ---
 # Credenciales de firma de release. El keystore vive fuera del repo
-# (~/keystores/nyx/nyx.jks); ver hasReleaseKeystore en app/build.gradle.kts.
+# (~/keys/keys_apk/nyx.jks); ver hasReleaseKeystore en app/build.gradle.kts.
 /keystore.properties
 *.jks
 *.keystore
+# Notas de credenciales del autor (usuario/contraseña de git). No deberían estar
+# en el árbol del repo, pero mientras lo estén, que un `git add -A` no las suba.
+/keys-git.md
 
 # --- Artefactos de compilación fuera de build/ ---
 # APK/AAB de release que Android Studio deja en app/release/.

@@ -395,10 +395,36 @@ class ChatService @Inject constructor(
                     logLine("buzón: $msg")
                 }
             }
+        fetchLikes()
+    }
+
+    /**
+     * Retira los "me gusta" pendientes, por su camino propio (cuota separada del buzón). Va
+     * pegado al fetch del buzón porque el disparador es el mismo —wake, ciclo del wanLoop,
+     * latido— y el nodo avisa igual de un like que de un mensaje.
+     *
+     * **Nunca puede tumbar la recogida de mensajes**, de ahí el `runCatching` propio: hasta que
+     * el nodo de producción no se redespliegue con `like.go`, esta llamada falla en cada ciclo
+     * ("protocol not supported"), y eso no debe tocar la mensajería ni llenar el diagnóstico.
+     */
+    private suspend fun fetchLikes() {
+        runCatching { signaling.fetchLikes() }
+            .onSuccess { n ->
+                lastLikeError = null
+                if (n > 0) logLine("likes: $n recogido(s)")
+            }
+            .onFailure {
+                val msg = it.message?.take(80) ?: it.toString()
+                if (msg != lastLikeError) {
+                    lastLikeError = msg
+                    logLine("likes: $msg")
+                }
+            }
     }
 
     @Volatile
     private var lastMailboxError: String? = null
+    private var lastLikeError: String? = null
 
     /**
      * Cifra [plaintext] para [contact], lo persiste (PENDING) y lo envía. Si el envío
@@ -839,8 +865,10 @@ class ChatService @Inject constructor(
                 MessageContent.File(d.name, d.mime, d.size, d.path)
             is MessageEnvelope.Decoded.Read -> MessageContent.Text("")
             is MessageEnvelope.Decoded.FileMeta, is MessageEnvelope.Decoded.FileChunk,
-            is MessageEnvelope.Decoded.Call ->
+            is MessageEnvelope.Decoded.Call, is MessageEnvelope.Decoded.Like ->
                 MessageContent.Text("") // no deberían persistirse como Message
+            // Un `Like` además nunca llega por aquí: viaja por su propio camino y lo procesa
+            // LikeService, que no crea `Message`. Está en la rama por exhaustividad.
             null -> MessageContent.Text(String(plain)) // legado
         }
     }

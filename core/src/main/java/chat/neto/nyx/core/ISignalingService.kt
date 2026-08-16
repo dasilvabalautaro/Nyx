@@ -48,6 +48,38 @@ interface ISignalingService {
         processor: suspend (fromPeerId: String, ciphertext: ByteArray, envelopeId: String, timestamp: Long) -> Boolean,
     )
 
+    // --- Tablón de perfiles y "me gusta" (Fase 3) ---------------------------------------
+    //
+    // El tablón es el opuesto exacto del buzón en cuanto a confidencialidad: la tarjeta va
+    // EN CLARO porque ser descubrible es el punto. Los "me gusta", en cambio, sí van cifrados
+    // y además por un camino **con cuota propia**, separada de la del buzón — si la
+    // compartieran, inundar de likes a alguien le bloquearía la entrega de sus mensajes.
+
+    /** Publica (o actualiza) mi tarjeta en [category]. El nodo fija el autor desde el stream. */
+    suspend fun publishCard(category: String, card: ByteArray)
+
+    /** Tarjetas de [category] en JSON (`[{"peer","ts","card"},…]`, `card` en base64). */
+    suspend fun queryBoard(category: String, limit: Int): String
+
+    /**
+     * Quita mi tarjeta de [category] (vacía = de todas). **Lanza si falla en algún nodo**: un
+     * éxito parcial deja el perfil visible donde falló, y eso el usuario tiene que saberlo.
+     */
+    suspend fun deleteCard(category: String)
+
+    /** Deposita un "me gusta" ya cifrado para [toPeerId] (camino propio, cuota propia). */
+    suspend fun sendLike(toPeerId: String, ciphertext: ByteArray)
+
+    /** Retira los "me gusta" pendientes. Devuelve cuántos confirmó el procesador. */
+    suspend fun fetchLikes(): Int
+
+    /**
+     * Procesador síncrono de "me gusta" entrantes: (PeerID emisor, ciphertext, hora) →
+     * `true` solo si quedó persistido. Mismo contrato ack-tras-persistir que el buzón, y por
+     * el mismo motivo: un like perdido es un match que nunca llega a formarse.
+     */
+    fun setLikeProcessor(processor: suspend (fromPeerId: String, ciphertext: ByteArray, timestamp: Long) -> Boolean)
+
     /**
      * Mantiene el stream ligero de wake al nodo: cada aviso de buzón (o reconexión) se
      * emite como [SignalingEvent.WakeReceived]. Idempotente.

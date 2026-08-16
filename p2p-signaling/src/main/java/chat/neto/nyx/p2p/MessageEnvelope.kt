@@ -14,6 +14,7 @@ package chat.neto.nyx.p2p
  *   FDESC: "D\n<size>\n<mime>\n<path>\n<name>"  (descriptor LOCAL del archivo; nunca se envía)
  *   CALL:  "C\n<kind>\n<callId>\n<ts>"  (señalización de llamada: invite/accept/reject/
  *          hangup/busy; ts = unix millis del emisor, para descartar invites rancios)
+ *   LIKE:  "L\n<ts>"                        ("me gusta" del tablón; ts = unix millis)
  *
  * Decodificar tolera bytes sin sobre (mensajes previos a esta versión) devolviendo null, para
  * que la capa superior los trate como texto legado.
@@ -42,6 +43,14 @@ object MessageEnvelope {
         ) : Decoded
         /** Señal de llamada: [kind] ∈ invite/accept/reject/hangup/busy, [ts] = unix millis. */
         data class Call(val kind: String, val callId: String, val ts: Long) : Decoded
+
+        /**
+         * "Me gusta" desde el tablón. No lleva id ni cuerpo a propósito: **quién** lo manda ya
+         * lo dice la identidad del stream/sobre (el nodo la fija y no es suplantable), y el
+         * contenido sobra — un like es el hecho de que llegue. Cuanto menos lleve, menos
+         * superficie tiene el único sobre que se acepta de peers desconocidos.
+         */
+        data class Like(val ts: Long) : Decoded
     }
 
     fun encodeText(id: String, body: ByteArray): ByteArray =
@@ -64,6 +73,8 @@ object MessageEnvelope {
 
     fun encodeCall(kind: String, callId: String, ts: Long): ByteArray =
         "C\n$kind\n$callId\n$ts".toByteArray(Charsets.UTF_8)
+
+    fun encodeLike(ts: Long): ByteArray = "L\n$ts".toByteArray(Charsets.UTF_8)
 
     fun decode(bytes: ByteArray): Decoded? {
         if (bytes.size < 2 || bytes[1] != NL) return null
@@ -99,6 +110,12 @@ object MessageEnvelope {
                 val ts = parts[2].toLongOrNull() ?: return null
                 if (parts[0].isBlank() || parts[1].isBlank()) return null
                 Decoded.Call(parts[0], parts[1], ts)
+            }
+            'L' -> {
+                // L\n<ts>
+                val ts = String(bytes, 2, bytes.size - 2, Charsets.UTF_8).trim().toLongOrNull()
+                    ?: return null
+                Decoded.Like(ts)
             }
             'D' -> {
                 // D\n<size>\n<mime>\n<path>\n<name>

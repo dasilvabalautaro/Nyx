@@ -1112,35 +1112,80 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       al wake. Sin esta migración, Room habría lanzado al arrancar y la única salida habría
       sido desinstalar, que borra la identidad Ed25519.
 
-### 3. Tablón + Like (Go/bridge)
-- [ ] 3.1 `infra/nyx-node/board.go`: protocolos publish/query/**delete**, almacenamiento
-      `boarddir/<categoría>/<peerId>.json` (sobreescribe, no append-only), TTL
-      ajustable (`-boardttl`, default 48h), cuota por categoría, **tope de tamaño de
-      tarjeta** (`-boardmaxcard`, sugerido 96 KiB).
-- [ ] 3.2 Wiring en `main.go` (igual que el buzón).
-- [ ] 3.3 Test Go `TestBoardPublishQuery` (mismo patrón que
-      `TestMailboxStoreAndForward`).
-- [ ] 3.4 `DiscoveryTopic` (Kotlin, `:p2p-signaling`): `HKDF("nyx-discover-v1", categoría)`.
-- [ ] 3.5 `bridge.go`: `PublishCard`/`QueryBoard` expuestas a gomobile; regenerar AAR.
-- [ ] 3.6 `Libp2pNode.kt`: `publishCard`/`queryBoard` suspend.
-- [ ] 3.7 `MessageEnvelope.kt`: nuevo prefijo `L` (`"L\n<ts>"`) + `encodeLike`/decode.
-- [ ] 3.8 `LikeService.kt` (`:p2p-signaling`): `sendLike(peerId)`, punto de entrada
-      propio para envelopes `L` que intenta descifrar con `keyExchange.sharedSecretWith`
-      aunque el peer no sea contacto todavía; persiste en `LikeEntity`; dispara
-      transición de match mutuo.
-- [ ] 3.9 Rate-limit por PeerID no-contacto en `LikeService`, **antes** de derivar el
-      secreto X25519 (que es la parte cara), con caché del secreto por peer.
-- [ ] 3.9b Bucket de cuota propio para Likes en el nodo (`/nyx/like/put/1.0.0`,
-      sobreescribe por emisor), para que un abusador no pueda llenar la cuota del buzón
-      de mensajes de su víctima con likes.
-- [ ] 3.10 Tests: like unidireccional no desbloquea, like mutuo dispara match,
-      rate-limit efectivo, cuota de likes no consume la del buzón.
-- [ ] 3.12 Borrar tarjeta del tablón desde la app (no esperar al TTL).
+### 3. Tablón + Like (Go/bridge) — **núcleo cerrado el 16 ago 2026** (falta UI, que es Fase 4)
+- [x] 3.1 `infra/nyx-node/board.go`: `/nyx/board/{publish,query,delete}/1.0.0`, almacenamiento
+      `boarddir/<categoría>/<peerId>.json` (sobreescribe, no append-only), `-boardttl`
+      (48h), `-boardmaxcard` (96 KiB), cuota por categoría (5000).
+      Dos propiedades salen gratis de libp2p y sostienen el diseño: el **autor** lo fija el
+      nodo desde la identidad del stream (no se puede publicar en nombre de otro), y por eso
+      mismo **`delete` solo puede borrar lo tuyo** — la ruta se construye con el PeerID
+      autenticado, nunca con uno que venga en la petición. La categoría se valida contra
+      `^[a-z0-9_-]{1,32}$` porque **es un nombre de directorio**: sin eso, `../../` sería una
+      vía de escape del boarddir. El TTL se aplica **al leer** además de en el barrido, para
+      que sea una garantía y no "lo que quede tras el próximo sweep".
+- [x] 3.2 Wiring en `main.go`, con flags y una línea de arranque que imprime tablón y likes
+      (mismo criterio que los topes del relay: diagnosticar una caja sin leerle el código).
+      El wake también se dispara con un like — si no, un match tardaría hasta 180 s en notarse.
+- [x] 3.3 Tests Go del nodo (7 de tablón + 8 de likes): ciclo publicar/consultar, una tarjeta
+      por autor que se sobreescribe, borrado inmediato y **que un peer no puede borrar la
+      tarjeta de otro**, TTL + barrido, topes de tamaño y de categoría, saneado de categoría.
+- [x] 3.4 `DiscoveryTopic` (`:p2p-signaling`): `HKDF("nyx-discover-v1", categoría)`.
+      Hermano de `RendezvousService`, **no** una extensión, y la diferencia es de modelo de
+      confianza: el rendezvous sale de un secreto compartido y por eso no es enumerable; este
+      tema es **público a propósito**, porque es el punto de encuentro de quien quiere ser
+      descubierto. El HKDF no aporta secreto: da clave de tamaño fijo a partir de texto
+      arbitrario y **separa el espacio de nombres**, para que un tema del tablón no pueda
+      colisionar con un rendezvous privado (si colisionaran, el tablón filtraría con quién
+      hablas — hay test).
+- [x] 3.5 `bridge.go`: `PublishCard`/`QueryBoard`/`DeleteCard`/`LikePut`/`LikeFetch` +
+      `LikeHandler`, AAR regenerado (alineación 16 KB re-verificada a `0x4000` en las 4 ABIs).
+      **Política multi-nodo distinta por operación, a propósito**: publicar va al primero que
+      acepte (basta un nodo para ser descubrible); consultar drena **todos** y fusiona por
+      autor quedándose con la más reciente (si no, vista parcial cuando cada nodo tiene un
+      trozo); y **borrar va a todos y devuelve error aunque falle uno solo** — un éxito
+      parcial deja el perfil público en el nodo que falló, y el usuario tiene que enterarse.
+- [x] 3.6 `Libp2pNode.kt` + `ISignalingService` + `SignalingService`: `publishCard`,
+      `queryBoard`, `deleteCard`, `sendLike`, `fetchLikes`, `setLikeProcessor`.
+- [x] 3.7 `MessageEnvelope`: prefijo `L` (`"L\n<ts>"`). **Sin id ni cuerpo a propósito**:
+      quién lo manda ya lo dice la identidad del sobre, y un like es el hecho de que llegue.
+      Es el único sobre que se acepta de desconocidos, así que cuanta menos superficie, mejor.
+- [x] 3.8 `LikeService.kt`: `sendLike(peerId)` y punto de entrada propio para sobres `L` que
+      deriva el secreto al vuelo con `keyExchange.sharedSecretWith`, sin necesitar `Contact`.
+      **Qué autentica un like**: no hace falta firma — el secreto sale del ECDH contra la
+      clave pública embebida en el PeerID del emisor, así que un tag GCM válido demuestra que
+      lo cifró quien posee esa privada. Un tag inválido se descarta en silencio.
+      Contrato de ack afinado: se confirma también lo **descartado definitivamente** (peer
+      bloqueado, tag roto, rate-limit) para que el nodo lo borre; solo un fallo **transitorio**
+      de persistencia devuelve false y provoca reentrega. Sin eso, un sobre roto sería un
+      bucle envenenado que el nodo repite en cada fetch.
+- [x] 3.9 Rate-limit por PeerID emisor (5/hora), **antes** de derivar el X25519 —que es la
+      parte cara, no el AES-GCM— y caché LRU del secreto por peer. El test lo comprueba
+      contando derivaciones, no solo rechazos: verifica *dónde* se corta, no solo que se corte.
+      El propio limitador tiene techo de claves (4096): si no, el anti-abuso sería la fuga de
+      memoria que un atacante con muchas identidades provocaría.
+- [x] 3.9b `infra/nyx-node/like.go`: `/nyx/like/{put,get}/1.0.0` con **directorio y cuota
+      propios**. Es el riesgo más grave que señalaba el plan y está cubierto con un test que
+      lo dice explícitamente (`TestLikeQuotaDoesNotStarveMailbox`): se agota la bandeja de
+      likes de una víctima y se comprueba que su **buzón de mensajes sigue aceptando**. Y la
+      clave de almacenamiento es `<to>/<from>.json`, o sea **un like vivo por emisor**:
+      insistir sobreescribe, así que el coste que puede imponer un abusador no crece con el
+      número de intentos sino con el de identidades que se moleste en crear.
+- [x] 3.10 Tests: 11 de `LikeService` + 4 de `RateLimiter` + 5 de `DiscoveryTopic` + 6 del
+      puente + 15 del nodo. Cubren like unidireccional que **no** desbloquea mensajería, like
+      mutuo que cierra match, rate-limit efectivo y en el sitio correcto, caché de secretos,
+      cuota de likes que no toca la del buzón, reentrega si la persistencia falla, y sobres
+      de peers bloqueados o con tag roto.
+- [ ] 3.12 Borrar tarjeta del tablón desde la app (no esperar al TTL). *El protocolo y
+      `deleteCard` están hechos y probados (3.1/3.5/3.6); falta el botón, que es Fase 4.*
 - [ ] 3.13 `/nyx/report/1.0.0` en el nodo (sobre cifrado a la clave del operador, cuota +
       TTL) + expulsión de un PeerID del tablón. Es trabajo de nodo y sube aquí desde la
       Fase 4 porque, con canal único en Play, el reporte con destino real es requisito de
       publicación, no una mejora.
-- [ ] 3.11 Cerrar con entrada en `CLAUDE.md`.
+- [x] 3.11 Cerrar con entrada en `CLAUDE.md`.
+- [ ] 3.14 **Redesplegar el nodo** con `board.go`/`like.go` (y los topes del relay de 1.12c).
+      Hasta entonces `fetchLikes()` falla en cada ciclo del `wanLoop` contra producción — está
+      envuelto en su propio `runCatching` para que no toque la mensajería, y solo loguea al
+      cambiar el error. Va junto con PRUEBAS-PENDIENTES §14.
 
 ### 3b. Motor de avatar
 - [ ] 3b.1 Definir/confirmar criterios de evaluación de la Alternativa A (calidad,

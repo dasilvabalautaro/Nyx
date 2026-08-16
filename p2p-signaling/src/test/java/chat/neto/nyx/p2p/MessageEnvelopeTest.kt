@@ -83,6 +83,16 @@ class MessageEnvelopeTest {
     }
 
     @Test
+    fun `like round-trips its timestamp and nothing else`() {
+        val decoded = MessageEnvelope.decode(MessageEnvelope.encodeLike(1_720_000_000_000))
+        assertEquals(1_720_000_000_000, (decoded as MessageEnvelope.Decoded.Like).ts)
+        // El sobre `L` es el único que se acepta de peers desconocidos, así que su superficie
+        // se mantiene mínima a propósito: nada más que el ts, y lo malformado cae a null.
+        assertNull(MessageEnvelope.decode("L\n".toByteArray()))
+        assertNull(MessageEnvelope.decode("L\nno-es-un-numero".toByteArray()))
+    }
+
+    @Test
     fun `decode returns null for non-enveloped (legacy) bytes`() {
         assertNull(MessageEnvelope.decode("mensaje viejo sin sobre".toByteArray()))
         assertNull(MessageEnvelope.decode(ByteArray(0)))

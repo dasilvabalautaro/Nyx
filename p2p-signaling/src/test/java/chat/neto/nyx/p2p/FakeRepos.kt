@@ -26,12 +26,18 @@ internal class FakeBlocks(blocked: Set<String> = emptySet()) : BlockRepository {
 /** Usa la máquina de estados real, para que los tests ejerciten la lógica de match de verdad. */
 internal class FakeLikes : LikeRepository {
     val store = mutableMapOf<String, Like>()
+    /** Simula un fallo transitorio de Room al persistir (disco lleno, etc.). */
+    var failOnWrite = false
     override fun observeAll() = flowOf(store.values.toList())
     override fun observeMatches() = flowOf(store.values.filter { it.isMatch })
     override suspend fun find(peerId: String) = store[peerId]
-    override suspend fun recordSent(peerId: String, source: LikeSource, now: Long) =
-        LikeState.applySent(store[peerId], peerId, source, now).also { store[peerId] = it }
-    override suspend fun recordReceived(peerId: String, source: LikeSource, now: Long) =
-        LikeState.applyReceived(store[peerId], peerId, source, now).also { store[peerId] = it }
+    override suspend fun recordSent(peerId: String, source: LikeSource, now: Long): Like {
+        if (failOnWrite) error("Room: disco lleno")
+        return LikeState.applySent(store[peerId], peerId, source, now).also { store[peerId] = it }
+    }
+    override suspend fun recordReceived(peerId: String, source: LikeSource, now: Long): Like {
+        if (failOnWrite) error("Room: disco lleno")
+        return LikeState.applyReceived(store[peerId], peerId, source, now).also { store[peerId] = it }
+    }
     override suspend fun delete(peerId: String) { store.remove(peerId) }
 }

@@ -123,6 +123,29 @@ class SignalingService @Inject constructor(
 
     override suspend fun fetchMailbox(): Int = node.mailboxFetch().toInt()
 
+    override suspend fun publishCard(category: String, card: ByteArray) =
+        node.publishCard(category, card)
+
+    override suspend fun queryBoard(category: String, limit: Int): String =
+        node.queryBoard(category, limit)
+
+    override suspend fun deleteCard(category: String) = node.deleteCard(category)
+
+    override suspend fun sendLike(toPeerId: String, ciphertext: ByteArray) =
+        node.likePut(toPeerId, ciphertext)
+
+    override suspend fun fetchLikes(): Int = node.likeFetch().toInt()
+
+    override fun setLikeProcessor(
+        processor: suspend (fromPeerId: String, ciphertext: ByteArray, timestamp: Long) -> Boolean,
+    ) {
+        // Igual que el del buzón: el callback llega en un hilo de Go dentro de LikeFetch y
+        // bloquearlo hasta persistir es justo lo que retrasa el ack.
+        node.likeProcessor = { from, ts, data ->
+            kotlinx.coroutines.runBlocking { processor(from, data, ts) }
+        }
+    }
+
     override suspend fun startWake() = node.startWake()
 
     override suspend fun stopWake() = node.stopWake()

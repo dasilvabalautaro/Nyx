@@ -46,6 +46,10 @@ func main() {
 	// que ser estable entre reinicios para poder publicarlo en DEFAULT_BOOTSTRAP.
 	quicPortFlag := flag.String("quicport", "0", "UDP port for QUIC (0 = ephemeral; set it on a public-IP node)")
 	mailboxDir := flag.String("mailboxdir", "", "E2EE store-and-forward mailbox dir (default: <key dir>/mailbox)")
+	boardDir := flag.String("boarddir", "", "tablón de tarjetas de perfil (default: <key dir>/board)")
+	boardTTL := flag.Duration("boardttl", boardDefaultTTL, "cuánto vive una tarjeta del tablón")
+	boardMaxCard := flag.Int("boardmaxcard", boardDefaultMaxCard, "tamaño máximo de una tarjeta, en bytes")
+	likeDir := flag.String("likedir", "", "bandeja de likes, con cuota propia (default: <key dir>/likes)")
 	// Topes del relay (ver relay.go). Ajustables sin recompilar porque son la palanca que
 	// se toca si el gasto de la caja se dispara o si una llamada larga se corta.
 	relayDataMiB := flag.Int64("relaydata", relayDataPerDirection>>20, "relay: MiB reenviados por dirección y circuito antes de cortarlo")
@@ -113,10 +117,48 @@ func main() {
 		}
 	}()
 
-	// Wake integrado: un depósito en el buzón avisa al instante al destinatario suscrito.
+	// Tablón de tarjetas de perfil (ver board.go). A diferencia del buzón, el contenido va en
+	// claro: ser descubrible es el punto.
+	brdDir := *boardDir
+	if brdDir == "" {
+		brdDir = filepath.Join(filepath.Dir(*keyPath), "board")
+	}
+	if err := os.MkdirAll(brdDir, 0o700); err != nil {
+		log.Fatalf("board dir: %v", err)
+	}
+	brd := newBoard(brdDir)
+	brd.ttl = *boardTTL
+	brd.maxCard = *boardMaxCard
+	brd.attach(h)
+
+	// Bandeja de "me gusta" (ver like.go). Directorio y cuota **propios**, separados del
+	// buzón: si compartieran cuota, inundar de likes a alguien le bloquearía la entrega de
+	// sus mensajes reales.
+	lkDir := *likeDir
+	if lkDir == "" {
+		lkDir = filepath.Join(filepath.Dir(*keyPath), "likes")
+	}
+	if err := os.MkdirAll(lkDir, 0o700); err != nil {
+		log.Fatalf("like dir: %v", err)
+	}
+	likes := newLikebox(lkDir)
+	likes.attach(h)
+
+	go func() {
+		for {
+			brd.sweep()
+			likes.sweep()
+			time.Sleep(time.Hour)
+		}
+	}()
+
+	// Wake integrado: un depósito en el buzón —o un like— avisa al instante al destinatario
+	// suscrito. Los likes también despiertan: si no, un match tardaría hasta el siguiente
+	// ciclo del wanLoop en notarse.
 	wake := newWakeRegistry()
 	wake.attach(h)
 	mbx.notify = wake.wake
+	likes.notify = wake.wake
 
 	kad, err := dht.New(ctx, h, dht.Mode(dht.ModeServer))
 	if err != nil {
@@ -133,6 +175,8 @@ func main() {
 	fmt.Printf("Relay v2 topes: %d MiB/dirección/circuito, %s máx., %d reservas (%d por IP, %d por ASN), %d circuitos por peer\n",
 		*relayDataMiB, *relayDuration, relayMaxReservations,
 		relayMaxReservationsPerIP, relayMaxReservationsPerASN, relayMaxCircuitsPerPeer)
+	fmt.Printf("Tablón: %s (TTL %s, tarjeta ≤%d KiB, ≤%d por categoría) · Likes: %s (cuota propia, ≤%d pendientes)\n",
+		brdDir, brd.ttl, brd.maxCard>>10, brd.maxCards, lkDir, likes.maxPending)
 	fmt.Println("Bootstrap addrs (use one of these from the phone):")
 	for _, a := range h.Addrs() {
 		fmt.Printf("  %s/p2p/%s\n", a, h.ID().String())

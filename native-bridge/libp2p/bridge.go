@@ -138,6 +138,7 @@ type Node struct {
 	peerHandler PeerHandler
 
 	mailboxHandler MailboxHandler
+	likeHandler    LikeHandler
 
 	wakeMu      sync.Mutex
 	wakeCancel  context.CancelFunc

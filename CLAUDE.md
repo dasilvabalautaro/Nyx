@@ -94,6 +94,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > the TECNO: its v4 database from Phase 1 builds migrated in place on first launch, identity
 > and WAN intact.
 >
+> **Phase 3 (board + like) — the machinery is done, 16 Aug 2026; the UI is Phase 4.**
+> **Node** (`infra/nyx-node/board.go`): `/nyx/board/{publish,query,delete}/1.0.0`, storage
+> `boarddir/<category>/<peerId>.json` — **one live card per author per category, overwritten on
+> republish**, which caps single-identity flooding without a per-author quota. Card bytes are
+> **opaque to the node** (it never parses them), so the card format can evolve client-side
+> alone; and unlike the mailbox the contents are **in the clear**, because being discoverable is
+> the point. Two properties come free from libp2p and carry the design: the **author** is set
+> from the stream identity (you cannot publish as someone else), and therefore **`delete` can
+> only remove your own** — the path is built from the authenticated PeerID, never from anything
+> in the request. Category is validated against `^[a-z0-9_-]{1,32}$` because **it is a directory
+> name**; without that, `../../` escapes `boarddir`. TTL (`-boardttl`, 48h) is enforced **on
+> read** as well as in the sweep, so it's a guarantee rather than "whatever the last sweep left".
+> **Likes get their own store and quota** (`like.go`, `/nyx/like/{put,get}/1.0.0`) — this is the
+> plan's most serious risk, not a nicety: publishing a card makes your PeerID public, and if
+> likes shared the mailbox quota (200 msgs / 5 MiB per recipient) one abuser could fill it and
+> **block delivery of your real messages**, turning the anti-harassment feature into a messaging
+> DoS. `TestLikeQuotaDoesNotStarveMailbox` exhausts a victim's like tray and asserts their
+> mailbox still accepts. Storage key `<to>/<from>.json` = **one live like per sender**, so
+> insisting overwrites: an abuser's cost grows with identities created, not attempts made.
+> **Bridge**: `PublishCard`/`QueryBoard`/`DeleteCard`/`LikePut`/`LikeFetch` + `LikeHandler` (AAR
+> regenerated, 16 KB alignment re-verified at `0x4000` on all four ABIs). Multi-node policy
+> differs **per operation on purpose**: publish goes to the first node that accepts (one is
+> enough to be discoverable); query drains **all** and merges by author keeping the newest (else
+> you get a partial view when each node holds a slice); delete goes to all and **returns an
+> error if even one fails** — a partial success leaves your profile public on the node that
+> failed. **`DiscoveryTopic`** = `HKDF("nyx-discover-v1", category)`, a *sibling* of
+> `RendezvousService`, not an extension: the rendezvous derives from a shared secret and is
+> therefore non-enumerable, while this topic is **public by design**. The HKDF adds no secrecy —
+> it gives a fixed-size key from arbitrary text and **separates the namespace**, so a board topic
+> can never collide with a private rendezvous (a collision would leak who you talk to; there's a
+> test). **Envelope `L`** (`"L\n<ts>"`) carries no id and no body deliberately: who sent it is
+> already established by the envelope's identity, and a like *is* the fact that it arrived — it's
+> the only envelope accepted from strangers, so its surface stays minimal. **`LikeService`**
+> (`:p2p-signaling`) exists separately from `ChatService` for a structural reason: `onReceived`
+> bails with `contacts.findByPeerId(peerId) ?: return null`, and a like arrives **by definition
+> from a non-contact**. No signature is needed to authenticate it — the secret comes from ECDH
+> against the public key embedded in the sender's PeerID, so a valid GCM tag proves who cipher-ed
+> it; an invalid tag is dropped silently. The **rate limit (5/hour per sender) runs before
+> deriving the X25519**, because that — not AES-GCM — is the expensive part; secrets are LRU-cached
+> per peer, and the limiter itself has a key ceiling so the anti-abuse isn't the memory leak. Ack
+> contract refined: **definitively** discarded envelopes (blocked peer, broken tag, rate-limited)
+> are acked so the node deletes them; only a *transient* persistence failure returns false and
+> triggers redelivery — otherwise a broken envelope would be a poisoned loop replayed on every
+> fetch. **The production node still runs the old binary**, so `fetchLikes()` fails each `wanLoop`
+> cycle until redeploy; it's wrapped in its own `runCatching` so it can never disturb messaging.
+>
 > **Git remotes**: `origin` is `https://github.com/dasilvabalautaro/Nyx.git` (Nyx's own repo,
 > still empty — nothing pushed yet). Krypta is wired as `upstream` with
 > `--push no_push`, so a push to Krypta fails by construction. Fixes made in Krypta that Nyx

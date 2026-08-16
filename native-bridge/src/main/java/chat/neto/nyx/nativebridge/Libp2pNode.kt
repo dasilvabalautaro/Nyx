@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Base64
 import chat.neto.nyx.bridge.Bridge
+import chat.neto.nyx.bridge.LikeHandler
 import chat.neto.nyx.bridge.MailboxHandler
 import chat.neto.nyx.bridge.MessageHandler
 import chat.neto.nyx.bridge.Node
@@ -152,6 +153,7 @@ class Libp2pNode @Inject constructor(
                 it.setMessageHandler(messageHandler)
                 it.setPeerHandler(peerHandler)
                 it.setMailboxHandler(mailboxHandler)
+                it.setLikeHandler(likeHandler)
                 // Streams de llamada entrantes → NodeEvent (los valida CallService con el hello).
                 it.setCallHandler { s ->
                     _events.trySend(NodeEvent.IncomingCall(s.remotePeer(), GoCallStream(s)))
@@ -264,6 +266,60 @@ class Libp2pNode @Inject constructor(
      */
     suspend fun mailboxFetch(): Long = withContext(Dispatchers.IO) {
         node?.mailboxFetch(savedBootstrap().orEmpty()) ?: 0L
+    }
+
+    // --- Tablón de perfiles y "me gusta" (Fase 3) ---------------------------------------
+
+    /**
+     * Publica (o actualiza) mi tarjeta en [category]. `card` va **en claro**: al revés que el
+     * buzón, aquí ser descubrible es el punto. El autor lo fija el nodo desde la identidad del
+     * stream, así que no viaja en la petición.
+     */
+    suspend fun publishCard(category: String, card: ByteArray) = withContext(Dispatchers.IO) {
+        checkNotNull(node) { "nodo no iniciado" }.publishCard(savedBootstrap().orEmpty(), category, card)
+    }
+
+    /**
+     * Tarjetas de [category] como JSON (`[{"peer","ts","card"},…]`, `card` en base64). El
+     * puente consulta todos los nodos y fusiona por autor; el JSON lo parsea la capa de
+     * dominio, que es quien conoce el formato de la tarjeta.
+     */
+    suspend fun queryBoard(category: String, limit: Int): String = withContext(Dispatchers.IO) {
+        node?.queryBoard(savedBootstrap().orEmpty(), category, limit.toLong()).orEmpty()
+    }
+
+    /**
+     * Quita mi tarjeta de [category] (vacía = de todas). **Lanza si falla en algún nodo**: a
+     * diferencia de publicar, un éxito parcial deja el perfil visible donde falló, y quien
+     * llama tiene que poder decírselo al usuario y reintentar.
+     */
+    suspend fun deleteCard(category: String) = withContext(Dispatchers.IO) {
+        checkNotNull(node) { "nodo no iniciado" }.deleteCard(savedBootstrap().orEmpty(), category)
+    }
+
+    /** Deposita un "me gusta" ya cifrado para [to], por el camino de likes (cuota propia). */
+    suspend fun likePut(to: String, data: ByteArray) = withContext(Dispatchers.IO) {
+        checkNotNull(node) { "nodo no iniciado" }.likePut(savedBootstrap().orEmpty(), to, data)
+    }
+
+    /**
+     * Retira los "me gusta" pendientes; cada uno va en el sitio al [likeProcessor] y solo los
+     * confirmados se ack'ean. Devuelve cuántos se confirmaron.
+     */
+    suspend fun likeFetch(): Long = withContext(Dispatchers.IO) {
+        node?.likeFetch(savedBootstrap().orEmpty()) ?: 0L
+    }
+
+    /**
+     * Procesador de "me gusta" entrantes. Mismo contrato que [mailboxProcessor] y por el mismo
+     * motivo: devuelve true solo si quedó persistido, y solo entonces se borra en el nodo —
+     * un like perdido es un match que nunca ocurre.
+     */
+    @Volatile
+    var likeProcessor: ((from: String, ts: Long, data: ByteArray) -> Boolean)? = null
+
+    private val likeHandler = LikeHandler { from, ts, data ->
+        likeProcessor?.let { runCatching { it(from, ts, data) }.getOrDefault(false) } ?: false
     }
 
     /** Anuncia este nodo bajo el rendezvous diario (bytes HKDF) en la DHT. */

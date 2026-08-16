@@ -382,7 +382,8 @@ que falta es **la caja**: el nodo de producción sigue corriendo el binario viej
 `WithInfiniteLimits`.
 
 1. - [ ] Redesplegar: `bash infra/nyx-node/deploy-vps.sh <usuario>@216.238.104.36`
-     (`dist/nyx-node-linux-amd64` ya está recompilado con los topes).
+     (`dist/nyx-node-linux-amd64` ya está recompilado con los topes **y con el tablón y los
+     likes de la Fase 3** — el mismo redespliegue cierra 1.12c y 3.14).
 2. - [ ] Comprobar que arrancó con ellos: el propio script imprime la línea, o
      `journalctl -u nyx-node | grep "Relay v2 topes"`. **Esperado**:
      `1024 MiB/dirección/circuito, 6h0m0s máx., 512 reservas (32 por IP, 512 por ASN), 8
@@ -396,6 +397,11 @@ que falta es **la caja**: el nodo de producción sigue corriendo el binario viej
      móviles, forzando el relay. Es el escenario que los topes por defecto rompían a los ~20 s.
      **Esperado**: ni corte ni degradación. Si se corta, el tope se sube con `-relaydata` en el
      `ExecStart` sin recompilar nada.
+6. - [ ] Comprobar de paso que arrancó con tablón y likes: el log del arranque debe llevar una
+     línea `Tablón: … · Likes: …`. Y en el móvil, que **desaparece** del diagnóstico el error
+     recurrente `likes: … protocol not supported` — mientras el nodo corra el binario viejo,
+     `fetchLikes()` falla en cada ciclo (sin afectar a la mensajería, va en su propio
+     `runCatching`).
 
 ---
 

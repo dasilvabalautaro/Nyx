@@ -94,6 +94,14 @@ class ChatServiceTest {
         override fun setMailboxProcessor(
             processor: suspend (fromPeerId: String, ciphertext: ByteArray, envelopeId: String, timestamp: Long) -> Boolean,
         ) { registeredMailboxProcessor = processor }
+        override suspend fun publishCard(category: String, card: ByteArray) = Unit
+        override suspend fun queryBoard(category: String, limit: Int): String = "[]"
+        override suspend fun deleteCard(category: String) = Unit
+        override suspend fun sendLike(toPeerId: String, ciphertext: ByteArray) = Unit
+        override suspend fun fetchLikes(): Int = 0
+        override fun setLikeProcessor(
+            processor: suspend (fromPeerId: String, ciphertext: ByteArray, timestamp: Long) -> Boolean,
+        ) = Unit
     }
 
     private class FakeMessages : MessageRepository {

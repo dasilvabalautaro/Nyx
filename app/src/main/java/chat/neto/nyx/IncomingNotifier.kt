@@ -16,6 +16,7 @@ import chat.neto.nyx.core.model.Contact
 import chat.neto.nyx.core.model.Message
 import chat.neto.nyx.p2p.CallPhase
 import chat.neto.nyx.p2p.CallService
+import chat.neto.nyx.p2p.LikeService
 import chat.neto.nyx.p2p.CallState
 import chat.neto.nyx.p2p.ChatService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,6 +53,10 @@ class IncomingNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
     private val chat: ChatService,
     private val calls: CallService,
+    // Inyectado, no usado directamente: instanciarlo es lo que registra su procesador de
+    // "me gusta" entrantes. Mismo motivo que `calls` — sin alguien que lo cree al arrancar el
+    // proceso, un like que llegue en un proceso revivido por el latido se descartaría.
+    @Suppress("unused") private val likes: LikeService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())

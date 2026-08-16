@@ -38,8 +38,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > literal, which no brand substitution touches — left alone, Nyx phones would have joined
 > Krypta's production infrastructure. Day-to-day runbook:
 > [infra/nyx-node/OPERACION.md](infra/nyx-node/OPERACION.md). **One node = single point of
-> failure** for mailbox, wake and relay, and the relay still runs `WithInfiniteLimits()`; both
-> are blockers before opening to the public, not before developing.
+> failure** for mailbox, wake and relay — still a blocker before opening to the public, not
+> before developing (plan task 1.18; the client already does mailbox failover, fetch-all and
+> one wake stream per node, so it costs a box, not code).
+>
+> **The relay has finite caps since 16 Aug 2026** (plan 1.12c) — `WithInfiniteLimits()` →
+> `WithResources(...)` in [infra/nyx-node/relay.go](infra/nyx-node/relay.go), sized from the
+> real measured throughput taken **per direction** (which is how `RelayLimit.Data` counts it):
+> **1 GiB per direction per circuit** ≈ 4.5 h of continuous video (225 MB/h) or ~24 h of voice
+> (43 MB/h), plus a **6 h** circuit lifetime — 8192× go-libp2p's 128 KiB default, the one that
+> killed calls at ~20 s, and still finite. Both tunable without recompiling (`-relaydata`,
+> `-relayduration`), and the node **prints its caps at startup**. Non-obvious finding while
+> sizing: go-libp2p's **per-IP (8) and per-ASN (32)** reservation caps assume one public IP per
+> user, but Nyx users arrive over **mobile CGNAT** — a whole carrier shares a handful of IPs and
+> **one ASN**, so with the defaults the 33rd Entel/Tigo user would silently get no relay; raised
+> to 32 / 512. Covered by `relay_test.go`, notably `TestRelayLimitsAppliedLive` (real relay,
+> real circuit: bytes flow under the cap, the relay cuts over it — it fails under
+> `WithInfiniteLimits`, so it actually detects the regression). What this does **not** do:
+> relayv2 has no aggregate traffic limit, so a reconnecting abuser keeps consuming; the real
+> backstop is a Vultr egress alert (still pending, plan 1.19). **The production box still runs
+> the old binary** — redeploy pending, PRUEBAS-PENDIENTES §14.
 >
 > **Git remotes**: `origin` is `https://github.com/dasilvabalautaro/Nyx.git` (Nyx's own repo,
 > still empty — nothing pushed yet). Krypta is wired as `upstream` with

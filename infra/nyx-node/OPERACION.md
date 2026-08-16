@@ -154,21 +154,73 @@ nyx-node`, el cambio, y `systemctl start nyx-node`.
 
 ## Estado de la deuda heredada de Krypta
 
-Los tres puntos siguientes se descubrieron sobre la marcha en el nodo de Krypta. Dos se
-hicieron **al aprovisionar** esta caja (14 ago 2026); el tercero sigue abierto.
+Los tres puntos siguientes se descubrieron sobre la marcha en el nodo de Krypta. Los tres
+están ya cerrados en esta caja: dos **al aprovisionar** (14 ago 2026) y el tercero el
+16 ago 2026.
 
 - ✅ **Copia del `node.key` fuera de la caja**, verificada por SHA-256 y por derivación del
   PeerID — ver el apartado anterior.
 - ✅ **`net.core.rmem_max`**: subido a 7 500 000 (y `wmem_max` igual) en
   `/etc/sysctl.d/99-nyx-quic.conf`, así que sobrevive a reinicios. Comprobado en el arranque
   siguiente: quic-go ya no emite el aviso *"failed to sufficiently increase receive buffer
-  size"*.
-- ❌ **Topes finitos al relay — pendiente, y bloqueante antes de abrir a público.**
-  Hoy [main.go](main.go) usa
-  `EnableRelayService(relayv2.WithInfiniteLimits())` — necesario porque el tope por defecto
-  (128 KiB / 2 min) cortaba las llamadas a los ~20 s, pero regala ancho de banda a cualquier
-  nodo libp2p de internet, y ahora con factura de por medio. Al dimensionarlos hay que contar
-  con los caudales reales: **43 MB/hora** una llamada de voz relayada, **225 MB/hora** una de
-  vídeo. Y recordar que el tope por circuito no es por sí solo protección contra abuso: quien
-  quiera abusar abre muchos circuitos, así que lo que acota el gasto son los límites de
-  `Resources` (máximo de reservas y circuitos, y reservas por peer/IP).
+  size"*. Desde el 16 ago lo pone **`deploy-vps.sh`** solo, para que el segundo nodo no
+  dependa de que alguien se acuerde de hacerlo a mano.
+- ✅ **Topes finitos al relay (16 ago 2026)** — ver el apartado siguiente.
+
+## Topes del relay
+
+Desde el 16 ago 2026 el relay ya **no** corre con `WithInfiniteLimits()`. Los valores viven
+en [relay.go](relay.go), y el nodo los **imprime al arrancar** (`journalctl -u nyx-node |
+grep "Relay v2 topes"`), que es la forma rápida de saber con qué arrancó una caja:
+
+| Tope | Valor | Por qué ese |
+|---|---|---|
+| Datos por dirección y circuito | 1 GiB | ~4,5 h de vídeo o ~24 h de voz seguidas, con los caudales reales (**225 MB/h** vídeo, **43 MB/h** voz). El default de go-libp2p son 128 KiB: ~20 s de llamada. |
+| Vida máxima del circuito | 6 h | Segundo techo, para el circuito ocioso que nadie cierra. Default: 2 min. |
+| Reservas simultáneas | 512 | Teléfonos con slot a la vez. Default: 128. |
+| Circuitos por teléfono | 8 | Uno por conversación activa sobra. Default: 16. |
+| Reservas por IP / por ASN | 32 / 512 | **Muy** por encima del default (8 / 32) a propósito: los usuarios entran por CGNAT móvil, donde una operadora entera comparte unas pocas IPs y **un solo ASN** — con el default, el usuario 33 de Entel se quedaría sin relay. |
+
+Los dos primeros se pueden ajustar sin recompilar, con `-relaydata <MiB>` y `-relayduration
+<dur>` en el `ExecStart` de la unidad.
+
+**Lo que esto NO protege**, y conviene no engañarse: son topes *por circuito* y de
+*concurrencia*. relayv2 no tiene un límite agregado de tráfico, así que quien quiera abusar
+reconecta y sigue. Lo que se acota es el coste de un circuito suelto y cuántos puede haber a
+la vez. El respaldo real de la factura es una **alerta de egress en el panel de Vultr** — eso
+sigue pendiente de configurar.
+
+## Segundo nodo (pendiente: falta la caja)
+
+Un solo nodo es punto único de fallo del **buzón**, del **wake** y del **relay**: si se cae,
+no hay entrega offline, no hay avisos y no hay travesía de NAT. Es bloqueante para abrir a
+público (no para desarrollar). El cliente ya está preparado y **no hace falta tocar código**:
+`MailboxPut` hace failover al primer nodo vivo, `MailboxFetch` drena todos, `StartWake`
+mantiene un stream por nodo y `StartDHT` da por buena la conexión con ≥1 bootstrap vivo.
+
+Lo que falta es la caja, y estos pasos:
+
+1. **Contratar un segundo VPS en otra región/proveedor** (no una máquina doméstica: las de
+   Krypta están documentadas como puntos únicos de fallo, y además son de Krypta). Otra
+   región es lo que hace que el segundo nodo cubra una caída del centro de datos, no solo
+   del proceso.
+2. `bash infra/nyx-node/deploy-vps.sh usuario@<ip-nueva>`. Genera **`node.key` propio** en el
+   primer arranque, así que el PeerID es nuevo por construcción — no hay riesgo de clonar la
+   identidad del primario. El script pone también el sysctl de QUIC y recuerda al final el
+   comando exacto para respaldar el `node.key`.
+3. **Registro DNS propio** (p. ej. `nyx2.neto.chat` → A a la IP nueva), **nube gris**, por el
+   mismo motivo que el primario: el proxy de Cloudflare solo entiende HTTP y rompería
+   TCP+Noise en el 4001.
+4. **Validar antes de fijarlo**, con las mismas cuatro sondas del apartado anterior
+   (`TestMailboxFetchAgainstLiveNode`, `TestMailboxRoundTripAgainstLiveNode`,
+   `TestWakeAgainstLiveNode`, `TestPingAgainstLiveNode`), por IP **y** por nombre.
+5. Añadir la **segunda línea** a `Libp2pNode.DEFAULT_BOOTSTRAP` (el campo ya es una lista
+   separada por saltos de línea; el orden importa: `MailboxPut` deposita en el primero vivo).
+6. Cerrar con la prueba de failover en vivo: matar el primario y comprobar que un mensaje
+   sigue llegando por el buzón del segundo (está anotada en
+   [docs/PRUEBAS-PENDIENTES.md](../../docs/PRUEBAS-PENDIENTES.md)).
+
+Ojo con un detalle que ya mordió en Krypta: un teléfono que **alguna vez** guardó una
+preferencia de bootstrap se queda con ella y **no** hereda el nuevo default. Para probar el
+segundo nodo en un móvil ya usado hay que borrar esa preferencia (o escribirla a mano en
+Ajustes), no basta con instalar la build nueva.

@@ -342,6 +342,63 @@ quejaba el autor ("hay mensajes recibidos pero la alarma no suena").
 
 ---
 
+## 13. Nyx: primer emparejamiento entre 2 móviles (plan 1.16) — **PENDIENTE, ya con APK**
+Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por no tener un
+APK que mandar a la persona que colabora. **Ya lo hay (16 ago 2026)**:
+`~/Desktop/nyx-arm64-debug.apk` — 63 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
+
+Dos cosas que hay que decirle a quien lo instale:
+
+- Va **firmado con la clave de depuración**, la misma que la build del autor, **a propósito**.
+  Con la de release el `applicationId` sería el mismo pero la firma distinta, así que Android
+  obligaría a desinstalar para instalar — y desinstalar **borra la identidad Ed25519, los
+  contactos y el historial** (es lo que pasó en Krypta el 13 ago). Debug en los dos lados =
+  nadie tiene que desinstalar nada.
+- Nyx se instala **junto a** Krypta, no la sustituye (`applicationId` distinto). Si la
+  persona tiene Krypta, se queda intacta.
+
+1. - [ ] Instalar en el segundo móvil ("Instalar apps desconocidas" para el gestor de
+     archivos / navegador que use). Abrir → conceder notificaciones y la exención de batería.
+2. - [ ] En **Ajustes** de cada móvil, copiar el PeerID propio y añadirlo como contacto en el
+     otro (nombre + PeerID). **Esperado**: la app rechaza pegarse el PeerID *propio* con un
+     mensaje claro (guarda de `addContact`, 23 jul).
+3. - [ ] Comprobar que ambos marcan **"WAN (DHT): conectado"** contra `nyx.neto.chat`. Es la
+     primera vez que dos teléfonos reales usan el nodo propio de Nyx y los protocol IDs
+     `/nyx/*`.
+4. - [ ] Mensaje de ida y vuelta → `SENT` → `DELIVERED` → `READ` al abrir el chat.
+5. - [ ] **Entrega offline**: cerrar la app del receptor (deslizar de recientes), enviar,
+     **esperado**: el emisor marca `SENT` (vía buzón) y al receptor le entra la notificación
+     en segundos (wake) sin abrir la app.
+6. - [ ] Verificación de identidad: comparar el número de seguridad y escanear el QR mutuo →
+     escudo en ambos (esto cubre también la §2, pendiente desde Krypta).
+7. - [ ] Llamada de voz y vídeo (cubre de paso el punto siguiente).
+
+---
+
+## 14. Topes finitos del relay (plan 1.12c) — **PENDIENTE en producción**
+El código y los tests están cerrados (`infra/nyx-node/relay.go` + `relay_test.go`, incluido
+`TestRelayLimitsAppliedLive`, que corta de verdad un circuito real al pasarse del tope). Lo
+que falta es **la caja**: el nodo de producción sigue corriendo el binario viejo, con
+`WithInfiniteLimits`.
+
+1. - [ ] Redesplegar: `bash infra/nyx-node/deploy-vps.sh <usuario>@216.238.104.36`
+     (`dist/nyx-node-linux-amd64` ya está recompilado con los topes).
+2. - [ ] Comprobar que arrancó con ellos: el propio script imprime la línea, o
+     `journalctl -u nyx-node | grep "Relay v2 topes"`. **Esperado**:
+     `1024 MiB/dirección/circuito, 6h0m0s máx., 512 reservas (32 por IP, 512 por ASN), 8
+     circuitos por peer`.
+3. - [ ] Confirmar que el PeerID **no cambió** (`deploy-vps.sh` no toca `node.key`): tiene que
+     seguir siendo `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`, o los móviles
+     instalados dejan de encontrar el nodo.
+4. - [ ] Las cuatro sondas desde la Mac (mailbox fetch, round-trip, wake, ping) siguen
+     pasando contra el nodo redesplegado.
+5. - [ ] **La prueba que de verdad importa**: una **videollamada larga** (>5 min) entre los dos
+     móviles, forzando el relay. Es el escenario que los topes por defecto rompían a los ~20 s.
+     **Esperado**: ni corte ni degradación. Si se corta, el tope se sube con `-relaydata` en el
+     `ExecStart` sin recompilar nada.
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.

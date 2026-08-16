@@ -952,10 +952,37 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       `/etc/sysctl.d/99-nyx-quic.conf` (persistente; quic-go ya no avisa al arrancar) y
       copia de `node.key` en `~/keys/nyx-node/node.key` (`600`), verificada por SHA-256
       **y** por derivación del PeerID real. `deploy-vps.sh` ya exigía host destino
-      explícito. **Falta lo único que no sale gratis: los topes finitos del relay**
-      (sigue con `WithInfiniteLimits`) — no bloquea el desarrollo, sí bloquea abrir a
-      público, y se dimensiona con los caudales reales (43 MB/h voz, 225 MB/h vídeo)
-      más límites de `Resources`, no solo por circuito.
+      explícito. **Topes finitos del relay cerrados el 16 ago 2026** (ver 1.12c).
+- [x] 1.12c **Topes finitos del relay (16 ago 2026)** — se cae el último bloqueante de infra
+      que quedaba heredado de Krypta. `WithInfiniteLimits()` → `WithResources(...)` en
+      [infra/nyx-node/relay.go](../infra/nyx-node/relay.go), dimensionado con los caudales
+      reales medidos, tomados **por dirección** (que es como los cuenta `RelayLimit.Data`)
+      para quedar del lado seguro: **1 GiB por dirección y circuito** = ~4,5 h de vídeo
+      (225 MB/h) o ~24 h de voz (43 MB/h) seguidas, y **6 h** de vida máxima de circuito.
+      Es 8192× el default (128 KiB) que mataba las llamadas a los ~20 s, y sigue siendo
+      finito. Ambos ajustables sin recompilar (`-relaydata`, `-relayduration`), y el nodo
+      **imprime los topes al arrancar** para poder diagnosticar una caja sin leerle el
+      código. Más los límites de `Resources` que el plan pedía y que no son por circuito:
+      512 reservas, 8 circuitos por teléfono.
+      *Hallazgo al dimensionar, no estaba en el plan*: los topes **por IP (8) y por ASN
+      (32)** de go-libp2p asumen una IP pública por usuario, y los usuarios de Nyx entran
+      por **CGNAT móvil** — una operadora entera comparte unas pocas IPs y **un solo ASN**,
+      así que con el default el usuario 33 de Entel/Tigo se habría quedado sin relay: un
+      fallo de disponibilidad indistinguible de "la app no funciona", y que solo aparece con
+      usuarios reales. Subidos a 32 / 512; el gasto lo sigue acotando el tope de datos, que
+      es donde está el coste.
+      Cubierto por cuatro tests Go en `infra/nyx-node` (`relay_test.go`): topes finitos
+      *y* holgados, guardas de CGNAT, los flags llegando a `Resources`, y sobre todo
+      **`TestRelayLimitsAppliedLive`**, que monta un relay real con un tope pequeño, pasa
+      tráfico por un circuito y comprueba que por debajo del tope los bytes llegan intactos
+      y por encima el relay corta — falsado a mano: con `WithInfiniteLimits` ese test falla
+      ("no cortó: pasaron 1048576 B"), así que detecta de verdad la regresión.
+      **Límite honesto que hay que tener presente**: son topes por circuito y de
+      concurrencia; relayv2 no ofrece límite agregado, así que un abusador que reconecte
+      sigue consumiendo. El respaldo real de la factura es una **alerta de egress en Vultr**,
+      que sigue **pendiente**. Falta también **redesplegar** el binario nuevo en la caja
+      (`dist/nyx-node-linux-amd64` ya recompilado) — hasta entonces el nodo en producción
+      sigue con límites infinitos.
 - [x] 1.13 `DEFAULT_BOOTSTRAP` = **una sola línea**,
       `/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooW…ziY3` (TCP directo, sin proxy),
       manteniendo el formato de lista para el segundo nodo futuro. Validado antes de
@@ -986,10 +1013,32 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       no era un residuo. Prueba de que el AAR nuevo y los protocol IDs `/nyx/*` casan
       extremo a extremo.
 - [ ] 1.16 Prueba en vivo de emparejamiento/mensaje entre dos dispositivos contra el
-      nuevo nodo desplegado.
+      nuevo nodo desplegado. **Desbloqueada el 16 ago 2026**: el APK para la persona que
+      colabora está en `~/Desktop/nyx-arm64-debug.apk` (63 MB, solo arm64-v8a,
+      `chat.neto.nyx` 1.0). Va **firmado con la clave de depuración a propósito**, la misma
+      que la build del autor: con la de release, `applicationId` igual + firma distinta
+      obliga a desinstalar para instalar, y desinstalar **borra la identidad Ed25519** —
+      justo lo que pasó en Krypta el 13 ago. Falta solo hacer la prueba.
 - [x] 1.17 Entrada en `CLAUDE.md`: recuadro de cabecera con qué cambió el rebrand, que
       Krypta sigue viva, por qué `DEFAULT_BOOTSTRAP` está vacío, el estado de los remotos
       y el aviso de que el resto del archivo aún describe Krypta (pase completo en 6.1).
+- [ ] 1.18 **Segundo nodo de infra.** Bloqueante para abrir a público (no para desarrollar):
+      con una sola caja, su caída deja sin buzón, sin wake y sin relay a todo el parque.
+      *Estado 16 ago 2026*: **no cuesta código** — el cliente ya hace failover en
+      `MailboxPut`, drena todos los nodos en `MailboxFetch`, mantiene un wake por nodo y da
+      por buena la conexión con ≥1 bootstrap vivo; y `deploy-vps.sh` ya deja la caja lista
+      de un comando, con `node.key` propio por construcción (PeerID nuevo, sin riesgo de
+      clonar el del primario), el sysctl de QUIC automatizado y el recordatorio del respaldo
+      de la clave. Lo que falta es **contratar el VPS** (otra región/proveedor, para cubrir
+      una caída de centro de datos y no solo del proceso; máquina doméstica no — es lo que
+      dejó a Krypta con puntos únicos de fallo), su registro DNS propio en **nube gris**,
+      validarlo con las cuatro sondas por IP y por nombre, añadir la segunda línea a
+      `DEFAULT_BOOTSTRAP` y cerrar con la prueba de failover en vivo. Runbook paso a paso en
+      [infra/nyx-node/OPERACION.md](../infra/nyx-node/OPERACION.md), apartado "Segundo nodo".
+- [ ] 1.19 **Alerta de egress en el panel de Vultr.** Es el único freno real al gasto: los
+      topes de 1.12c acotan un circuito suelto y la concurrencia, pero relayv2 no tiene
+      límite agregado y quien abuse puede reconectar. Sin la alerta, un abuso se descubre
+      con la factura.
 
 ### 2. Modelo de datos
 - [ ] 2.1 `MyProfilePrefs.kt` (SharedPreferences): `nickname`, `ageMin`/`ageMax`,

@@ -67,6 +67,20 @@ mkdir -p /var/lib/nyx
 chown nyx:nyx /var/lib/nyx
 chmod 0700 /var/lib/nyx
 
+# Buffers UDP para QUIC. Sin esto quic-go avisa en cada arranque ("failed to sufficiently
+# increase receive buffer size") y el caudal QUIC queda capado bajo carga. En el primer
+# nodo esto se hizo a mano durante el aprovisionamiento; aquí va en el script para que el
+# segundo nodo (y cualquiera posterior) no dependa de que alguien se acuerde.
+if [ ! -f /etc/sysctl.d/99-nyx-quic.conf ]; then
+  echo "  fijando net.core.{rmem,wmem}_max para QUIC"
+  cat > /etc/sysctl.d/99-nyx-quic.conf <<'SYSCTL'
+# Nyx: buffers UDP para quic-go (ver infra/nyx-node/README.md)
+net.core.rmem_max=7500000
+net.core.wmem_max=7500000
+SYSCTL
+fi
+sysctl -q --system >/dev/null 2>&1 || true
+
 systemctl daemon-reload
 systemctl enable --now nyx-node
 
@@ -91,7 +105,22 @@ journalctl -u nyx-node -n 20 --no-pager
 echo
 echo "===== ¿escucha? ====="
 (ss -lntup 2>/dev/null || netstat -lntup 2>/dev/null) | grep -E ":4001|:8081" || echo "(NADA escuchando — revisa el log)"
+echo
+echo "===== topes del relay ====="
+journalctl -u nyx-node -n 40 --no-pager | grep "Relay v2 topes" || echo "(binario viejo, sin topes finitos — recompila dist/)"
 REMOTE
+
+echo
+echo "==================================================================="
+echo "AHORA, antes de seguir: copia el node.key fuera de la caja."
+echo "El node.key ES el PeerID, y el PeerID va compilado en DEFAULT_BOOTSTRAP de"
+echo "cada APK instalado. Si se pierde con la caja, ese nodo no se puede resucitar:"
+echo "hay que publicar otra versión en Play para que el parque encuentre al sustituto."
+echo
+echo "  mkdir -p ~/keys/nyx-node/$(echo "$HOST" | tr '@/' '__')"
+echo "  ssh $HOST 'sudo cat /var/lib/nyx/node.key' > ~/keys/nyx-node/$(echo "$HOST" | tr '@/' '__')/node.key"
+echo "  chmod 600 ~/keys/nyx-node/$(echo "$HOST" | tr '@/' '__')/node.key"
+echo "==================================================================="
 
 echo
 echo "==================================================================="

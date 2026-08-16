@@ -46,6 +46,10 @@ func main() {
 	// que ser estable entre reinicios para poder publicarlo en DEFAULT_BOOTSTRAP.
 	quicPortFlag := flag.String("quicport", "0", "UDP port for QUIC (0 = ephemeral; set it on a public-IP node)")
 	mailboxDir := flag.String("mailboxdir", "", "E2EE store-and-forward mailbox dir (default: <key dir>/mailbox)")
+	// Topes del relay (ver relay.go). Ajustables sin recompilar porque son la palanca que
+	// se toca si el gasto de la caja se dispara o si una llamada larga se corta.
+	relayDataMiB := flag.Int64("relaydata", relayDataPerDirection>>20, "relay: MiB reenviados por dirección y circuito antes de cortarlo")
+	relayDuration := flag.Duration("relayduration", relayCircuitDuration, "relay: vida máxima de un circuito relayado")
 	flag.Parse()
 	wsPort := *wsPortFlag
 	quicPort := *quicPortFlag
@@ -65,10 +69,10 @@ func main() {
 			"/ip4/0.0.0.0/tcp/"+wsPort+"/ws", // WebSocket: lo expone Cloudflare Tunnel como wss/443
 		),
 		// Circuit Relay v2: este nodo reenvía tráfico (E2EE) cuando DCUtR no perfora el NAT.
-		// Sin WithInfiniteLimits, go-libp2p corta cada conexión relayada a los 128 KiB o
-		// 2 min (por defecto) — una llamada de voz (~5-6 KB/s) moría a los ~20 s. Este nodo
-		// ES el relay de Nyx y el tráfico va E2EE, así que sin límites.
-		libp2p.EnableRelayService(relayv2.WithInfiniteLimits()),
+		// Topes FINITOS pero dimensionados con los caudales reales de voz/vídeo (ver
+		// relay.go): los defaults de go-libp2p (128 KiB / 2 min) mataban las llamadas a los
+		// ~20 s, e infinito regalaba la caja como proxy de ancho de banda a cualquiera.
+		libp2p.EnableRelayService(relayv2.WithResources(relayResources(*relayDataMiB<<20, *relayDuration))),
 		// El servicio de relay v2 solo ofrece el protocolo `hop` cuando el nodo se cree
 		// PÚBLICAMENTE alcanzable. Tras Cloudflare Tunnel (sin IP pública directa) AutoNAT no
 		// lo confirma y desactivaría el relay → los móviles no podrían reservar slot. Como este
@@ -123,6 +127,12 @@ func main() {
 	}
 
 	fmt.Println("Nyx infra node up (bootstrap + DHT server + relay v2). PeerID:", h.ID().String())
+	// Los topes del relay se imprimen a propósito: son la diferencia entre "las llamadas se
+	// cortan solas" y "cualquiera usa la caja de proxy gratis", y ninguna de las dos cosas
+	// se diagnostica rápido sin saber con qué valores arrancó el nodo.
+	fmt.Printf("Relay v2 topes: %d MiB/dirección/circuito, %s máx., %d reservas (%d por IP, %d por ASN), %d circuitos por peer\n",
+		*relayDataMiB, *relayDuration, relayMaxReservations,
+		relayMaxReservationsPerIP, relayMaxReservationsPerASN, relayMaxCircuitsPerPeer)
 	fmt.Println("Bootstrap addrs (use one of these from the phone):")
 	for _, a := range h.Addrs() {
 		fmt.Printf("  %s/p2p/%s\n", a, h.ID().String())

@@ -9,7 +9,9 @@ import chat.neto.nyx.core.model.Contact
 import chat.neto.nyx.core.model.Message
 import chat.neto.nyx.core.model.MessageContent
 import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.repository.BlockRepository
 import chat.neto.nyx.core.repository.ContactRepository
+import chat.neto.nyx.core.repository.LikeRepository
 import chat.neto.nyx.core.repository.MessageRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +75,8 @@ class ChatService @Inject constructor(
     private val keyExchange: KeyExchange,
     private val rendezvous: RendezvousService,
     private val fileStore: FileStore,
+    private val blocked: BlockRepository,
+    private val likes: LikeRepository,
     private val scope: CoroutineScope,
 ) {
     private val _onlinePeers = MutableStateFlow<Set<String>>(emptySet())
@@ -730,6 +734,13 @@ class ChatService @Inject constructor(
         require(peerId != keyExchange.localPeerId()) {
             "Ese es tu propio PeerID: pide a tu contacto el suyo"
         }
+        // Hermano del guard de arriba, y por el mismo motivo: `Contact.id` **es** el PeerID, así
+        // que sin esto añadir a alguien bloqueado le devolvería su conversación entera (el
+        // historial sigue en Room) y volvería a arrancar su rendezvous, deshaciendo el bloqueo
+        // sin que el usuario se entere. Desbloquear tiene que ser un acto explícito.
+        require(!blocked.isBlocked(peerId)) {
+            "Has bloqueado a este contacto: desbloquéalo primero si quieres volver a hablarle"
+        }
         val existing = contacts.findById(peerId)
         val contact = Contact(
             id = peerId, // 1:1: el PeerID identifica la conversación
@@ -783,6 +794,10 @@ class ChatService @Inject constructor(
     suspend fun deleteContact(contact: Contact) {
         clearConversation(contact)
         contacts.delete(contact.id)
+        // También el estado de like: si quedara la fila, volver a cruzarse con ese peer lo daría
+        // por "match" ya cerrado y le abriría la mensajería sin que nadie haya vuelto a decir
+        // que sí. Eliminar un contacto tiene que devolver la relación a cero.
+        likes.delete(contact.peerId)
         lastFound.remove(contact.peerId)
         _onlinePeers.update { it - contact.peerId }
         logLine("🗑 contacto eliminado: ${short(contact.peerId)}")

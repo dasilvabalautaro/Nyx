@@ -1040,19 +1040,77 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       límite agregado y quien abuse puede reconectar. Sin la alerta, un abuso se descubre
       con la factura.
 
-### 2. Modelo de datos
-- [ ] 2.1 `MyProfilePrefs.kt` (SharedPreferences): `nickname`, `ageMin`/`ageMax`,
+### 2. Modelo de datos — **CERRADA el 16 ago 2026**
+- [x] 2.1 `MyProfilePrefs.kt` (SharedPreferences): `nickname`, `ageMin`/`ageMax`,
       `interests`, `bio`, `tipAddress`, `avatarBytes`.
-- [ ] 2.2 `LikeEntity` (Room): `peerId` PK, `sentAt`, `receivedAt`, `matchedAt`,
+      **Una desviación deliberada del plan**: la API pública mantiene `avatarBytes`, pero los
+      bytes se guardan en `filesDir/nyx_profile/avatar.bin`, no en prefs. `SharedPreferences`
+      carga el fichero entero en memoria al arrancar y lo **reescribe completo en cada
+      `apply()` de cualquier clave**, así que meter ahí ~58 KiB (78 KB en base64) haría que
+      cambiar el tema o el bloqueo reescribiera el avatar entero cada vez. En prefs queda solo
+      `hasAvatar`. Escritura atómica tmp+rename, como `DiskFileStore`.
+      Todo lo que teclea el usuario se **sanea al guardar y no al publicar** (funciones puras,
+      cubiertas por `MyProfilePrefsTest`): apodo a una línea y ≤32, bio ≤300 sin ristras de
+      líneas en blanco, intereses ≤10 sin vacíos ni duplicados **y sin saltos de línea** (es
+      el separador con el que se persisten: uno colado partiría un interés en dos al releer),
+      y la franja de edad con **suelo duro en 18** —Nyx es 18+— enderezando de paso el rango
+      invertido, que llega de dos sliders y cruzarlos es un accidente de manejo normal.
+- [x] 2.2 `LikeEntity` (Room): `peerId` PK, `sentAt`, `receivedAt`, `matchedAt`,
       `source` + `LikeDao` + `LikeRepository` (`:core`/`:data`).
-- [ ] 2.3 `BlockedPeerEntity` (Room): `peerId` PK, `blockedAt`, `reason` + `BlockedPeerDao`
-      + `BlockRepository`.
-- [ ] 2.4 `MIGRATION_4_5` (crea ambas tablas), registrar en `DataModule.kt`, bump
-      `@Database(version = 5, entities = [...])` en `NyxDatabase.kt`, y **commitear
-      `data/schemas/5.json`** (hoy solo existe `4.json`).
-- [ ] 2.5 Guard en `addContact`/flujo de match: `require(!blockRepo.isBlocked(peerId))`.
-- [ ] 2.6 Test de migración `MIGRATION_4_5` (mismo patrón que `MIGRATION_3_4`).
-- [ ] 2.7 Cerrar con entrada en `CLAUDE.md`.
+      La **máquina de estados vive en `:core` como `LikeState`, pura y sin Room** (mismo
+      criterio que `ThemePreference.resolveDark` / `AppLock.shouldRelock`): es la regla que
+      decide si se desbloquea la mensajería, así que se prueba en la JVM. `LikeStateTest`
+      cubre las dos direcciones del match, que **ambos lados lo detectan por separado** con
+      solo los dos likes unidireccionales, la idempotencia (repetir el like no mueve fechas),
+      que `matchedAt` se fija una sola vez, y sobre todo el freno anti-acoso: **un like
+      solo-recibido nunca habilita mensajería**. `source` se persiste por nombre y no por
+      ordinal, con lectura tolerante a valores desconocidos — una fila escrita por una
+      versión posterior no puede tumbar la lectura de la tabla.
+- [x] 2.3 `BlockedPeerEntity` (Room): `peerId` PK, `blockedAt`, `reason` + `BlockedPeerDao`
+      + `BlockRepository`. Bloquear es idempotente (`INSERT OR IGNORE`): re-bloquear conserva
+      la fecha del primer bloqueo, pero un motivo nuevo sí se guarda — lo acaba de escribir el
+      usuario a propósito y perderlo en silencio sería peor.
+- [x] 2.4 `MIGRATION_4_5` (crea ambas tablas), registrada en `DataModule.kt`, `version = 5`
+      en `NyxDatabase.kt` y esquema v5 commiteado.
+      *Corrección al plan*: los esquemas exportados **ya no están en `data/schemas/`** sino en
+      `data/src/androidTest/assets/`. `MigrationTestHelper` los busca en los assets del APK de
+      test, y la forma normal de conseguirlo —añadir `schemas/` a
+      `sourceSets["androidTest"].assets`— **revienta con AGP 9.2.1**
+      (`DefaultAndroidLibrarySourceSet_Decorated cannot be cast to AndroidLibrarySourceSet`:
+      el accessor del DSL de Kotlin quedó desfasado para módulos library). Exportando
+      directamente ahí, los esquemas viajan en el APK de test sin tocar source sets.
+- [x] 2.5 Guard en `addContact`: `require(!blocked.isBlocked(peerId))`, hermano del de
+      auto-añadirse y por el mismo motivo — `Contact.id` **es** el PeerID, así que un alta
+      silenciosa le devolvería la conversación entera (el historial sigue en Room) y
+      rearrancaría su rendezvous, deshaciendo el bloqueo sin que el usuario lo pida.
+      `deleteContact` limpia además la fila de like: si quedara, volver a cruzarse con ese
+      peer lo daría por match ya cerrado y le abriría la mensajería sin que nadie haya
+      vuelto a decir que sí.
+- [x] 2.6 Test de migración — **dos, que cubren cosas distintas**:
+      (a) `MigrationSqlTest` (JVM, corre en cada `testDebugUnitTest`, **sin dispositivo**)
+      compara el SQL de `MIGRATION_4_5` con `5.json`, el esquema exportado. Lee el SQL
+      pasándole a la migración un `SupportSQLiteDatabase` de mentira (proxy dinámico) que
+      apunta cada `execSQL` en vez de ejecutarlo. Es el que importa en el día a día: el modo
+      de fallo real es que el SQL escrito a mano se desvíe una coma del que genera Room, y eso
+      **no se ve al compilar** — aparece en runtime, en el móvil, al arrancar. Falsado
+      quitando un `NOT NULL`: falla.
+      (b) `MigrationTest` (instrumentado, `:data:connectedDebugAndroidTest`) migra SQLite de
+      verdad y comprueba que contactos y mensajes sobreviven y que las tablas nuevas quedan
+      usables. **No es destructivo**: vive en `:data`, se instala como `chat.neto.nyx.data.test`
+      y solo se desinstala a sí mismo — el aviso de `CLAUDE.md` es sobre
+      `:app:connectedDebugAndroidTest`, que sí borra la identidad. Verificado: los dos tests
+      pasan en el TECNO y `chat.neto.nyx` sigue instalada e intacta.
+      *Lo que no cubre y por qué*: no hay test de la cadena v2→v5. `createDatabase` necesita el
+      esquema exportado de la versión de partida, y `exportSchema` se activó ya en la v4, así
+      que el histórico commiteado empieza en `4.json`. `MIGRATION_2_3` y `MIGRATION_3_4` se
+      quedan sin cobertura por eso, no por olvido.
+- [x] 2.7 Cerrar con entrada en `CLAUDE.md`.
+- [x] 2.8 **Verificado en el TECNO** (el escenario que justificaba escribir la migración): el
+      móvil tenía la base en v4 de las builds de la Fase 1, se instaló encima la primera build
+      con v5 y arrancó sin incidencia — `PRAGMA user_version` = 5, `likes` y `blocked_peers`
+      creadas con su índice, `nyx_identity.xml` intacto, y la app conectó a la DHT, al relay y
+      al wake. Sin esta migración, Room habría lanzado al arrancar y la única salida habría
+      sido desinstalar, que borra la identidad Ed25519.
 
 ### 3. Tablón + Like (Go/bridge)
 - [ ] 3.1 `infra/nyx-node/board.go`: protocolos publish/query/**delete**, almacenamiento

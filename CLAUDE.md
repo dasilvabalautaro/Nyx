@@ -59,6 +59,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > backstop is a Vultr egress alert (still pending, plan 1.19). **The production box still runs
 > the old binary** — redeploy pending, PRUEBAS-PENDIENTES §14.
 >
+> **Phase 2 (data model) is done, 16 Aug 2026.** `NyxDatabase` is at **v5**: two new tables
+> that Krypta never had, both additive. **`likes`** (`peerId` PK, `sentAt`, `receivedAt`,
+> `matchedAt`, `source`) holds like/match state — but the state machine itself lives in
+> `:core` as **`LikeState`**, pure and Room-free, following the repo's existing idiom for
+> decisions worth testing on the JVM (`ThemePreference.resolveDark`, `AppLock.shouldRelock`).
+> Both devices detect mutuality independently from the two one-way likes, with no coordination
+> protocol; `matchedAt` is set once and never moved. The rule the whole anti-harassment stance
+> rests on — **a like you only *received* never unlocks messaging** — is `Like.canMessage` and
+> is tested. **`blocked_peers`** (`peerId` PK, `blockedAt`, `reason?`) is local, unilateral and
+> silent; blocking twice keeps the first date. `ChatService` gained the sibling of the
+> add-yourself guard: **`addContact` rejects a blocked PeerID** — since `Contact.id` *is* the
+> PeerID, a silent re-add would hand back the entire conversation (history is still in Room)
+> and restart its rendezvous, undoing the block without the user asking; `deleteContact` also
+> wipes the like row, or re-crossing that peer later would count as an already-closed match.
+> **`MyProfilePrefs`** (`:app`, `nyx_settings`, the `ThemePreference` pattern) holds the board
+> profile draft; nothing leaves the device on its own. Its API says `avatarBytes` as the plan
+> asked, but the bytes go to `filesDir/nyx_profile/avatar.bin`, **not** into prefs —
+> SharedPreferences rewrites the whole file on *any* `apply()`, so ~58 KiB there would mean
+> rewriting the avatar every time the theme or the lock changes. Free text is sanitized **on
+> save, not on publish** (it ends up on a public card): interests can't contain newlines
+> because that's their persistence separator, and the age floor is a hard **18**.
+> **Two migration tests, covering different things**: `MigrationSqlTest` (JVM, every
+> `testDebugUnitTest`) diffs `MIGRATION_4_5`'s SQL against the exported `5.json` by handing the
+> migration a dynamic-proxy `SupportSQLiteDatabase` that records `execSQL` instead of running
+> it — hand-falsified by dropping one `NOT NULL`; and `MigrationTest` (`:data:connectedDebug‑
+> AndroidTest`) migrates real SQLite and checks contacts/messages survive. That one is **not
+> destructive** — it installs as `chat.neto.nyx.data.test` and uninstalls only itself; the
+> scary warning in this file is about `:app:connectedDebugAndroidTest`. Exported schemas moved
+> to **`data/src/androidTest/assets/`** because `MigrationTestHelper` reads them from the test
+> APK's assets and the normal way to arrange that (`sourceSets["androidTest"].assets`) **throws
+> under AGP 9.2.1** (`DefaultAndroidLibrarySourceSet_Decorated cannot be cast to
+> AndroidLibrarySourceSet` — the Kotlin DSL accessor is stale for library modules). Verified on
+> the TECNO: its v4 database from Phase 1 builds migrated in place on first launch, identity
+> and WAN intact.
+>
 > **Git remotes**: `origin` is `https://github.com/dasilvabalautaro/Nyx.git` (Nyx's own repo,
 > still empty — nothing pushed yet). Krypta is wired as `upstream` with
 > `--push no_push`, so a push to Krypta fails by construction. Fixes made in Krypta that Nyx
@@ -700,11 +735,13 @@ accessibility tree is unaffected) or the in-app capture. Two trade-offs to keep 
                 cancel), CallActionReceiver (answer/decline from the notification).
                 Wires all modules together.
 :core           Pure domain: interfaces (ISignalingService, IDiscoveryService,
-                MessageRepository, ContactRepository) + models (Message, Contact,
-                MessageStatus). No Android components, no DI framework. Everything
-                else depends on this.
-:data           Room persistence: MessageEntity / MessageDao / KryptaDatabase /
-                Converters, RoomMessageRepository, DataModule (Hilt).
+                MessageRepository, ContactRepository, LikeRepository, BlockRepository)
+                + models (Message, Contact, MessageStatus, Like/LikeState, BlockedPeer).
+                No Android components, no DI framework. Everything else depends on this.
+                Pure decision logic that deserves a JVM test lands here (LikeState).
+:data           Room persistence: MessageEntity / ContactEntity / LikeEntity /
+                BlockedPeerEntity + their DAOs, NyxDatabase (v5), Converters,
+                Migrations, Room*Repository impls, DataModule (Hilt).
 :native-bridge  Kotlin/JNI wrapper over the go-libp2p AAR (Libp2pNode). The FG service
                 lives in :app (it injects ChatService, which this module cannot see).
 :p2p-signaling  RendezvousService (real HKDF-SHA256, RFC 5869) + SignalingService
@@ -746,6 +783,10 @@ Use the Gradle wrapper (`./gradlew`).
   wiped the TECNO's identity and its two contacts. **Export a `.krbk` first, or run it on a
   spare device/emulator.** Target one class with
   `-Pandroid.testInstrumentationRunnerArguments.class=<FQCN>`; the uninstall happens either way.
+- Migration tests on device: `./gradlew :data:connectedDebugAndroidTest` — **safe, unlike the
+  line above.** A library module's instrumented tests install as their own package
+  (`chat.neto.nyx.data.test`) and uninstall only that, so `chat.neto.nyx`'s identity, contacts
+  and history are never touched. Verified.
 - Lint: `./gradlew :app:lint`
 - Clean: `./gradlew clean`
 
@@ -819,12 +860,15 @@ compiled to an AAR with gomobile. Kotlin calls it through generated classes
 - **DI = Hilt, KSP not kapt.** Modules with Hilt/Room annotations apply both the
   `ksp` and (for Hilt) `hilt` plugins and use `ksp(...)` for the compilers. Put `@Module`
   bindings in a `di/` package. Components install in `SingletonComponent`.
-- **Room migrations, not destructive.** `KryptaDatabase` is at **v4** with real migrations
+- **Room migrations, not destructive.** `NyxDatabase` is at **v5** with real migrations
   (`data/Migrations.kt`, wired in `DatabaseModule` via `addMigrations`); `exportSchema=true`
-  writes `data/schemas/`. **Every schema change adds a `Migration` + bumps the version** —
+  writes **`data/src/androidTest/assets/`** (not `data/schemas/` — see the Phase 2 box below).
+  **Every schema change adds a `Migration` + bumps the version** —
   do not reintroduce `fallbackToDestructiveMigration` (it wipes user data). Destructive
   fallback is scoped to the ancient v1 only (`fallbackToDestructiveMigrationFrom(1)`). A
-  migration's SQL must reproduce the entity schema exactly or Room throws at runtime.
+  migration's SQL must reproduce the entity schema exactly or Room throws at runtime —
+  `MigrationSqlTest` checks exactly that in the JVM, so the drift is caught at commit time
+  instead of on a phone at startup.
 - **Async = coroutines + Flow.** Services expose `Flow`/`SharedFlow`; repositories expose
   `Flow` + `suspend` functions. No RxJava, no callbacks-as-API.
 - **Crypto must stay correct.** `RendezvousService` is real (HKDF-SHA256). The rendezvous

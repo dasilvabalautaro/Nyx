@@ -163,7 +163,8 @@ class CallServiceTest {
         val contact = otherContact
         val chat = ChatService(
             signaling, cipher, messages, FakeContacts(listOf(otherContact)),
-            FakeKeyExchange(peerId), RendezvousService(), FakeFileStore(), scope,
+            FakeKeyExchange(peerId), RendezvousService(), FakeFileStore(),
+            FakeBlocks(), FakeLikes(), scope,
         )
         val audio = FakeAudioEngine()
         val calls = CallService(chat, signaling, cipher, audio, scope)

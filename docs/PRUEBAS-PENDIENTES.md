@@ -382,33 +382,37 @@ Dos cosas que hay que decirle a quien lo instale:
 
 ---
 
-## 14. Topes finitos del relay (plan 1.12c) — **PENDIENTE en producción**
-El código y los tests están cerrados (`infra/nyx-node/relay.go` + `relay_test.go`, incluido
-`TestRelayLimitsAppliedLive`, que corta de verdad un circuito real al pasarse del tope). Lo
-que falta es **la caja**: el nodo de producción sigue corriendo el binario viejo, con
-`WithInfiniteLimits`.
+## 14. Topes finitos del relay (plan 1.12c) — **DESPLEGADO; falta la prueba con 2 móviles**
+El código y los tests estaban cerrados (`infra/nyx-node/relay.go` + `relay_test.go`, incluido
+`TestRelayLimitsAppliedLive`, que corta de verdad un circuito real al pasarse del tope). Lo que
+faltaba era **la caja**, y ya está: **desplegado el 21 ago 2026**. Un solo despliegue cerró
+1.12c y 3.14, porque el mismo binario lleva topes, tablón y likes.
 
-1. - [ ] Redesplegar: `bash infra/nyx-node/deploy-vps.sh <usuario>@216.238.104.36`
-     (`dist/nyx-node-linux-amd64` ya está recompilado con los topes **y con el tablón y los
-     likes de la Fase 3** — el mismo redespliegue cierra 1.12c y 3.14).
-2. - [ ] Comprobar que arrancó con ellos: el propio script imprime la línea, o
-     `journalctl -u nyx-node | grep "Relay v2 topes"`. **Esperado**:
-     `1024 MiB/dirección/circuito, 6h0m0s máx., 512 reservas (32 por IP, 512 por ASN), 8
-     circuitos por peer`.
-3. - [ ] Confirmar que el PeerID **no cambió** (`deploy-vps.sh` no toca `node.key`): tiene que
-     seguir siendo `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`, o los móviles
-     instalados dejan de encontrar el nodo.
-4. - [ ] Las cuatro sondas desde la Mac (mailbox fetch, round-trip, wake, ping) siguen
-     pasando contra el nodo redesplegado.
-5. - [ ] **La prueba que de verdad importa**: una **videollamada larga** (>5 min) entre los dos
-     móviles, forzando el relay. Es el escenario que los topes por defecto rompían a los ~20 s.
-     **Esperado**: ni corte ni degradación. Si se corta, el tope se sube con `-relaydata` en el
-     `ExecStart` sin recompilar nada.
-6. - [ ] Comprobar de paso que arrancó con tablón y likes: el log del arranque debe llevar una
-     línea `Tablón: … · Likes: …`. Y en el móvil, que **desaparece** del diagnóstico el error
-     recurrente `likes: … protocol not supported` — mientras el nodo corra el binario viejo,
-     `fetchLikes()` falla en cada ciclo (sin afectar a la mensajería, va en su propio
-     `runCatching`).
+1. - [x] Redesplegado con `bash infra/nyx-node/deploy-vps.sh root@nyx.neto.chat`. El binario
+     instalado da el SHA-256 esperado (`41d56903…`) y `/tmp` quedó limpio.
+2. - [x] Arrancó con los topes, con la cadena **exacta** que se esperaba:
+     `Relay v2 topes: 1024 MiB/dirección/circuito, 6h0m0s máx., 512 reservas (32 por IP, 512
+     por ASN), 8 circuitos por peer`.
+3. - [x] PeerID intacto: sigue siendo
+     `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`. El `node.key` no se tocó (mismo
+     SHA-256 antes y después, y coincide con el respaldo de `~/keys/nyx-node/node.key`).
+4. - [x] Las cuatro sondas pasan **por nombre** (`/dns4/nyx.neto.chat/…`, que es la forma que
+     llevan los móviles): buzón responde, wake responde, round-trip completo, y latencia
+     **n=50/50, min=99 ms, p50=103 ms, p95=112 ms, max=131 ms** — algo mejor que la referencia
+     del 14 ago (p50 ≈ 105 / p95 ≤ 125). Cero avisos en el journal desde el reinicio, incluido
+     el de buffers QUIC: el sysctl aguanta.
+5. - [ ] **La prueba que de verdad importa, y la única que sigue pendiente**: una
+     **videollamada larga** (>5 min) entre los dos móviles, forzando el relay. Es el escenario
+     que los topes por defecto rompían a los ~20 s. **Esperado**: ni corte ni degradación. Si
+     se corta, el tope se sube con `-relaydata` en el `ExecStart` sin recompilar nada.
+     Aprovecha la misma sesión de la §13, que ya necesita el segundo móvil.
+6. - [x] Tablón y likes arrancados: `Tablón: /var/lib/nyx/board (TTL 48h0m0s, tarjeta ≤96 KiB,
+     ≤5000 por categoría) · Likes: /var/lib/nyx/likes (cuota propia, ≤500 pendientes)`, y los
+     dos directorios creados con permisos `0700` del usuario `nyx`.
+   - [ ] Falta la mitad que se ve **en el móvil**: que desaparezca del diagnóstico el error
+     recurrente `likes: … protocol not supported`. Mientras el nodo corría el binario viejo,
+     `fetchLikes()` fallaba en cada ciclo del `wanLoop` (sin afectar a la mensajería, va en su
+     propio `runCatching`); ahora el nodo responde, así que debería dejar de aparecer.
 
 ---
 

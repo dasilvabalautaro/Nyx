@@ -56,8 +56,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > real circuit: bytes flow under the cap, the relay cuts over it — it fails under
 > `WithInfiniteLimits`, so it actually detects the regression). What this does **not** do:
 > relayv2 has no aggregate traffic limit, so a reconnecting abuser keeps consuming; the real
-> backstop is a Vultr egress alert (still pending, plan 1.19). **The production box still runs
-> the old binary** — redeploy pending, PRUEBAS-PENDIENTES §14.
+> backstop is a Vultr egress alert (still pending, plan 1.19). **Deployed to production on
+> 21 Aug 2026** — the box now boots printing `Relay v2 topes: 1024 MiB/dirección/circuito,
+> 6h0m0s máx., 512 reservas (32 por IP, 512 por ASN), 8 circuitos por peer`, and the PeerID
+> survived the redeploy (`deploy-vps.sh` never touches `node.key`). What is **not** verified
+> yet is the thing the caps are for: a >5 min video call forced through the relay, which needs
+> the second phone (PRUEBAS-PENDIENTES §14.5). If it cuts, `-relaydata` in the `ExecStart`
+> raises the cap without recompiling.
 >
 > **Phase 2 (data model) is done, 16 Aug 2026.** `NyxDatabase` is at **v5**: two new tables
 > that Krypta never had, both additive. **`likes`** (`peerId` PK, `sentAt`, `receivedAt`,
@@ -137,8 +142,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > contract refined: **definitively** discarded envelopes (blocked peer, broken tag, rate-limited)
 > are acked so the node deletes them; only a *transient* persistence failure returns false and
 > triggers redelivery — otherwise a broken envelope would be a poisoned loop replayed on every
-> fetch. **The production node still runs the old binary**, so `fetchLikes()` fails each `wanLoop`
-> cycle until redeploy; it's wrapped in its own `runCatching` so it can never disturb messaging.
+> fetch. **The node was redeployed with all of this on 21 Aug 2026** (same binary as the relay
+> caps above — one deploy closed both), so the board and like protocols now answer in
+> production: startup prints `Tablón: /var/lib/nyx/board (TTL 48h0m0s, tarjeta ≤96 KiB, ≤5000
+> por categoría) · Likes: /var/lib/nyx/likes (cuota propia, ≤500 pendientes)`. Until then
+> `fetchLikes()` failed on every `wanLoop` cycle against production; it stays wrapped in its own
+> `runCatching` so it can never disturb messaging. Confirming the recurring
+> `likes: … protocol not supported` is gone from the phone's diagnostics is a device check that
+> is still pending.
 >
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is

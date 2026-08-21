@@ -169,9 +169,11 @@ están ya cerrados en esta caja: dos **al aprovisionar** (14 ago 2026) y el terc
 
 ## Topes del relay
 
-Desde el 16 ago 2026 el relay ya **no** corre con `WithInfiniteLimits()`. Los valores viven
-en [relay.go](relay.go), y el nodo los **imprime al arrancar** (`journalctl -u nyx-node |
-grep "Relay v2 topes"`), que es la forma rápida de saber con qué arrancó una caja:
+El relay ya **no** corre con `WithInfiniteLimits()`: el código es del 16 ago 2026, pero
+**esta caja no lo tuvo hasta el redespliegue del 21 ago** — durante esos cinco días el
+repositorio decía una cosa y producción hacía otra. De ahí que el nodo los **imprima al
+arrancar** (`journalctl -u nyx-node | grep "Relay v2 topes"`): es la única forma fiable de
+saber con qué arrancó una caja, porque mirar `relay.go` solo dice con qué *debería*.
 
 | Tope | Valor | Por qué ese |
 |---|---|---|

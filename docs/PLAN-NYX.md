@@ -1182,10 +1182,16 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       Fase 4 porque, con canal único en Play, el reporte con destino real es requisito de
       publicación, no una mejora.
 - [x] 3.11 Cerrar con entrada en `CLAUDE.md`.
-- [ ] 3.14 **Redesplegar el nodo** con `board.go`/`like.go` (y los topes del relay de 1.12c).
-      Hasta entonces `fetchLikes()` falla en cada ciclo del `wanLoop` contra producción — está
-      envuelto en su propio `runCatching` para que no toque la mensajería, y solo loguea al
-      cambiar el error. Va junto con PRUEBAS-PENDIENTES §14.
+- [x] 3.14 **Redesplegar el nodo** con `board.go`/`like.go` (y los topes del relay de 1.12c).
+      **Hecho el 21 ago 2026**, y en un solo despliegue: el mismo binario lleva el tablón, los
+      likes y los topes, así que cerró también la parte de producción de 1.12c. El arranque
+      imprime las dos líneas (`Relay v2 topes: …` y `Tablón: … · Likes: …`), el PeerID
+      `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` sobrevivió al despliegue, las
+      cuatro sondas pasan por nombre (buzón, wake, round-trip, y latencia p50=103 ms / p95=112 ms
+      con 50/50, algo mejor que la referencia del 14 ago) y no hay un solo aviso en el journal
+      desde el reinicio. Lo que **no** cierra esto: la videollamada larga por relay, que necesita
+      el segundo móvil (PRUEBAS-PENDIENTES §14.5), y ver desaparecer el error recurrente de
+      `fetchLikes()` en el diagnóstico del teléfono.
 
 ### 3b. Motor de avatar
 - [ ] 3b.1 Definir/confirmar criterios de evaluación de la Alternativa A (calidad,

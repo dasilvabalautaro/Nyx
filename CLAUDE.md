@@ -140,11 +140,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > fetch. **The production node still runs the old binary**, so `fetchLikes()` fails each `wanLoop`
 > cycle until redeploy; it's wrapped in its own `runCatching` so it can never disturb messaging.
 >
-> **Git remotes**: `origin` is `https://github.com/dasilvabalautaro/Nyx.git` (Nyx's own repo,
-> still empty — nothing pushed yet). Krypta is wired as `upstream` with
-> `--push no_push`, so a push to Krypta fails by construction. Fixes made in Krypta that Nyx
-> also needs are ported with the patch-rewriting procedure in the plan's "Relación con Krypta
-> a largo plazo" section — the two repos share history.
+> **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
+> credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
+> `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is
+> wired as `upstream` = `git@github.com:dasilvabalautaro/Krypta.git` with `--push no_push`, so
+> a push to Krypta fails by construction (verified: it can't resolve the URL). Fixes made in
+> Krypta that Nyx also needs are ported with `tools/port-from-krypta.sh` and logged in
+> [docs/SYNC-KRYPTA.md](docs/SYNC-KRYPTA.md) — see the plan's "Relación con Krypta a largo
+> plazo" section; the two repos share history. **Note for ports**: everything in this file
+> below the box, and every doc under `docs/`, is still literally Krypta's text (task 6.1), so
+> doc hunks apply from the **un-rebranded** patch — the code half is the one that takes the
+> `Krypta`→`Nyx` substitution.
 >
 > **Release signing** uses Nyx's own keystore (`~/keys/keys_apk/nyx.jks` via the git-ignored
 > `keystore.properties`) — never Krypta's, which would tie both products to one Play App

@@ -1193,18 +1193,53 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       el segundo móvil (PRUEBAS-PENDIENTES §14.5), y ver desaparecer el error recurrente de
       `fetchLikes()` en el diagnóstico del teléfono.
 
-### 3b. Motor de avatar
-- [ ] 3b.1 Definir/confirmar criterios de evaluación de la Alternativa A (calidad,
-      tamaño de modelo, latencia, filtro de contenido). **Criterio endurecido por la
-      Fase 0**: el avatar se publica en el tablón, que es la superficie regulada por
-      Child Safety Standards, así que generar un rostro que parezca de menor tiene que
-      ser *estructuralmente improbable*, no *estadísticamente raro*.
-- [ ] 3b.2 Evaluar el modelo propio (Alternativa A) contra esos criterios.
-- [ ] 3b.3 Decisión: A si cumple criterios, B (constructor paramétrico) si no.
-- [ ] 3b.4 Implementar la alternativa elegida detrás de una interfaz común
-      (`AvatarEngine` o similar) para no acoplar el resto de la app a cuál se usó.
+### 3b. Motor de avatar — **decidido el 21 ago 2026** (falta enchufarlo a la UI, que es Fase 4)
+
+Llegó el `avatarface-render-kit` del repositorio `dasilvabalautaro/Avatar` (ADR 0012) y
+resuelve la decisión. Detalle completo en
+[docs/avatar/INTEGRACION-NYX.md](avatar/INTEGRACION-NYX.md).
+
+- [x] 3b.1 Criterios de evaluación de la Alternativa A. Quedaron fijados y **medidos**, no
+      estimados: presupuesto de 5 s por imagen en gama media, tamaño compatible con un APK que
+      ya carga ~75 MB de AAR, y el criterio endurecido por la Fase 0 — que un rostro que parezca
+      de menor sea *estructuralmente improbable*, no *estadísticamente raro*.
+- [x] 3b.2 Evaluada la Alternativa A y **descartada con números**: Würstchen v2 destilado en
+      cinco formulaciones (~28 h de RTX 4090); el mejor estudiante (7,5 M parámetros) daba
+      **4,46 s en INT8 produciendo ruido** y **11 s en FP32** contra el presupuesto de 5 s. El
+      hallazgo decisivo fue de diseño, no de rendimiento: el modelo estaba condicionado **sólo
+      por los atributos discretos** del vocabulario cerrado, así que no aportaba poder
+      expresivo — era un renderizador caro y borroso de una tabla de categorías.
+- [x] 3b.3 Decisión: **dibujo vectorial por código**, que no es exactamente ninguna de las dos
+      casillas del plan. Se queda con la entrada expresiva de la A (acepta texto libre, lo
+      traduce a atributos) y con el coste, el determinismo y la ausencia de superficie de abuso
+      de la B. 256 px en **18-20 ms en el TECNO**, sin pesos, sin red, sin dependencias más allá
+      de `android.graphics`.
+- [x] 3b.4 Archivos colocados: la parte pura (geometría, paleta, atributos, parser, filtro
+      RF-09) en `:core`, donde se prueba en la JVM; el renderizador en `:app`, que es lo único
+      que necesita Android; herramientas y verificación en `tools/avatar/`. Cubierto por
+      `AvatarPromptTest` (7) y `AvatarIdentityTest` (11). **Lo que falta de esta tarea** es la
+      interfaz común (`AvatarEngine`): hoy no hay dos motores entre los que elegir, así que
+      abstraerlo ahora sería una envoltura vacía; se hará si aparece un segundo.
+- [x] 3b.7 **Avatar derivado del PeerID** (`AvatarIdentity` en `:core`, gemelo en
+      `tools/avatar/python/identity.py`) — añadido, no venía en el kit. Deriva los 16 atributos
+      de `SHA-256("nyx-avatar-v1" ‖ contador ‖ peerId)`, mismo idioma de dominio separado que
+      `SafetyNumber` y `DiscoveryTopic`. Da un rostro propio y estable sin que el usuario haga
+      nada, y **reduce la superficie de RF-09**: un rostro derivado de un hash no puede pedir a
+      un menor ni parecerse a alguien real a propósito. Lleva vocabularios **ponderados** porque
+      el muestreo uniforme producía caras que nadie elegiría (8 de cada 10 con gafas, barbas de
+      colores); un catálogo curado no es una distribución uniforme.
+      **Aviso que hay que respetar en la Fase 4**: ~9 bits de entropía perceptiva a 40 dp, así
+      que **no sustituye al número de seguridad** y no debe presentarse como verificación. Y un
+      avatar *elegido* nunca debe mostrarse como seña de identidad, o el atacante sólo tiene que
+      escribir la misma descripción.
 - [ ] 3b.5 Integrar con `ImageCodec` existente para compresión/tope de tamaño.
-- [ ] 3b.6 Cerrar con entrada en `CLAUDE.md` explicando qué alternativa se usó y por qué.
+- [ ] 3b.8 Regla de contraste mínimo entre pelo y piel: a 40 dp algunas caras derivadas se leen
+      como una mancha (visible en `tools/avatar/referencia/identidades-derivadas.png`). Acopla
+      atributos, así que conviene decidirlo mirando la lista de conversaciones real, en la Fase 4.
+- [ ] 3b.9 Comparación de píxeles Android↔Python (`compare_android_render.py`) para que las dos
+      implementaciones no diverjan. Necesita test instrumentado: **en un emulador**, que en
+      `:app` es destructivo.
+- [x] 3b.6 Cerrar con entrada en `CLAUDE.md` explicando qué alternativa se usó y por qué.
 
 ### 4. Funcionalidad de app
 - [ ] 4.1 Guard de bloqueo temprano en `ChatService.onReceived`, `LikeService`,

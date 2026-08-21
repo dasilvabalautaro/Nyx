@@ -44,3 +44,11 @@ local.properties
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 /.idea/deploymentTargetSelector.xml
+
+# Bytecode de las herramientas de Python (tools/avatar)
+__pycache__/
+*.pyc
+
+# El kit de avatares llegó como zip; su contenido vive desplegado en core/, app/,
+# tools/avatar/ y docs/avatar/, así que el paquete es redundante en git.
+avatarface-render-kit.zip

@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "combinaciones": 13226976000000,
+  "orden_canonico": [
+    "expression",
+    "face_shape",
+    "skin_tone",
+    "hair_style",
+    "hair_color",
+    "eye_color",
+    "eye_shape",
+    "accessory",
+    "background",
+    "brow_style",
+    "nose_style",
+    "facial_hair",
+    "glasses",
+    "earrings",
+    "freckles",
+    "clothing",
+    "clothing_color"
+  ],
+  "atributos_heredados": [
+    "expression",
+    "face_shape",
+    "skin_tone",
+    "hair_style",
+    "hair_color",
+    "eye_color",
+    "eye_shape",
+    "accessory",
+    "background"
+  ],
+  "por_defecto": {
+    "expression": "calm",
+    "face_shape": "oval",
+    "skin_tone": "light",
+    "hair_style": "short",
+    "hair_color": "brown",
+    "eye_color": "brown",
+    "eye_shape": "almond",
+    "accessory": "none",
+    "background": "sky",
+    "brow_style": "natural",
+    "nose_style": "straight",
+    "facial_hair": "none",
+    "glasses": "none",
+    "earrings": "none",
+    "freckles": "none",
+    "clothing": "crew neck",
+    "clothing_color": "blue"
+  },
+  "vocabulario": {
+    "expression": [
+      "smiling",
+      "calm",
+      "happy",
+      "confident",
+      "serious",
+      "friendly"
+    ],
+    "face_shape": [
+      "round",
+      "oval",
+      "square",
+      "heart",
+      "long",
+      "diamond"
+    ],
+    "skin_tone": [
+      "porcelain",
+      "light",
+      "beige",
+      "golden",
+      "olive",
+      "tan",
+      "brown",
+      "deep",
+      "ebony"
+    ],
+    "hair_style": [
+      "short",
+      "buzz",
+      "curly",
+      "wavy",
+      "side-parted",
+      "bob",
+      "long",
+      "ponytail",
+      "bun",
+      "afro",
+      "undercut",
+      "bald"
+    ],
+    "hair_color": [
+      "black",
+      "brown",
+      "auburn",
+      "blonde",
+      "blue",
+      "pink",
+      "gray",
+      "red",
+      "silver",
+      "green"
+    ],
+    "eye_color": [
+      "brown",
+      "blue",
+      "green",
+      "gray",
+      "hazel",
+      "amber"
+    ],
+    "eye_shape": [
+      "almond",
+      "round",
+      "narrow",
+      "wide",
+      "hooded"
+    ],
+    "accessory": [
+      "none",
+      "round glasses",
+      "square glasses",
+      "sunglasses",
+      "earrings",
+      "freckles"
+    ],
+    "background": [
+      "coral",
+      "mint",
+      "sky",
+      "lavender",
+      "sand",
+      "slate",
+      "rose",
+      "teal"
+    ],
+    "brow_style": [
+      "natural",
+      "arched",
+      "thick",
+      "thin",
+      "angled"
+    ],
+    "nose_style": [
+      "straight",
+      "small",
+      "button",
+      "wide",
+      "pointed"
+    ],
+    "facial_hair": [
+      "none",
+      "stubble",
+      "mustache",
+      "goatee",
+      "short beard",
+      "full beard"
+    ],
+    "glasses": [
+      "none",
+      "round",
+      "square",
+      "sunglasses",
+      "rectangular"
+    ],
+    "earrings": [
+      "none",
+      "studs",
+      "hoops"
+    ],
+    "freckles": [
+      "none",
+      "light",
+      "heavy"
+    ],
+    "clothing": [
+      "crew neck",
+      "v-neck",
+      "collared shirt",
+      "hoodie",
+      "turtleneck"
+    ],
+    "clothing_color": [
+      "white",
+      "charcoal",
+      "red",
+      "blue",
+      "green",
+      "mustard",
+      "purple"
+    ]
+  },
+  "terminos_menores_rf09": [
+    "adolescente",
+    "adolescentes",
+    "babies",
+    "baby",
+    "bebe",
+    "bebes",
+    "boy",
+    "boys",
+    "child",
+    "children",
+    "girl",
+    "girls",
+    "infant",
+    "infante",
+    "infantes",
+    "infantil",
+    "infants",
+    "kid",
+    "kids",
+    "loli",
+    "menor",
+    "menores",
+    "minor",
+    "minors",
+    "nina",
+    "ninas",
+    "nino",
+    "ninos",
+    "preadolescente",
+    "preadolescentes",
+    "preteen",
+    "preteens",
+    "shota",
+    "teen",
+    "teenage",
+    "teenager",
+    "teenagers",
+    "teens",
+    "toddler",
+    "toddlers",
+    "underage"
+  ]
+}

@@ -151,6 +151,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > `likes: … protocol not supported` is gone from the phone's diagnostics is a device check that
 > is still pending.
 >
+> **Phase 3b (avatar engine) is decided, 21 Aug 2026 — the machinery is in, the UI is Phase 4.**
+> The `avatarface-render-kit` (from the sibling `dasilvabalautaro/Avatar` repo, ADR 0012,
+> Apache-2.0) settles the plan's open A-vs-B question, and **it is neither**: it takes free text
+> → structured attributes → **flat vector drawing by code**, so it keeps A's expressive input
+> while having B's cost, determinism and absence of abuse surface. 256 px in **18–20 ms on the
+> TECNO**, no weights, no network, nothing beyond `android.graphics`. Alternative A was killed
+> **with measurements**, which is worth not re-litigating: a distilled Würstchen v2 student
+> (7.5 M params) gave **4.46 s per image in INT8 producing noise** and 11 s in FP32 against a
+> 5 s budget — and the decisive finding was design, not speed: the model was conditioned
+> **only on the closed vocabulary's discrete attributes**, so it was an expensive blurry
+> renderer of a category table. Files are split by *what needs Android, because that decides
+> where it can be tested*: geometry, palette, attributes, parser and the **RF-09 adults-only
+> filter** went to `:core` (`core/…/core/avatar/`) where `testDebugUnitTest` covers them on the
+> JVM; only `AvatarRenderer` went to `:app` (`app/…/nyx/avatar/`). Two edits made that possible:
+> `Palette` does its color math by hand instead of `android.graphics.Color`, and
+> `AvatarAttributes` lost an unused `fromJson` that tied `:core` to `org.json` (a stub in JVM
+> tests). Python twin, scripts and reference images live in `tools/avatar/`; docs in
+> `docs/avatar/`, with [docs/avatar/INTEGRACION-NYX.md](docs/avatar/INTEGRACION-NYX.md) as the
+> Nyx-specific entry point.
+>
+> **Added on top of the kit: `AvatarIdentity`, the avatar derived from the PeerID.** The kit
+> draws whatever you *describe*, which is presentation — and a chosen avatar identifies nobody,
+> since anyone can type the same description. `AvatarIdentity` (`:core`, twin in
+> `tools/avatar/python/identity.py`) derives all 16 attributes from
+> `SHA-256("nyx-avatar-v1" ‖ counter ‖ peerId)`, same domain-separation idiom as `SafetyNumber`
+> and `DiscoveryTopic`. Its input is the PeerID and **only** the PeerID, so your face is yours
+> with zero effort and cannot be forged by typing. It also **shrinks the RF-09 surface**: a face
+> derived from a hash cannot request a minor or deliberately resemble a real person, so it is
+> the right *default*, with text as the opt-in. **The trap to avoid in Phase 4**: this is not
+> verification. Measured entropy is ~39.5 bits total, ~17 perceptual at full size and **~9 bits
+> at the ~40 dp of the conversations list** — and an Ed25519 keygen costs microseconds, so
+> grinding a look-alike PeerID takes under a second. `SafetyNumber` + QR (199 bits) stays the
+> anti-MITM mechanism; the face catches *mistakes* (wrong PeerID pasted, wrong chat), which it
+> does very well. Corollary: a **chosen** avatar must never be presented as an identity signal,
+> or an attacker just types the same description — that would regress the SafetyNumber work.
+> Non-obvious finding while building it: sampling the vocabulary **uniformly** produced faces
+> nobody would pick (8 in 10 with glasses, colored beards) — **a curated catalogue is not a
+> uniform distribution**, so the vocabularies carry weights; the entropy that buys is entropy
+> that was never buying security. Deliberately *not* done: correlating facial hair with
+> hairstyle — it would look more "coherent" and it encodes a gender norm into a dating app's
+> default avatar. Covered by `AvatarIdentityTest` (11) and `AvatarPromptTest` (7), including a
+> **golden test whose values come from running the Python twin**, so one test pins the contract
+> (domain, order, weights) *and* proves the two implementations agree; hand-falsified by
+> bumping `DOMAIN`. Still open: wiring to the UI (Phase 4), `ImageCodec` compression (3b.5), a
+> hair/skin contrast rule (some faces read as a blob at 40 dp, 3b.8), and the Android↔Python
+> pixel comparison, which needs an **emulator** since `:app` instrumented tests are destructive.
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is
@@ -798,6 +845,7 @@ in-app capture. Two trade-offs to keep in mind: casting
 
 ```
 :app            Compose UI + ViewModels. KryptaApplication(@HiltAndroidApp),
+                avatar/AvatarRenderer (the only avatar piece that needs android.graphics),
                 MainActivity(@AndroidEntryPoint, singleTop for notif deep-links),
                 KryptaForegroundService (keeps the node + wake alive with the UI closed),
                 IncomingNotifier (owns every user-facing alert; attached from the
@@ -809,7 +857,10 @@ in-app capture. Two trade-offs to keep in mind: casting
                 MessageRepository, ContactRepository, LikeRepository, BlockRepository)
                 + models (Message, Contact, MessageStatus, Like/LikeState, BlockedPeer).
                 No Android components, no DI framework. Everything else depends on this.
-                Pure decision logic that deserves a JVM test lands here (LikeState).
+                Pure decision logic that deserves a JVM test lands here (LikeState), and so
+                does the Android-free half of the avatar kit (core/avatar/: Geometry,
+                Palette, AvatarAttributes, AttributeParser, the RF-09 AvatarPrompt filter,
+                and AvatarIdentity — the PeerID-derived avatar).
 :data           Room persistence: MessageEntity / ContactEntity / LikeEntity /
                 BlockedPeerEntity + their DAOs, NyxDatabase (v5), Converters,
                 Migrations, Room*Repository impls, DataModule (Hilt).

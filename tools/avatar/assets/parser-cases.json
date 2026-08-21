@@ -1,0 +1,222 @@
+[
+  {
+    "text": "smiling adult with curly pink hair and round glasses",
+    "expected": {
+      "expression": "smiling",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "curly",
+      "hair_color": "pink",
+      "eye_color": "brown",
+      "eye_shape": "almond",
+      "accessory": "round glasses",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "round",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "serious adult with deep skin and full beard and thick brows",
+    "expected": {
+      "expression": "serious",
+      "face_shape": "oval",
+      "skin_tone": "deep",
+      "hair_style": "short",
+      "hair_color": "brown",
+      "eye_color": "brown",
+      "eye_shape": "almond",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "thick",
+      "nose_style": "straight",
+      "facial_hair": "full beard",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "confident adult, square face, olive skin, bald, sunglasses, charcoal hoodie",
+    "expected": {
+      "expression": "confident",
+      "face_shape": "square",
+      "skin_tone": "olive",
+      "hair_style": "bald",
+      "hair_color": "brown",
+      "eye_color": "brown",
+      "eye_shape": "almond",
+      "accessory": "sunglasses",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "sunglasses",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "hoodie",
+      "clothing_color": "charcoal"
+    }
+  },
+  {
+    "text": "friendly adult with long red hair, green wide eyes, many freckles, mint background",
+    "expected": {
+      "expression": "friendly",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "long",
+      "hair_color": "red",
+      "eye_color": "green",
+      "eye_shape": "wide",
+      "accessory": "freckles",
+      "background": "mint",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "heavy",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "calm adult with silver bob hair, gray eyes, hoops and collared shirt",
+    "expected": {
+      "expression": "calm",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "bob",
+      "hair_color": "brown",
+      "eye_color": "gray",
+      "eye_shape": "almond",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "none",
+      "earrings": "hoops",
+      "freckles": "none",
+      "clothing": "collared shirt",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "happy adult with afro black hair, brown round eyes, mustard sweater",
+    "expected": {
+      "expression": "happy",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "afro",
+      "hair_color": "black",
+      "eye_color": "brown",
+      "eye_shape": "round",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "mustard"
+    }
+  },
+  {
+    "text": "adult with wavy blonde hair, hazel eyes, arched brows, pointed nose",
+    "expected": {
+      "expression": "calm",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "wavy",
+      "hair_color": "blonde",
+      "eye_color": "hazel",
+      "eye_shape": "almond",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "arched",
+      "nose_style": "pointed",
+      "facial_hair": "none",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "adult with side-parted blue hair, amber narrow eyes, goatee, teal background",
+    "expected": {
+      "expression": "calm",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "side-parted",
+      "hair_color": "blue",
+      "eye_color": "amber",
+      "eye_shape": "narrow",
+      "accessory": "none",
+      "background": "teal",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "goatee",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "an adult",
+    "expected": {
+      "expression": "calm",
+      "face_shape": "oval",
+      "skin_tone": "light",
+      "hair_style": "short",
+      "hair_color": "brown",
+      "eye_color": "brown",
+      "eye_shape": "almond",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "none",
+      "glasses": "none",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "crew neck",
+      "clothing_color": "blue"
+    }
+  },
+  {
+    "text": "adult with tan skin, buzz black hair, stubble, rectangular glasses, turtleneck",
+    "expected": {
+      "expression": "calm",
+      "face_shape": "oval",
+      "skin_tone": "tan",
+      "hair_style": "buzz",
+      "hair_color": "black",
+      "eye_color": "brown",
+      "eye_shape": "almond",
+      "accessory": "none",
+      "background": "sky",
+      "brow_style": "natural",
+      "nose_style": "straight",
+      "facial_hair": "stubble",
+      "glasses": "rectangular",
+      "earrings": "none",
+      "freckles": "none",
+      "clothing": "turtleneck",
+      "clothing_color": "blue"
+    }
+  }
+]

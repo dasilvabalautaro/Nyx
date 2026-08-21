@@ -189,13 +189,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Non-obvious finding while building it: sampling the vocabulary **uniformly** produced faces
 > nobody would pick (8 in 10 with glasses, colored beards) — **a curated catalogue is not a
 > uniform distribution**, so the vocabularies carry weights; the entropy that buys is entropy
-> that was never buying security. Deliberately *not* done: correlating facial hair with
-> hairstyle — it would look more "coherent" and it encodes a gender norm into a dating app's
-> default avatar. Covered by `AvatarIdentityTest` (11) and `AvatarPromptTest` (7), including a
+> that was never buying security. Two coherence rules landed the same day. **Facial hair is
+> switched off for long hairstyles** — a deliberate normative call, taken at the author's request
+> after first being declined, and it only touches the *derived* avatar: type it and you get it.
+> **Hair/skin contrast** is the more interesting one, because the first diagnosis was wrong and
+> only rendering at 40 dp showed it: `ebony`+`black` (Δ22) reads **fine** — the linework gives it
+> an edge — so a uniform threshold would have **erased black hair on dark skin**, far worse than
+> the defect it fixes; the real blob is `ebony`+`brown` (Δ10), plus the pale-on-pale pairs
+> (`golden`+`blonde`, Δ7). Hence two thresholds (20 general, 25 when both tones are pale) over an
+> **integer** luma so Kotlin and Python agree bit for bit; 15 unreadable pairs go, 7–9 hair
+> colors survive per skin tone, and a test *requires* that dark-on-dark keeps appearing. Side
+> effect worth knowing: filtering candidates shifts the weighted pick, so enabling the rule moved
+> faces that had no contrast problem — that is what the golden test is for. Covered by
+> `AvatarIdentityTest` (15) and `AvatarPromptTest` (7), including a
 > **golden test whose values come from running the Python twin**, so one test pins the contract
 > (domain, order, weights) *and* proves the two implementations agree; hand-falsified by
 > bumping `DOMAIN`. Still open: wiring to the UI (Phase 4), `ImageCodec` compression (3b.5), a
-> hair/skin contrast rule (some faces read as a blob at 40 dp, 3b.8), and the Android↔Python
+> and the Android↔Python
 > pixel comparison, which needs an **emulator** since `:app` instrumented tests are destructive.
 >
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS

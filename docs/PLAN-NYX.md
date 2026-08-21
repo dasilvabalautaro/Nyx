@@ -1233,9 +1233,16 @@ resuelve la decisión. Detalle completo en
       avatar *elegido* nunca debe mostrarse como seña de identidad, o el atacante sólo tiene que
       escribir la misma descripción.
 - [ ] 3b.5 Integrar con `ImageCodec` existente para compresión/tope de tamaño.
-- [ ] 3b.8 Regla de contraste mínimo entre pelo y piel: a 40 dp algunas caras derivadas se leen
-      como una mancha (visible en `tools/avatar/referencia/identidades-derivadas.png`). Acopla
-      atributos, así que conviene decidirlo mirando la lista de conversaciones real, en la Fase 4.
+- [x] 3b.8 **Dos reglas de coherencia, hechas el 21 ago 2026.** (a) Con peinado largo se apaga
+      el vello facial — decisión normativa deliberada, tomada a petición del autor tras haberla
+      descartado primero; el camino de texto no se toca. (b) Contraste mínimo entre pelo y piel:
+      el diagnóstico inicial ("oscuro sobre oscuro") era **cierto a medias**, y sólo se vio
+      renderizando a 40 dp — `ebony`+`black` (Δ22) se lee bien y filtrarlo habría **borrado el
+      pelo negro sobre piel oscura**, mientras que `ebony`+`brown` (Δ10) sí es una mancha. Dos
+      umbrales (20 general, 25 entre pálidos) quitan 15 pares ilegibles y dejan 7-9 colores por
+      tono de piel; hay un test que exige que el negro sobre piel oscura siga saliendo.
+      Referencia nueva: `tools/avatar/referencia/identidades-40dp.png`, al tamaño de la lista,
+      que es el único donde estos defectos se ven.
 - [ ] 3b.9 Comparación de píxeles Android↔Python (`compare_android_render.py`) para que las dos
       implementaciones no diverjan. Necesita test instrumentado: **en un emulador**, que en
       `:app` es destructivo.

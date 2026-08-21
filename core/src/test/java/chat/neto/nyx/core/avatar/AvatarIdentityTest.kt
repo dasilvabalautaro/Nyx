@@ -119,6 +119,61 @@ class AvatarIdentityTest {
     }
 
     /**
+     * El vello facial se apaga con los peinados largos. Es la regla de coherencia que se decidió
+     * el 21 ago 2026, después de haberla descartado el mismo día: va aquí para que quede claro
+     * que es deliberada y no un efecto colateral de los pesos.
+     */
+    @Test
+    fun `ningun peinado largo lleva vello facial`() {
+        val largos = setOf("bob", "long", "ponytail", "bun")
+        val conVello = (0 until 5000)
+            .map { AvatarIdentity.attributesFor("12D3KooWlargo$it") }
+            .filter { it.hairStyle in largos && it.facialHair != "none" }
+        assertTrue("peinado largo con vello facial: ${conVello.take(3)}", conVello.isEmpty())
+    }
+
+    /**
+     * Los cuatro pares pálido-sobre-pálido que no se leen a 40 dp. Se comprobó renderizándolos:
+     * en esos, piel y pelo son los dos cálidos y claros y no queda borde.
+     */
+    @Test
+    fun `no salen los pares de pelo y piel que no se distinguen`() {
+        val prohibidos = setOf(
+            // Pálidos sobre pálido: los dos tonos cálidos y claros, sin borde entre ellos.
+            "light" to "silver", "beige" to "silver",
+            "beige" to "blonde", "golden" to "blonde", "porcelain" to "silver",
+            // Y los oscuros que de verdad se funden. Ojo: "ebony" to "black" (Δ22) NO está
+            // aquí a propósito — ese se lee bien, y el test de más abajo exige que siga saliendo.
+            "ebony" to "brown", "deep" to "auburn", "deep" to "blue", "deep" to "brown",
+            "brown" to "red", "brown" to "green",
+            "tan" to "gray", "tan" to "pink", "olive" to "gray", "olive" to "pink",
+        )
+        val encontrados = (0 until 20_000)
+            .map { AvatarIdentity.attributesFor("12D3KooWcontraste$it") }
+            .map { it.skinTone to it.hairColor }
+            .filter { it in prohibidos }
+            .distinct()
+        assertTrue("par ilegible: $encontrados", encontrados.isEmpty())
+    }
+
+    /**
+     * El contrapunto del test de arriba, y el más importante de los dos.
+     *
+     * La primera versión de la regla de contraste filtraba por luminancia a secas, y eso
+     * **eliminaba el pelo negro sobre piel oscura** — que se lee perfectamente (el trazado le da
+     * borde) y que es una de las combinaciones más comunes que existen. Borrarla en una app de
+     * citas es mucho peor que el defecto que arreglaba. Este test impide que vuelva a colarse
+     * al ajustar umbrales.
+     */
+    @Test
+    fun `el pelo oscuro sobre piel oscura sigue existiendo`() {
+        val casos = (0 until 5000)
+            .map { AvatarIdentity.attributesFor("12D3KooWoscuro$it") }
+            .count { it.skinTone in setOf("deep", "ebony") && it.hairColor in setOf("black", "brown") }
+        assertTrue("se perdió el pelo oscuro sobre piel oscura", casos > 100)
+    }
+
+    /**
      * Caso dorado: fija el contrato entero de un tirón.
      *
      * `DOMAIN`, el orden de los vocabularios y **cada peso** entran en el rostro que sale. Si
@@ -175,6 +230,37 @@ class AvatarIdentityTest {
         val peloNoNatural = muestras.count { it.hairColor in setOf("blue", "pink", "green") }
         assertTrue("pelo de fantasía en demasiadas: $peloNoNatural/5000", peloNoNatural < 5000 * 0.15)
         assertTrue("el pelo de fantasía desapareció del todo", peloNoNatural > 0)
+    }
+
+    /**
+     * Dos casos dorados más, elegidos porque **atraviesan las reglas nuevas**, que es donde una
+     * divergencia entre Kotlin y Python sería más fácil de introducir y más difícil de ver: uno
+     * con peinado largo (el vello facial tiene que salir apagado) y otro con piel clara y pelo
+     * claro (el filtro de contraste tuvo que descartar candidatos antes de elegir).
+     *
+     * Como el dorado principal, los valores salen de ejecutar `tools/avatar/python/identity.py`.
+     */
+    @Test
+    fun `los casos que cruzan las reglas nuevas coinciden con el gemelo de Python`() {
+        val largo = AvatarIdentity.attributesFor("12D3KooWcruce2")
+        assertEquals("bob", largo.hairStyle)
+        assertEquals("none", largo.facialHair)
+        assertEquals("ebony", largo.skinTone)
+        assertEquals("gray", largo.hairColor)
+        assertEquals("long", largo.faceShape)
+        assertEquals("rose", largo.background)
+        assertEquals("rectangular", largo.glasses)
+        assertEquals("crew neck", largo.clothing)
+
+        val claro = AvatarIdentity.attributesFor("12D3KooWcruce3")
+        assertEquals("bald", claro.hairStyle)
+        assertEquals("short beard", claro.facialHair)
+        assertEquals("olive", claro.skinTone)
+        assertEquals("blonde", claro.hairColor)
+        assertEquals("diamond", claro.faceShape)
+        assertEquals("sky", claro.background)
+        assertEquals("studs", claro.earrings)
+        assertEquals("v-neck", claro.clothing)
     }
 
     @Test(expected = IllegalArgumentException::class)

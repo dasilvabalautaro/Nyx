@@ -14,6 +14,7 @@ la copia autoritativa. No lo dupliques aquí: duplicarlo es cómo empiezan a div
 import hashlib
 
 from attributes import DEFAULT_ATTRIBUTES, AvatarAttributes
+from palette import HAIR_COLORS, SKIN_TONES
 
 DOMAIN = b"nyx-avatar-v1"
 BYTES_PER_ATTRIBUTE = 4
@@ -67,6 +68,38 @@ def _choose(vocabulary, value: int) -> str:
     return vocabulary[-1][0]  # inalcanzable
 
 
+# Peinados que el trazado dibuja largos: con uno de estos se apaga el vello facial.
+# Regla de coherencia visual y también normativa, así que va a la vista. Sólo afecta al avatar
+# derivado; quien quiera barba con melena la escribe.
+LONG_HAIR = {"bob", "long", "ponytail", "bun"}
+
+# Contraste pelo/piel. Dos umbrales, y el motivo está en el KDoc de AvatarIdentity.kt: el suelo
+# general va bajo a propósito para no perder `ebony`+`black` (Δ22), que se lee bien; el exigente
+# sólo se aplica cuando piel y pelo son los dos pálidos, que es donde no queda borde.
+PALE_LUMA = 150
+MIN_DELTA = 20
+MIN_PALE_DELTA = 25
+
+
+def _luma(hex_color: str) -> int:
+    """Brillo percibido, en enteros: la misma cuenta en Kotlin y aquí da el mismo resultado."""
+    value = int(hex_color.lstrip("#"), 16)
+    red, green, blue = (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF
+    return (299 * red + 587 * green + 114 * blue) // 1000
+
+
+def _hair_colors_for(skin_tone: str, vocabulary):
+    """Colores de pelo utilizables sobre `skin_tone`; la lista entera si el filtro la vacía."""
+    skin = _luma(SKIN_TONES[skin_tone])
+    usable = []
+    for name, weight in vocabulary:
+        hair = _luma(HAIR_COLORS[name])
+        needed = MIN_PALE_DELTA if (skin > PALE_LUMA and hair > PALE_LUMA) else MIN_DELTA
+        if abs(hair - skin) >= needed:
+            usable.append((name, weight))
+    return usable or vocabulary
+
+
 def _stream(peer_id: str, length: int) -> bytes:
     """SHA-256(DOMAIN || contador || peerId) por bloques, igual que el lado Kotlin."""
     out = bytearray()
@@ -86,13 +119,22 @@ def attributes_for(peer_id: str) -> AvatarAttributes:
         raise ValueError("el PeerID no puede estar vacío")
 
     raw = _stream(peer_id, len(VOCABULARIES) * BYTES_PER_ATTRIBUTE)
+    values = [
+        int.from_bytes(raw[i * BYTES_PER_ATTRIBUTE:(i + 1) * BYTES_PER_ATTRIBUTE], "big")
+        for i in range(len(VOCABULARIES))
+    ]
+
     attributes = dict(DEFAULT_ATTRIBUTES)
     attributes["accessory"] = ACCESSORY_FIXED
 
+    # El orden importa: el pelo se elige sabiendo ya la piel, y el vello sabiendo el peinado.
     for index, (name, vocabulary) in enumerate(VOCABULARIES):
-        offset = index * BYTES_PER_ATTRIBUTE
-        value = int.from_bytes(raw[offset:offset + BYTES_PER_ATTRIBUTE], "big")
-        attributes[name] = _choose(vocabulary, value)
+        if name == "hair_color":
+            vocabulary = _hair_colors_for(attributes["skin_tone"], vocabulary)
+        attributes[name] = _choose(vocabulary, values[index])
+
+    if attributes["hair_style"] in LONG_HAIR:
+        attributes["facial_hair"] = "none"
 
     # AvatarAttributes valida el vocabulario en __post_init__, así que un mapeo mal hecho
     # revienta aquí y no más tarde, dibujando un rasgo por defecto en silencio.

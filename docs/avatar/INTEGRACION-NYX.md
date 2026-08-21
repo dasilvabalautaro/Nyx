@@ -104,9 +104,34 @@ Los vocabularios llevan ahora pesos (`AvatarIdentity.Choice`). Se paga en entrop
 gusto, precisamente porque la tabla de arriba ya establece que esa entropía no compra seguridad.
 Todos los valores siguen siendo alcanzables; sólo dejan de ser equiprobables.
 
-Una cosa que se decidió **no** hacer: correlacionar el vello facial con el peinado. Saldrían
-rostros más "coherentes", pero es codificar una norma de género en el avatar por defecto de una
-app de citas. Se bajó la frecuencia y quien quiera otra cosa la escribe.
+### Dos reglas de coherencia (21 ago 2026)
+
+**Vello facial ↔ peinado.** Con un peinado largo (`bob`, `long`, `ponytail`, `bun`) el vello
+facial se apaga. Se decidió primero **no** hacerlo, por no codificar una norma de género en el
+avatar por defecto de una app de citas, y luego hacerlo a petición del autor. Queda escrito en
+el código que es una decisión normativa deliberada, no un efecto de los pesos. El camino de
+texto no se toca: quien quiera barba con melena la escribe y la obtiene.
+
+**Contraste pelo ↔ piel.** El diagnóstico inicial —"piel oscura + pelo oscuro se vuelve una
+mancha"— resultó **cierto sólo a medias**, y sólo se vio renderizando los peores pares a 40 dp:
+
+- `ebony` + `black` (Δ22) se lee **perfectamente**: el trazado da borde, y la piel es cálida
+  frente a un pelo neutro. Un umbral alto y uniforme lo habría eliminado, y con él el pelo negro
+  sobre piel oscura. Borrar esa combinación sería mucho peor que el defecto que arregla, así que
+  hay un test que **exige** que siga apareciendo.
+- `ebony` + `brown` (Δ10) **sí** es una mancha — ese era el caso que se veía mal en la primera
+  galería.
+- Fallan igual los pálidos sobre pálido: `golden`+`blonde` (Δ7), `light`+`silver` (Δ6).
+
+De ahí dos umbrales sobre un brillo percibido calculado **con enteros** (para que Kotlin y
+Python den bit a bit lo mismo): un suelo general de 20, puesto por debajo de esos Δ22 para no
+perderlos, y uno de 25 que sólo se aplica cuando piel y pelo son los dos pálidos. Elimina 15
+pares ilegibles y deja 7-9 colores de pelo disponibles para cada tono de piel.
+
+Efecto de lado que conviene entender: **filtrar candidatos cambia la selección ponderada**, así
+que activar la regla movió el rostro de identidades que no tenían ningún problema de contraste.
+Es inevitable —el índice se calcula sobre la lista filtrada— y es exactamente lo que el caso
+dorado está para detectar.
 
 ### Verificación
 
@@ -115,19 +140,18 @@ app de citas. Se bajó la frecuencia y quien quiera otra cosa la escribe.
   (dominio, orden, pesos) **y** comprueba que las dos implementaciones coinciden — la regla 4.2
   del kit. Falsificado a mano cambiando `DOMAIN` a `nyx-avatar-v2`: falla ese test y sólo ese.
 - `tools/avatar/scripts/render_identity_gallery.py` dibuja los rostros de una lista de PeerID.
-  Las referencias versionadas están en `tools/avatar/referencia/identidades-derivadas.png` (24
-  identidades) y `identidades-casi-iguales.png`, que incluye a propósito dos PeerID que sólo
-  difieren en el último carácter — el error real que este avatar tiene que cazar.
+  Las referencias versionadas están en `tools/avatar/referencia/`:
+  `identidades-derivadas.png` (24 identidades), `identidades-casi-iguales.png` —que incluye a
+  propósito dos PeerID que sólo difieren en el último carácter, el error real que este avatar
+  tiene que cazar— e **`identidades-40dp.png`**, las mismas 24 al tamaño de la lista de
+  conversaciones. Esa última es la que importa para juzgar legibilidad: los defectos de
+  contraste no se ven a 224 px.
 
 ## Lo que queda pendiente
 
 - **Nada de esto está enchufado a la UI todavía.** Es Fase 4 del plan (`ProfileEditorScreen`,
   `DiscoveryCard`), y el avatar derivado añade una decisión de producto que antes no existía:
   dónde se muestra el elegido y dónde el derivado.
-- **Contraste a tamaño pequeño**: con piel oscura y pelo oscuro, algunas caras se leen como una
-  mancha a 40 dp. Se ve en `identidades-derivadas.png`. Una regla de contraste mínimo entre pelo
-  y piel lo arreglaría; no se ha hecho porque acopla atributos y conviene decidirlo mirando la
-  lista real.
 - **Comparación de píxeles Android↔Python** (`compare_android_render.py`): requiere renderizar
   en Android, o sea un test instrumentado. En `:app` eso es destructivo; hazlo en un emulador.
 

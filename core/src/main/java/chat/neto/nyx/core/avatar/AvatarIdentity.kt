@@ -151,40 +151,111 @@ object AvatarIdentity {
         CLOTHING, CLOTHING_COLOR,
     )
 
+    /**
+     * Peinados que el trazado dibuja largos. Con uno de estos, el vello facial se apaga.
+     *
+     * Es una regla de coherencia visual y **también una decisión normativa**, así que conviene
+     * que esté a la vista y no escondida: quita barba y bigote a los peinados largos en el
+     * avatar *derivado*. El camino de texto no se toca — quien quiera barba con melena la
+     * escribe y la obtiene.
+     */
+    private val LONG_HAIR = setOf("bob", "long", "ponytail", "bun")
+
+    /**
+     * Umbrales de la regla de contraste entre pelo y piel, y la parte interesante es **dónde
+     * NO se aplica**.
+     *
+     * El diagnóstico inicial era "piel oscura + pelo oscuro se vuelve una mancha", y renderizando
+     * los peores pares a 40 dp resultó ser **cierto sólo a medias** — que es justo por lo que hay
+     * que mirar las imágenes y no fiarse de la matriz de números:
+     *
+     * - `ebony` + `black` (Δ22) se lee **perfectamente**: el trazado le da borde, y la piel es
+     *   cálida mientras el pelo es neutro. Un umbral alto y uniforme lo habría eliminado, y con
+     *   él el pelo negro sobre piel oscura — una de las combinaciones más comunes que existen.
+     *   Borrarla en una app de citas sería mucho peor que el defecto que arregla.
+     * - `ebony` + `brown` (Δ10) **sí** es una mancha.
+     * - Y fallan igual los **claros sobre claro**, donde los dos tonos son cálidos y pálidos y no
+     *   queda borde: `golden`+`blonde` (Δ7), `light`+`silver` (Δ6), `beige`+`silver` (Δ8).
+     *
+     * De ahí los dos umbrales. [MIN_DELTA] es el suelo general, puesto **por debajo** de esos
+     * Δ22 para no perderlos; [MIN_PALE_DELTA] es más exigente y sólo se aplica cuando **ambos**
+     * tonos superan [PALE_LUMA], porque en esa esquina de la paleta hace falta más separación
+     * para que se distinga algo.
+     */
+    private const val PALE_LUMA = 150
+    private const val MIN_DELTA = 20
+    private const val MIN_PALE_DELTA = 25
+
     /** Atributos del avatar que le corresponden a [peerId]. Determinista y sin estado. */
     fun attributesFor(peerId: String): AvatarAttributes {
         require(peerId.isNotBlank()) { "el PeerID no puede estar vacío" }
-        val picks = pick(peerId)
+        val raw = values(peerId)
+
+        // El orden importa: el pelo se elige sabiendo ya la piel, y el vello sabiendo el peinado.
+        val skinTone = choose(SKIN_TONE, raw[2])
+        val hairStyle = choose(HAIR_STYLE, raw[3])
+        val hairColor = choose(hairColorsFor(skinTone), raw[4])
+        val facialHair = if (hairStyle in LONG_HAIR) "none" else choose(FACIAL_HAIR, raw[10])
+
         return AvatarAttributes(
-            expression = picks[0],
-            faceShape = picks[1],
-            skinTone = picks[2],
-            hairStyle = picks[3],
-            hairColor = picks[4],
-            eyeColor = picks[5],
-            eyeShape = picks[6],
+            expression = choose(EXPRESSION, raw[0]),
+            faceShape = choose(FACE_SHAPE, raw[1]),
+            skinTone = skinTone,
+            hairStyle = hairStyle,
+            hairColor = hairColor,
+            eyeColor = choose(EYE_COLOR, raw[5]),
+            eyeShape = choose(EYE_SHAPE, raw[6]),
             accessory = ACCESSORY_FIXED,
-            background = picks[7],
-            browStyle = picks[8],
-            noseStyle = picks[9],
-            facialHair = picks[10],
-            glasses = picks[11],
-            earrings = picks[12],
-            freckles = picks[13],
-            clothing = picks[14],
-            clothingColor = picks[15],
+            background = choose(BACKGROUND, raw[7]),
+            browStyle = choose(BROW_STYLE, raw[8]),
+            noseStyle = choose(NOSE_STYLE, raw[9]),
+            facialHair = facialHair,
+            glasses = choose(GLASSES, raw[11]),
+            earrings = choose(EARRINGS, raw[12]),
+            freckles = choose(FRECKLES, raw[13]),
+            clothing = choose(CLOTHING, raw[14]),
+            clothingColor = choose(CLOTHING_COLOR, raw[15]),
         )
     }
 
-    private fun pick(peerId: String): List<String> {
+    /**
+     * Colores de pelo utilizables sobre [skinTone]. Si el filtro dejara la lista vacía devuelve
+     * la completa: más vale un avatar con poco contraste que ninguno.
+     */
+    private fun hairColorsFor(skinTone: String): List<Choice> {
+        val skin = luma(Palette.skinTones.getValue(skinTone))
+        val usable = HAIR_COLOR.filter { choice ->
+            val hair = luma(Palette.hairColors.getValue(choice.value))
+            val delta = kotlin.math.abs(hair - skin)
+            val needed = if (skin > PALE_LUMA && hair > PALE_LUMA) MIN_PALE_DELTA else MIN_DELTA
+            delta >= needed
+        }
+        return usable.ifEmpty { HAIR_COLOR }
+    }
+
+    /**
+     * Brillo percibido de un `#RRGGBB`, en enteros a propósito: la misma cuenta en Kotlin y en
+     * Python da bit a bit el mismo resultado, cosa que con coma flotante no está garantizada —
+     * y aquí una divergencia de un solo tono cambiaría el rostro de alguien en una plataforma
+     * y no en la otra.
+     */
+    private fun luma(hex: String): Int {
+        val value = hex.removePrefix("#").toInt(16)
+        val red = (value shr 16) and 0xFF
+        val green = (value shr 8) and 0xFF
+        val blue = value and 0xFF
+        return (299 * red + 587 * green + 114 * blue) / 1000
+    }
+
+    private fun values(peerId: String): LongArray {
         val bytes = stream(peerId, VOCABULARIES.size * BYTES_PER_ATTRIBUTE)
-        return VOCABULARIES.mapIndexed { index, vocabulary ->
+        return LongArray(VOCABULARIES.size) { index ->
             val offset = index * BYTES_PER_ATTRIBUTE
             var value = 0L
             for (i in 0 until BYTES_PER_ATTRIBUTE) {
                 value = (value shl 8) or (bytes[offset + i].toLong() and 0xFF)
             }
-            choose(vocabulary, value)
+            value
         }
     }
 

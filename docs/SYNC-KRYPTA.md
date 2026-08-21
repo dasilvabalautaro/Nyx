@@ -56,8 +56,14 @@ después: el `.aar` no está en git.
 | --- | --- | --- | --- |
 | `9a4a7fa` | 21 ago 2026 | `FLAG_SECURE` solo en la pantalla de chat (antes cubría toda la app) | **Portado** en `0f8bad8`. Código con el script; docs a mano con el parche sin sustituir. Compila y pasa los tests JVM; falta prueba en móvil. |
 | `feb96d0` | 21 ago 2026 | Correo de contacto de la política de privacidad de Krypta | **No aplica**: dato de la ficha/política de Krypta. Nyx pondrá el suyo en la 6.1. |
-| `25ee9e8` | 21 ago 2026 | Onboarding de la lista vacía + jerarquía tipográfica en Ajustes | **Pendiente**. Es UI compartida y se porta bien, pero el texto de los tres pasos habla del PeerID y Nyx añade el tablón: conviene rehacerlo con el flujo de Nyx, no copiarlo. |
+| `25ee9e8` | 21 ago 2026 | Onboarding de la lista vacía + jerarquía tipográfica en Ajustes | **Portado** en `a0a9851`, entero y con el script. Revertida la decisión de dejarlo pendiente: la mitad de Ajustes es tipografía pura y no toca el tablón, así que aplazarla solo conservaba aquí un defecto de legibilidad ya arreglado en Krypta — el commit no es atómico desde el punto de vista de Nyx. Y los tres pasos describen el único flujo de alta que Nyx tiene hoy. El estado vacío se reescribe cuando aterrice el tablón: tarea **4.8b** del plan. Compila y pasa los tests JVM; falta prueba en móvil. |
 | `b83be11` | 21 ago 2026 | `.gitignore`: ignora `keys-git.md` | **No aplica**: aquí ya estaba ignorado (fue al revés — se copió de Nyx a Krypta). |
 
 Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el historial común: el
 `git log upstream/main --not HEAD` sale vacío, así que no hay deuda acumulada de antes.
+
+**Último repaso: 21 ago 2026.** El tip de Krypta es `9a4a7fa` en `main` y en
+`feat/avisos-gif-capturas-1.5` (las dos ramas apuntan al mismo sitio), o sea que la tabla
+está al día y no queda nada suyo sin decidir. La comprobación son dos órdenes: `git fetch
+upstream` y el `git log upstream/main --not HEAD` de arriba; si la lista sale vacía, no hay
+nada que portar.

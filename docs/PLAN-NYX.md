@@ -1225,6 +1225,12 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       creación de avatar de la Fase 3b, botón "Publicar").
 - [ ] 4.8 `DiscoveryCard.kt` (apodo/edad/intereses/bio/avatar, "Me interesa" → `sendLike`,
       overflow → Bloquear/Reportar).
+- [ ] 4.8b Reescribir el estado vacío de `ConversationsScreen.kt` para el flujo del
+      tablón. Hoy enumera los tres pasos del alta por PeerID (portado de Krypta en
+      `a0a9851`), que es exacto mientras el tablón no exista pero deja de serlo en cuanto
+      aterricen 4.6-4.9: en Nyx la puerta de entrada es descubrir una tarjeta y llegar a
+      match, no pegar un PeerID que no tienes. Sin esta tarea el estado vacío queda
+      enseñando el flujo que el producto está diseñando para dejar atrás.
 - [ ] 4.9 Flujo de match: `Flow` sobre `LikeRepository`, momento "¡Nuevo match!",
       navegación al chat desbloqueado.
 - [ ] 4.10 Iconos nuevos en `NyxIcons.kt` (like/corazón, bloquear, reportar/bandera).

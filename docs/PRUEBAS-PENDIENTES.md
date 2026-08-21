@@ -438,6 +438,13 @@ directa (DCUtR) o se queda en relay.
   ese comportamiento (el flag se pone/quita, no se queda pegado); (d) al ir a "recientes"
   desde un chat la miniatura sale vacía, y desde la lista sale normal; (e) ⋮ → "Capturar
   pantalla" sigue guardando el PNG correcto.
+- **Retoques de UI portados de Krypta (21 ago) — PENDIENTE de mirar en el móvil**: es un
+  cambio solo visual, así que la única prueba posible es verlo. En la **lista vacía** (hace
+  falta un móvil sin contactos, o borrarlos): título "Aún no tienes contactos" y los tres
+  pasos numerados, con el fondo del Scaffold en `surfaceContainerLow` separándose de las
+  filas. En **Ajustes**: en cada tarjeta el título debe leerse claramente por encima de su
+  descripción — título 2sp más grande y en negrita, descripción en cursiva. Comprobar en
+  **claro y oscuro**, que es donde estos tonos de `surfaceContainer*` se han torcido antes.
 - **Contenido del teclado (13 ago)**: en el TECNO, con un contacto de usar y tirar, las
   pestañas **GIF y stickers** de Gboard ya abren (antes: "la app no admite insertar aquí"); un
   sticker con fondo transparente se pinta **sobre el teal de la burbuja**, no sobre un cuadro

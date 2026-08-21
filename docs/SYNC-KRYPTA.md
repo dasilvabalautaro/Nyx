@@ -25,8 +25,19 @@ Qué hay en Krypta que aquí falta:
 
 ```sh
 git fetch upstream
-git log --oneline upstream/main --not HEAD
+git log --oneline upstream/main --not HEAD          # candidatos
+for c in $(git log --format=%h upstream/main --not HEAD); do
+  grep -q "$c" docs/SYNC-KRYPTA.md || echo "SIN DECIDIR: $c $(git log -1 --format=%s $c)"
+done                                                 # lo que de verdad falta
 ```
+
+El `git log` a secas **no sirve** como "no queda nada": el porte es un `git am`, o sea un
+commit nuevo con otro SHA, así que el commit original de Krypta se queda en esa lista para
+siempre aunque esté portado. Por eso el segundo bucle cruza cada candidato con la tabla de
+abajo, donde está *todo* lo revisado — portado y "no aplica" por igual. Si imprime algo, es
+que apareció algo que nadie ha mirado; si no imprime nada, la tabla está al día. Esto obliga
+a **anotar en la tabla también lo que se descarta**: un commit que no esté en ella vuelve a
+salir en cada repaso.
 
 Traer un commit:
 
@@ -64,6 +75,4 @@ Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el histori
 
 **Último repaso: 21 ago 2026.** El tip de Krypta es `9a4a7fa` en `main` y en
 `feat/avisos-gif-capturas-1.5` (las dos ramas apuntan al mismo sitio), o sea que la tabla
-está al día y no queda nada suyo sin decidir. La comprobación son dos órdenes: `git fetch
-upstream` y el `git log upstream/main --not HEAD` de arriba; si la lista sale vacía, no hay
-nada que portar.
+está al día y no queda nada suyo sin decidir: el bucle de "Cómo se usa" no imprime nada.

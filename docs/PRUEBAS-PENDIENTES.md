@@ -344,8 +344,15 @@ quejaba el autor ("hay mensajes recibidos pero la alarma no suena").
 
 ## 13. Nyx: primer emparejamiento entre 2 móviles (plan 1.16) — **PENDIENTE, ya con APK**
 Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por no tener un
-APK que mandar a la persona que colabora. **Ya lo hay (16 ago 2026)**:
-`~/Desktop/nyx-arm64-debug.apk` — 63 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
+APK que mandar a la persona que colabora. **Ya lo hay**: `~/Desktop/nyx-arm64-debug.apk`
+— 61 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
+
+**Regenerado el 21 ago 2026**, porque el del 16 ago ya no estaba en el Escritorio: se
+reconstruye con `./gradlew :app:assembleDebug -PslimAbi` y copiando
+`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. El de ahora incluye el porte de UI
+de ese día (lista vacía con los tres pasos, jerarquía en Ajustes), así que sirve además
+para la comprobación visual anotada más abajo — y conviene mandar **este**, no uno viejo,
+para que los dos móviles muestren lo mismo durante la sesión.
 
 Dos cosas que hay que decirle a quien lo instale:
 

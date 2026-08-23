@@ -359,8 +359,8 @@ quejaba el autor ("hay mensajes recibidos pero la alarma no suena").
 ## 13. Nyx: primer emparejamiento entre 2 móviles (plan 1.16) — **EN CURSO (23 ago 2026)**
 
 > **Hito**: es la primera vez que dos teléfonos reales hablan por la infraestructura propia de
-> Nyx y los protocol IDs `/nyx/*`. Los pasos 1-3 y el 6 están hechos y correctos — los 1-3 son
-> requisito del 6, así que se dan por buenos con él. Faltan por confirmar el 4, el 5 y el 7.
+> Nyx y los protocol IDs `/nyx/*`. Los pasos 1-3 y el 6 están **confirmados uno a uno por el
+> autor** (23 ago 2026), no deducidos. Faltan el 4, el 5 y el 7.
 Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por no tener un
 APK que mandar a la persona que colabora. **Ya lo hay**: `~/Desktop/nyx-arm64-debug.apk`
 — 61 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.

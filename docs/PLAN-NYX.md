@@ -1177,10 +1177,26 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       de peers bloqueados o con tag roto.
 - [ ] 3.12 Borrar tarjeta del tablón desde la app (no esperar al TTL). *El protocolo y
       `deleteCard` están hechos y probados (3.1/3.5/3.6); falta el botón, que es Fase 4.*
-- [ ] 3.13 `/nyx/report/1.0.0` en el nodo (sobre cifrado a la clave del operador, cuota +
-      TTL) + expulsión de un PeerID del tablón. Es trabajo de nodo y sube aquí desde la
-      Fase 4 porque, con canal único en Play, el reporte con destino real es requisito de
-      publicación, no una mejora.
+- [x] 3.13 **`/nyx/report/1.0.0` + expulsión del tablón — hecho en el nodo el 23 ago 2026**
+      (`infra/nyx-node/report.go`, 9 tests). El nodo guarda sobres **opacos** cifrados a la clave
+      del operador, con TTL de 180 días (largo a propósito: una denuncia no debe caducar antes de
+      que alguien la mire), ≤64 KiB por sobre y ≤50 por denunciante — cuota **por denunciante**,
+      para que agotarla no silencie el mecanismo a los demás, mismo criterio que la separación de
+      los likes. Lo que el nodo sí ve es **quién denuncia** (identidad del stream, no ocultable);
+      se guarda a propósito, porque sin eso no hay freno a las denuncias falsas.
+      La **expulsión** es un fichero de texto que el operador edita por SSH y el nodo relee al
+      cambiar el mtime. Se aplica en tres sitios y el importante es el segundo: al publicar, **al
+      consultar** y en el barrido. Sin el de consulta, expulsar a alguien no retiraría la tarjeta
+      ya puesta hasta que caducara sola (48 h) y "el operador puede actuar" sería un gesto vacío;
+      hay un test que lo cubre y falla si se quita.
+      **No hay protocolo de recogida ni de administración** a propósito: ambos exigirían
+      autenticar al operador —otra identidad, otro secreto, otra superficie que puede fallar
+      abierta— para resolver algo que SSH ya resuelve. Runbook en
+      [infra/nyx-node/OPERACION.md](../infra/nyx-node/OPERACION.md).
+      Sube a la Fase 3 desde la 4 porque, con canal único en Play, el reporte con destino real
+      es requisito de publicación y no una mejora.
+      *Falta el redespliegue del nodo con esto (va con PRUEBAS-PENDIENTES §14), y la mitad de
+      cliente: clave del operador, cifrado del sobre, puente Go y UI — eso es 4.4/4.4b.*
 - [x] 3.11 Cerrar con entrada en `CLAUDE.md`.
 - [x] 3.14 **Redesplegar el nodo** con `board.go`/`like.go` (y los topes del relay de 1.12c).
       **Hecho el 21 ago 2026**, y en un solo despliegue: el mismo binario lleva el tablón, los

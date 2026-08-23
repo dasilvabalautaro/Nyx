@@ -74,6 +74,7 @@ var categoryPattern = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 
 type board struct {
 	dir      string
+	bans     *banlist // expulsados; nil = sin expulsión (tests que no la ejercitan)
 	ttl      time.Duration
 	maxCard  int // bytes de tarjeta
 	maxCards int // tarjetas vivas por categoría
@@ -150,6 +151,12 @@ func (b *board) handlePublish(s network.Stream) {
 	}
 
 	author := s.Conn().RemotePeer().String() // identidad verificada, no suplantable
+	if b.bans.isBanned(author) {
+		// Mensaje deliberadamente escueto: no se le explica al expulsado por qué ni desde
+		// cuándo. Basta con que no pueda publicar.
+		reply("no puedes publicar en el tablón")
+		return
+	}
 	if err := b.store(req.Cat, author, req.Card); err != nil {
 		reply(err.Error())
 		return
@@ -276,6 +283,13 @@ func (b *board) list(cat string, limit int) []boardCard {
 		if err := json.Unmarshal(data, &c); err != nil || c.Ts < cutoff {
 			continue
 		}
+		// La expulsión se aplica **al leer**, no solo al publicar. Sin esto, expulsar a
+		// alguien no retiraría la tarjeta que ya tiene puesta y "actuar sobre lo denunciado"
+		// se quedaría en un gesto hasta que caducara sola (48 h). El barrido la borra
+		// después; esto la hace invisible ya.
+		if b.bans.isBanned(c.Peer) {
+			continue
+		}
 		cards = append(cards, c)
 	}
 	sort.Slice(cards, func(i, j int) bool { return cards[i].Ts > cards[j].Ts })
@@ -333,7 +347,7 @@ func (b *board) sweep() {
 				continue
 			}
 			var c boardCard
-			if err := json.Unmarshal(data, &c); err != nil || c.Ts < cutoff {
+			if err := json.Unmarshal(data, &c); err != nil || c.Ts < cutoff || b.bans.isBanned(c.Peer) {
 				_ = os.Remove(path)
 				continue
 			}

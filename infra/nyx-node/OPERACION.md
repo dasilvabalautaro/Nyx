@@ -226,3 +226,64 @@ Ojo con un detalle que ya mordió en Krypta: un teléfono que **alguna vez** gua
 preferencia de bootstrap se queda con ella y **no** hereda el nuevo default. Para probar el
 segundo nodo en un móvil ya usado hay que borrar esa preferencia (o escribirla a mano en
 Ajustes), no basta con instalar la build nueva.
+
+## Denuncias y expulsión del tablón
+
+Es lo que hace que Nyx cumpla la política de contenido generado por usuarios de Play sin montar
+un servidor de contenido: existe un canal para denunciar **y** el operador puede actuar. Esta
+sección es la parte de "puede actuar".
+
+### Leer las denuncias
+
+Llegan por `/nyx/report/1.0.0` y se guardan en `/var/lib/nyx/reports/<peerid-denunciante>/`,
+un fichero JSON por denuncia. **El contenido está cifrado a la clave del operador**: ni el nodo
+ni quien entre en la caja pueden leerlo. Se descifra fuera, con la clave privada.
+
+```sh
+ssh root@nyx.neto.chat 'ls -R /var/lib/nyx/reports'
+scp -r root@nyx.neto.chat:/var/lib/nyx/reports ./reports-$(date +%F)
+```
+
+Lo que **sí** se ve sin descifrar es **quién denunció** (el nombre del directorio) y cuándo. Sale
+de la identidad del stream de libp2p y no se puede ocultar; se guarda a propósito, porque sin él
+no hay forma de frenar a quien inunde de denuncias falsas.
+
+Topes: sobre ≤64 KiB, ≤50 denuncias vivas por denunciante, TTL 180 días. El TTL es largo a
+propósito — una denuncia es justo lo que no debe caducar antes de que alguien la mire. La cuota
+es **por denunciante**, así que agotarla no impide denunciar a los demás (hay un test).
+
+### Expulsar un PeerID del tablón
+
+La lista es un fichero de texto en `/var/lib/nyx/banned.txt`, un PeerID por línea. Admite
+comentarios con `#`, en su propia línea o detrás del PeerID, que es donde conviene anotar por
+qué:
+
+```sh
+ssh root@nyx.neto.chat
+echo '12D3KooW…  # denuncia 2026-08-23, acoso' >> /var/lib/nyx/banned.txt
+```
+
+**No hace falta reiniciar**: el nodo relee el fichero cuando cambia su fecha de modificación.
+Levantar una expulsión es borrar la línea.
+
+El efecto es inmediato y en tres sitios, y el segundo es el que importa:
+
+1. **No puede publicar** tarjetas nuevas.
+2. **Su tarjeta ya publicada deja de verse** en las consultas. Sin esto, expulsar a alguien no
+   retiraría nada hasta que su tarjeta caducara sola (48 h) y "actuar sobre lo denunciado" sería
+   un gesto vacío.
+3. El barrido horario **borra** sus tarjetas, para que la expulsión libere espacio y no solo
+   esconda.
+
+### El alcance real de la moderación, y hay que ser honesto con él
+
+Se modera **el tablón**, no las conversaciones. Los mensajes son E2EE y el operador no puede
+leerlos ni borrarlos: la única herramienta contra el acoso en una conversación privada es el
+bloqueo, que es local y del usuario. Esto va dicho igual en la política de privacidad y en la
+ficha de Play (Fase 6); disimularlo sería peor que la limitación.
+
+### Por qué no hay protocolo de recogida ni de administración
+
+Ni `/nyx/report/fetch` ni un comando remoto para expulsar. Los dos necesitarían autenticar al
+operador —otra identidad, otro secreto, otra superficie que puede fallar abierta— para resolver
+algo que SSH ya resuelve. Con una caja y un operador, el protocolo sería complejidad sin ganancia.

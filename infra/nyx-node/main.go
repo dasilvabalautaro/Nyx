@@ -50,6 +50,8 @@ func main() {
 	boardTTL := flag.Duration("boardttl", boardDefaultTTL, "cuánto vive una tarjeta del tablón")
 	boardMaxCard := flag.Int("boardmaxcard", boardDefaultMaxCard, "tamaño máximo de una tarjeta, en bytes")
 	likeDir := flag.String("likedir", "", "bandeja de likes, con cuota propia (default: <key dir>/likes)")
+	reportDir := flag.String("reportdir", "", "denuncias cifradas al operador (default: <key dir>/reports)")
+	banFile := flag.String("banlist", "", "PeerID expulsados del tablón, uno por línea (default: <key dir>/banned.txt)")
 	// Topes del relay (ver relay.go). Ajustables sin recompilar porque son la palanca que
 	// se toca si el gasto de la caja se dispara o si una llamada larga se corta.
 	relayDataMiB := flag.Int64("relaydata", relayDataPerDirection>>20, "relay: MiB reenviados por dirección y circuito antes de cortarlo")
@@ -144,10 +146,31 @@ func main() {
 	likes := newLikebox(lkDir)
 	likes.attach(h)
 
+	// Denuncias y expulsión (ver report.go). El nodo guarda sobres opacos —cifrados a la
+	// clave del operador— y consulta una lista de expulsados que se edita por SSH; no hay
+	// protocolo de recogida ni de administración, porque SSH ya resuelve las dos cosas.
+	rptDir := *reportDir
+	if rptDir == "" {
+		rptDir = filepath.Join(filepath.Dir(*keyPath), "reports")
+	}
+	if err := os.MkdirAll(rptDir, 0o700); err != nil {
+		log.Fatalf("report dir: %v", err)
+	}
+	rpt := newReports(rptDir)
+	rpt.attach(h)
+
+	banPath := *banFile
+	if banPath == "" {
+		banPath = filepath.Join(filepath.Dir(*keyPath), "banned.txt")
+	}
+	bans := newBanlist(banPath)
+	brd.bans = bans
+
 	go func() {
 		for {
 			brd.sweep()
 			likes.sweep()
+			rpt.sweep()
 			time.Sleep(time.Hour)
 		}
 	}()
@@ -177,6 +200,10 @@ func main() {
 		relayMaxReservationsPerIP, relayMaxReservationsPerASN, relayMaxCircuitsPerPeer)
 	fmt.Printf("Tablón: %s (TTL %s, tarjeta ≤%d KiB, ≤%d por categoría) · Likes: %s (cuota propia, ≤%d pendientes)\n",
 		brdDir, brd.ttl, brd.maxCard>>10, brd.maxCards, lkDir, likes.maxPending)
+	// Se imprime el número de expulsados, y no solo la ruta, para que se vea de un vistazo
+	// que el fichero se está leyendo de verdad: una lista que no se carga no da ningún error.
+	fmt.Printf("Denuncias: %s (TTL %s, sobre ≤%d KiB, ≤%d por denunciante) · Expulsados: %s (%d)\n",
+		rptDir, rpt.ttl, rpt.maxBlob>>10, rpt.maxPerReporter, banPath, bans.count())
 	fmt.Println("Bootstrap addrs (use one of these from the phone):")
 	for _, a := range h.Addrs() {
 		fmt.Printf("  %s/p2p/%s\n", a, h.ID().String())

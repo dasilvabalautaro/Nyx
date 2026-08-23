@@ -415,6 +415,12 @@ El código y los tests estaban cerrados (`infra/nyx-node/relay.go` + `relay_test
 faltaba era **la caja**, y ya está: **desplegado el 21 ago 2026**. Un solo despliegue cerró
 1.12c y 3.14, porque el mismo binario lleva topes, tablón y likes.
 
+> **Nuevo pendiente (23 ago 2026)**: `report.go` (denuncias + expulsión del tablón) aterrizó
+> después de este despliegue, así que **la caja vuelve a estar por detrás del repositorio**.
+> Hace falta otro `deploy-vps.sh` cuando la mitad de cliente esté lista; el arranque debe
+> imprimir entonces una línea `Denuncias: … · Expulsados: …`. Mientras tanto no rompe nada: la
+> app todavía no denuncia.
+
 1. - [x] Redesplegado con `bash infra/nyx-node/deploy-vps.sh root@nyx.neto.chat`. El binario
      instalado da el SHA-256 esperado (`41d56903…`) y `/tmp` quedó limpio.
 2. - [x] Arrancó con los topes, con la cadena **exacta** que se esperaba:

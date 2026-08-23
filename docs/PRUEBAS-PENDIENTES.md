@@ -91,15 +91,22 @@ flujo dice "verificado" cuando debe. Una implementación que dijera "verificado"
 pasaría esos dos pasos igual, y sería inútil como defensa anti-MITM. Lo que prueba que sirve es
 que **rechace**:
 
-4. - [ ] (MITM negativo) Escanear un QR con un PeerID **distinto** → toast
-     **"⚠ El QR NO coincide (posible suplantación)"** y **no** marca verificado.
-     *No hace falta un tercer móvil*: el payload es texto plano, así que basta generar un QR con
-     `nyx:verify:<cualquier otro PeerID>` en cualquier generador y escanearlo. Sirve el PeerID
-     del nodo, `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`.
-5. - [ ] Escanear un QR cualquiera que no sea de Nyx (una URL, un wifi, lo que sea) → toast
-     "Ese QR no es de Nyx". El prefijo que espera es `nyx:verify:`, así que un QR de **Krypta**
-     (`krypta:verify:…`) también debería caer aquí — comprobación gratis si tienes Krypta
-     instalada.
+**Los dos QR ya están generados y verificados** (23 ago 2026), en el Escritorio. Se abren en la
+Mac y se escanean desde el móvil; cada imagen lleva impreso debajo qué es y qué debe pasar. No
+hace falta un tercer móvil — el payload del QR es texto plano, así que se puede fabricar.
+
+4. - [ ] (MITM negativo) `~/Desktop/nyx-caso4-suplantacion.png`. Lleva
+     `nyx:verify:12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` — prefijo **correcto**,
+     PeerID de otro (el del nodo de São Paulo). Abrir el chat de un contacto → escudo → "Usar QR"
+     → escanear esto. **Esperado**: toast `⚠ El QR NO coincide con <nombre> (posible
+     suplantación)` y el contacto **NO** queda verificado.
+5. - [ ] `~/Desktop/nyx-caso5-qr-ajeno.png`, que es una URL normal sin el prefijo.
+     **Esperado**: toast `Ese QR no es de Nyx`.
+     Un QR de **Krypta** (`krypta:verify:…`) cae aquí por el mismo motivo — comprobación gratis
+     si tienes Krypta instalada.
+
+*(Los dos textos salen de `ui/ChatScreens.kt:761` y `:764`; ambos PNG se decodificaron para
+confirmar que llevan la carga útil que dicen.)*
 
 ## 3. Endurecimiento de segundo plano — **PARCIAL**
 Verificado en un móvil: FGS `specialUse` (`types=0x40000000`), exención de batería en la

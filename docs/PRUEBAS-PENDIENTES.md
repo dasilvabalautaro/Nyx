@@ -73,19 +73,33 @@ la prueba real de recepción entre dos móviles:
      la app, no solo por la notificación).
    - [ ] Enviar varios mensajes seguidos: el scroll sigue al último.
 
-## 2. Verificación de identidad anti-MITM (número + QR) — **PENDIENTE**
+## 2. Verificación de identidad anti-MITM (número + QR) — **CAMINO POSITIVO VERIFICADO (23 ago 2026)**
 Verificado en un móvil: el diálogo muestra 60 dígitos, el **QR se genera** (captura ok), el
 botón "Escanear" abre la cámara (permiso + `CaptureActivity` de ZXing), "Coinciden,
 verificar" marca el contacto y aparece la insignia de escudo (persiste). El parse del payload
-QR está cubierto por `QrCodeTest`. Falta confirmar el flujo real entre dos móviles:
+QR está cubierto por `QrCodeTest`. **En vivo, con dos móviles (23 ago 2026, reporte del autor):
+la verificación de identidad funciona** — con lo que cae el pendiente más viejo heredado de
+Krypta.
 
 1. En ambos móviles, abrir el chat del otro → botón **escudo** → "Verificar identidad".
-2. **Número de seguridad**: - [ ] es **idéntico** en los dos móviles.
-3. **QR**: - [ ] "Usar QR" en ambos; A escanea el QR de B → toast **"✓ Identidad verificada"**
+2. **Número de seguridad**: - [x] es **idéntico** en los dos móviles.
+3. **QR**: - [x] "Usar QR" en ambos; A escanea el QR de B → toast **"✓ Identidad verificada"**
    y aparece la insignia; B escanea el de A → igual. (Cada uno muestra su QR y escanea el otro.)
-4. - [ ] (MITM negativo) Escanear el QR de un tercero / un contacto con PeerID distinto → toast
+
+**Faltan los dos casos negativos, y no son un detalle**: los pasos 2-3 sólo demuestran que el
+flujo dice "verificado" cuando debe. Una implementación que dijera "verificado" **siempre**
+pasaría esos dos pasos igual, y sería inútil como defensa anti-MITM. Lo que prueba que sirve es
+que **rechace**:
+
+4. - [ ] (MITM negativo) Escanear un QR con un PeerID **distinto** → toast
      **"⚠ El QR NO coincide (posible suplantación)"** y **no** marca verificado.
-5. - [ ] Escanear un QR cualquiera (no Krypta) → toast "Ese QR no es de Krypta".
+     *No hace falta un tercer móvil*: el payload es texto plano, así que basta generar un QR con
+     `nyx:verify:<cualquier otro PeerID>` en cualquier generador y escanearlo. Sirve el PeerID
+     del nodo, `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3`.
+5. - [ ] Escanear un QR cualquiera que no sea de Nyx (una URL, un wifi, lo que sea) → toast
+     "Ese QR no es de Nyx". El prefijo que espera es `nyx:verify:`, así que un QR de **Krypta**
+     (`krypta:verify:…`) también debería caer aquí — comprobación gratis si tienes Krypta
+     instalada.
 
 ## 3. Endurecimiento de segundo plano — **PARCIAL**
 Verificado en un móvil: FGS `specialUse` (`types=0x40000000`), exención de batería en la
@@ -342,7 +356,11 @@ quejaba el autor ("hay mensajes recibidos pero la alarma no suena").
 
 ---
 
-## 13. Nyx: primer emparejamiento entre 2 móviles (plan 1.16) — **PENDIENTE, ya con APK**
+## 13. Nyx: primer emparejamiento entre 2 móviles (plan 1.16) — **EN CURSO (23 ago 2026)**
+
+> **Hito**: es la primera vez que dos teléfonos reales hablan por la infraestructura propia de
+> Nyx y los protocol IDs `/nyx/*`. Los pasos 1-3 y el 6 están hechos y correctos — los 1-3 son
+> requisito del 6, así que se dan por buenos con él. Faltan por confirmar el 4, el 5 y el 7.
 Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por no tener un
 APK que mandar a la persona que colabora. **Ya lo hay**: `~/Desktop/nyx-arm64-debug.apk`
 — 61 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
@@ -364,20 +382,22 @@ Dos cosas que hay que decirle a quien lo instale:
 - Nyx se instala **junto a** Krypta, no la sustituye (`applicationId` distinto). Si la
   persona tiene Krypta, se queda intacta.
 
-1. - [ ] Instalar en el segundo móvil ("Instalar apps desconocidas" para el gestor de
+1. - [x] Instalar en el segundo móvil ("Instalar apps desconocidas" para el gestor de
      archivos / navegador que use). Abrir → conceder notificaciones y la exención de batería.
-2. - [ ] En **Ajustes** de cada móvil, copiar el PeerID propio y añadirlo como contacto en el
+2. - [x] En **Ajustes** de cada móvil, copiar el PeerID propio y añadirlo como contacto en el
      otro (nombre + PeerID). **Esperado**: la app rechaza pegarse el PeerID *propio* con un
      mensaje claro (guarda de `addContact`, 23 jul).
-3. - [ ] Comprobar que ambos marcan **"WAN (DHT): conectado"** contra `nyx.neto.chat`. Es la
+3. - [x] Comprobar que ambos marcan **"WAN (DHT): conectado"** contra `nyx.neto.chat`. Es la
      primera vez que dos teléfonos reales usan el nodo propio de Nyx y los protocol IDs
      `/nyx/*`.
 4. - [ ] Mensaje de ida y vuelta → `SENT` → `DELIVERED` → `READ` al abrir el chat.
 5. - [ ] **Entrega offline**: cerrar la app del receptor (deslizar de recientes), enviar,
      **esperado**: el emisor marca `SENT` (vía buzón) y al receptor le entra la notificación
      en segundos (wake) sin abrir la app.
-6. - [ ] Verificación de identidad: comparar el número de seguridad y escanear el QR mutuo →
-     escudo en ambos (esto cubre también la §2, pendiente desde Krypta).
+6. - [x] **Verificación de identidad: HECHA y correcta (23 ago 2026).** Número idéntico en los
+     dos y QR mutuo → escudo en ambos. Cierra el camino positivo de la §2, el pendiente más
+     viejo del proyecto; allí quedan los dos casos **negativos**, que son los que prueban que
+     además sabe rechazar.
 7. - [ ] Llamada de voz y vídeo (cubre de paso el punto siguiente).
 
 ---

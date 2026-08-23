@@ -276,6 +276,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > excerpt — ticking it now scrolls the dialog to the preview. Still open: the board-card entry
 > point (needs 4.8), a node redeploy, and an off-machine backup of the operator key.
 >
+> **Age gate and Terms since 23 Aug 2026 (plan 4.5 / 4.5b).** `AgeGate` follows the
+> `AppLock`/`ThemePreference` pattern — process state, pref in `nyx_settings`, pure decisions
+> pulled out and JVM-tested (`AgeGateTest`). The 18+ self-declaration is **the first branch in
+> `NyxApp`'s `when`, above even an incoming call and the app lock**, and that ordering is
+> deliberate: it only ever shows on first launch, when there are no contacts and therefore no
+> call to hide, so putting it first makes the reasoning trivial — no gap to argue about — instead
+> of having to prove no path skips it. Declining calls `finishAndRemoveTask()`; a "just looking"
+> mode of an 18+ dating app would not exist. It is **self-declaration** and says so on screen:
+> without an identity backend there is nothing to verify, and dressing that up on the most
+> regulated screen in the app would be the wrong lie. Terms acceptance is **versioned** —
+> bumping `TERMS_VERSION` forces re-acceptance, the only way a change to what gets moderated or
+> published doesn't apply behind the back of someone who agreed to something else; the check is
+> `>=` so accidentally lowering the constant doesn't invalidate good acceptances across the
+> installed base. **`TermsScreen` has no caller yet**: it belongs before publishing the first
+> board card and the profile editor is 4.7, one line away. Deliberately not hung off first
+> launch — terms accepted three weeks before you publish anything are a checkbox nobody reads.
+> Verified on the TECNO: gate shows on first launch, **back exits the app rather than skipping
+> it**, reopening shows it again, confirming enters, and a cold restart no longer asks.
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

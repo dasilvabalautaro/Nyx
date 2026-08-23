@@ -1338,11 +1338,28 @@ resuelve la decisión. Detalle completo en
       autorizar y confirmar **sin haber visto nunca** el fragmento — la garantía se quedaba en
       adorno. Ahora marcarla desplaza el diálogo hasta la vista previa.
       *Falta la tarjeta del tablón, que depende de 4.8.*
-- [ ] 4.5 `AgeGate.kt`: autodeclaración 18+ al primer inicio, cubre toda la app, guard
-      de navegación antes de cualquier pantalla (cubre de sobra el requisito de
-      age-gating previo a las funciones de emparejamiento).
-- [ ] 4.5b Pantalla de **aceptación de los Términos de uso** antes de poder publicar la
-      primera tarjeta; no saltable, decisión persistida (patrón `AgeGate`).
+- [x] 4.5 **`AgeGate.kt` — hecho el 23 ago 2026.** Autodeclaración 18+ al primer arranque,
+      preferencia en `nyx_settings` (patrón `AppLock`/`ThemePreference`), decisiones puras
+      extraídas y cubiertas por `AgeGateTest` (5).
+      **Va lo primero del `when` de `NyxApp`, por encima incluso de la llamada entrante y del
+      bloqueo de app**, y eso es deliberado: solo aparece en el primer arranque, cuando todavía
+      no hay contactos y por tanto no puede haber llamada que tapar. Ponerla la primera hace el
+      razonamiento trivial —no queda rendija por la que entrar sin pasar— en vez de tener que
+      demostrar que ningún camino la esquiva. Declinar cierra la app: una versión "solo mirar"
+      de una app de citas 18+ no existiría.
+      Verificado en el TECNO: aparece en el primer arranque, **"atrás" sale de la app en vez de
+      saltarla**, reabrir la vuelve a mostrar, confirmar entra, y un reinicio en frío ya no
+      pregunta (`age_gate_confirmed_18=true` en disco).
+- [~] 4.5b **Términos de uso — pantalla y persistencia hechas; falta el punto de llamada.**
+      `TermsScreen` y `AgeGate.acceptTerms`/`shouldAskTerms` están listos y probados. La
+      aceptación lleva **versión**: subir `TERMS_VERSION` obliga a aceptar de nuevo, que es la
+      única forma de que un cambio de fondo en las reglas no se le aplique a quien aceptó otra
+      cosa; la comparación es `>=` para que rebajar el número por error no invalide las
+      aceptaciones buenas del parque instalado.
+      **La pantalla todavía no la abre nadie**: va antes de publicar la primera tarjeta y el
+      editor de perfil es 4.7. Es una línea allí. Se dejó así en vez de colgarla del primer
+      arranque a propósito — unos términos aceptados tres semanas antes de publicar nada son una
+      casilla que nadie lee; pegados al acto que gobiernan, significan algo.
 - [ ] 4.6 `DiscoveryScreen.kt` + `DiscoveryViewModel.kt` + `BoardService`
       (`:p2p-signaling`).
 - [ ] 4.7 `ProfileEditorScreen.kt` (edita `MyProfilePrefs`, incluye el flujo de

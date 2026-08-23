@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Bloqueo de acceso: cargar la preferencia y armar el observador de visibilidad
         // antes de componer, para que un arranque en frío ya nazca bloqueado.
+        AgeGate.init(applicationContext)
         AppLock.init(applicationContext)
         // Preferencia de tema (claro/oscuro/sistema); por defecto sigue al sistema.
         ThemePreference.init(applicationContext)

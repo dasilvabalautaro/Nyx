@@ -90,6 +90,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import chat.neto.nyx.AgeGate
 import chat.neto.nyx.AppLock
 import chat.neto.nyx.ScreenSecurity
 import chat.neto.nyx.core.model.Contact
@@ -155,6 +156,25 @@ fun NyxApp(
             onSwitchCamera = viewModel::switchCamera,
             onPreviewSurface = viewModel::onPreviewSurfaceReady,
             onRemoteSurface = viewModel::setRemoteVideoSurface,
+        )
+        return
+    }
+
+    // Puerta de edad: **lo primero de todo**, por encima incluso de una llamada entrante.
+    //
+    // Va antes que el bloqueo de app y que la llamada, y no al revés, porque solo aparece en el
+    // primer arranque: en ese momento no hay contactos, así que no puede haber ninguna llamada
+    // que tapar. Ponerla la primera hace el razonamiento trivial —no queda ninguna rendija por
+    // la que se llegue a la app sin pasar— en vez de tener que demostrar que ningún camino la
+    // esquiva.
+    val ageConfirmed by AgeGate.ageConfirmed.collectAsState()
+    if (AgeGate.shouldAskAge(ageConfirmed)) {
+        val ctx = LocalContext.current
+        AgeGateScreen(
+            onConfirm = { AgeGate.confirmAge(ctx) },
+            // Declinar cierra la app. Es la única respuesta coherente: una versión "solo
+            // mirar" de una app de citas 18+ no existiría.
+            onDecline = { ctx.findActivity()?.finishAndRemoveTask() },
         )
         return
     }

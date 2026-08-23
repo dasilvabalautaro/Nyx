@@ -12,6 +12,8 @@ import chat.neto.nyx.core.repository.MessageRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -541,6 +543,92 @@ class ChatServiceTest {
      * cruzarse con ese peer lo daría por match ya cerrado y le abriría la mensajería sin que
      * nadie haya vuelto a decir que sí.
      */
+    // --- Bloqueo (4.1) ------------------------------------------------------------------
+
+    /**
+     * El bloqueo se hace real aquí: un sobre de alguien bloqueado no se persiste ni se emite.
+     * Como el guard está antes de resolver el contacto, da igual que la persona siga siendo un
+     * contacto con historial — que es el caso normal, porque bloquear no borra nada.
+     */
+    @Test
+    fun `un mensaje de un peer bloqueado no se persiste`() = runTest {
+        val messages = FakeMessages()
+        val blocks = FakeBlocks(setOf(contact.peerId))
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), blocks, FakeLikes(), backgroundScope)
+
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-b1", "hola".toByteArray()))
+        assertNull(chat.onReceived(contact.peerId, ciphertext))
+        assertEquals(0, messages.saved.size)
+
+        // Y al desbloquear vuelve a entrar: el guard consulta el repositorio en cada sobre, no
+        // una copia cacheada al arrancar.
+        chat.unblock(contact.peerId)
+        assertEquals("mid-b1", chat.onReceived(contact.peerId, ciphertext)?.id)
+        assertEquals(1, messages.saved.size)
+    }
+
+    /**
+     * El matiz que de verdad importa del contrato de ack: un sobre de alguien bloqueado se
+     * **confirma** (ack → el nodo lo borra), no se rechaza. Si devolviera `false`, el nodo lo
+     * reentregaría en cada `fetch` para siempre — un bucle envenenado que crecería con cada
+     * mensaje que mandara el bloqueado, justo la persona a la que menos interesa dar la
+     * capacidad de llenarte el buzón. Mismo criterio que `LikeService.onLikeReceived`.
+     */
+    @Test
+    fun `un sobre de un peer bloqueado se confirma para que el nodo lo borre`() = runTest {
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope)
+        val processor = signaling.registeredMailboxProcessor!!
+
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-b2", "insiste".toByteArray()))
+        assertTrue("un sobre bloqueado debe ack'earse, no reentregarse", processor(contact.peerId, ciphertext, "env-b", 333L))
+        assertEquals(0, messages.saved.size)
+    }
+
+    /**
+     * Las señales de llamada viajan en sobres `C` por el mismo `onReceived`, así que el guard
+     * las corta de paso: un bloqueado no puede hacer sonar el teléfono. Esto es lo que hace que
+     * la guarda equivalente de `CallService.onInvite` sea defensa en profundidad y no la
+     * principal.
+     */
+    @Test
+    fun `un peer bloqueado no puede emitir una senal de llamada`() = runTest {
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope)
+
+        val senales = mutableListOf<Pair<Contact, MessageEnvelope.Decoded.Call>>()
+        val job = backgroundScope.launch { chat.callSignals.collect { senales += it } }
+        runCurrent()
+
+        // "invite" literal, como en CallServiceTest: la constante vive en un companion privado.
+        val invite = cipher.encrypt(secret, MessageEnvelope.encodeCall("invite", "call-1", 1_000L))
+        assertNull(chat.onReceived(contact.peerId, invite))
+        runCurrent()
+
+        assertTrue("una llamada de un bloqueado no debe emitirse: $senales", senales.isEmpty())
+        job.cancel()
+    }
+
+    /** Bloquear no borra: el contacto y su conversación siguen, para poder denunciar (4.4). */
+    @Test
+    fun `bloquear conserva el contacto y su historial`() = runTest {
+        val messages = FakeMessages()
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+
+        val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-b3", "previo".toByteArray()))
+        chat.onReceived(contact.peerId, ciphertext)
+        assertEquals(1, messages.saved.size)
+
+        chat.block(contact.peerId, reason = "acoso")
+
+        assertTrue(chat.isBlocked(contact.peerId))
+        // Contra el repositorio y no con `chat.findContact`: esa busca por `Contact.id`, y en
+        // esta fixture el id es "c1" mientras que en producción el id **es** el PeerID.
+        assertEquals(contact.peerId, contacts.findByPeerId(contact.peerId)?.peerId)
+        assertEquals(1, messages.saved.size)
+    }
+
     @Test
     fun `deleteContact also clears the like state`() = runTest {
         val contacts = FakeContacts(listOf(contact))

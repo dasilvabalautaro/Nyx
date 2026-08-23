@@ -635,6 +635,18 @@ class ChatService @Inject constructor(
         mailboxId: String? = null,
         ts: Long? = null,
     ): Message? {
+        // Bloqueado: se descarta antes de tocar nada. Este `return` es el punto donde el
+        // bloqueo se hace real, y cubre de una vez **mensajes, archivos, acuses y señales de
+        // llamada**, porque los sobres de tipo `C` también entran por aquí (más abajo, hacia
+        // `_callSignals`). Un bloqueado no puede escribir ni hacer sonar el teléfono.
+        //
+        // Volver `null` en vez de lanzar es deliberado, y es el contrato de ack del buzón: el
+        // procesador de arriba confirma todo lo que no lanza, así que el nodo **borra** el
+        // sobre. Es lo correcto — reentregar un sobre de alguien bloqueado no lo mejora, y
+        // dejarlo sin confirmar sería un bucle envenenado que se repite en cada `fetch`.
+        // Mismo criterio que `LikeService.onLikeReceived`.
+        if (blocked.isBlocked(peerId)) return null
+
         val contact = contacts.findByPeerId(peerId) ?: return null
         val secret = contact.sharedSecret ?: return null
         val decoded = runCatching { MessageEnvelope.decode(cipher.decrypt(secret, ciphertext)) }.getOrNull()
@@ -828,6 +840,38 @@ class ChatService @Inject constructor(
         _onlinePeers.update { it - contact.peerId }
         logLine("🗑 contacto eliminado: ${short(contact.peerId)}")
     }
+
+    /**
+     * Bloquea un PeerID. **Local, unilateral y silencioso**: el bloqueado no recibe ningún
+     * aviso, y desde su lado todo sigue pareciendo normal — sus mensajes salen y se quedan en
+     * `SENT`, porque el buzón del nodo los acepta igual; el filtro está aquí, en el receptor.
+     * Eso es deliberado: si bloquear devolviera un error al otro lado, sería una señal que un
+     * acosador puede usar para saber que le has bloqueado y crearse otra identidad.
+     *
+     * Deja el contacto y su historial intactos. Bloquear no es borrar: puedes querer callar a
+     * alguien y conservar la conversación como prueba para una denuncia (Fase 4.4).
+     *
+     * Lo que **no** hace, y conviene saberlo: no corta una llamada que ya esté en curso con esa
+     * persona. `CallService` depende de este servicio y no al revés, así que cortarla desde aquí
+     * pediría un canal de vuelta; hoy le toca a quien llame a esto desde la UI.
+     */
+    suspend fun block(peerId: String, reason: String? = null) {
+        blocked.block(peerId, reason)
+        lastFound.remove(peerId)
+        _onlinePeers.update { it - peerId }
+        logLine("🚫 bloqueado: ${short(peerId)}")
+    }
+
+    /** Levanta el bloqueo. Acto explícito por diseño: ver el guard de [addContact]. */
+    suspend fun unblock(peerId: String) {
+        blocked.unblock(peerId)
+        logLine("bloqueo retirado: ${short(peerId)}")
+    }
+
+    /** Peers bloqueados, para la pantalla de gestión (4.2). */
+    fun observeBlocked(): Flow<List<chat.neto.nyx.core.model.BlockedPeer>> = blocked.observeAll()
+
+    suspend fun isBlocked(peerId: String): Boolean = blocked.isBlocked(peerId)
 
     fun observeConversation(conversationId: String): Flow<List<Message>> =
         messages.observeConversation(conversationId)

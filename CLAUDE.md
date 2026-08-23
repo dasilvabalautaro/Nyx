@@ -208,6 +208,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > and the Android↔Python
 > pixel comparison, which needs an **emulator** since `:app` instrumented tests are destructive.
 >
+> **Blocking is enforced end to end since 23 Aug 2026 (plan 4.1).** It used to exist only in
+> Room and in `LikeService`: `BlockRepository.block()` had **no caller anywhere**, so a user
+> could not block at all, and a blocked peer's messages and calls still came through. The
+> non-obvious part is where the guard belongs — **call signals ride `C` envelopes through the
+> same `ChatService.onReceived`**, so one check at the top of that method stops messages, files,
+> read receipts *and* calls; it is the real funnel. `CallService.onInvite` keeps a second check
+> as defense in depth (one line, `chat` was already injected) and its comment says outright that
+> it is redundant today, so nobody mistakes it for the primary. Two contract details worth
+> keeping: a blocked peer's envelope is **acked** (`return null`, never throw) so the node
+> deletes it — returning `false` would redeliver it on every `fetch`, a poisoned loop that grows
+> with each message the blocked peer sends; and a blocked invite is dropped **silently**, with no
+> ring, no missed-call row and no BUSY signal, because BUSY would confirm to the caller that
+> you're there. `ChatService` gained `block`/`unblock`/`observeBlocked`/`isBlocked`; blocking
+> deliberately keeps the contact and the history, since reporting (4.4) needs them. Four tests,
+> the three guard ones hand-falsified by deleting the guard. Not covered: it does not end a call
+> already in progress — `CallService` depends on `ChatService` and not the reverse, so that falls
+> to whoever calls `block` from the UI (4.3).
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

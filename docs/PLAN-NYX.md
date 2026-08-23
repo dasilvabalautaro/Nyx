@@ -1249,8 +1249,24 @@ resuelve la decisión. Detalle completo en
 - [x] 3b.6 Cerrar con entrada en `CLAUDE.md` explicando qué alternativa se usó y por qué.
 
 ### 4. Funcionalidad de app
-- [ ] 4.1 Guard de bloqueo temprano en `ChatService.onReceived`, `LikeService`,
-      aceptar-llamada de `CallService`.
+- [x] 4.1 **Guard de bloqueo temprano — hecho el 23 ago 2026.** `LikeService` ya lo tenía
+      (envío y recepción). Faltaban los otros dos, y al mirarlo apareció algo que cambia el
+      diseño: **las señales de llamada viajan en sobres `C` por el mismo `ChatService.onReceived`**,
+      así que un único guard al principio de ese método corta de una vez mensajes, archivos,
+      acuses **y** llamadas — es el embudo real. El de `CallService.onInvite` se queda como
+      defensa en profundidad (cuesta una línea, `chat` ya estaba inyectado) y su comentario dice
+      que hoy es redundante, para que nadie lo lea como la protección principal.
+      Detalle del contrato de ack: el sobre de un bloqueado se **confirma** (`return null`, no
+      excepción) para que el nodo lo borre; devolver `false` lo reentregaría en cada `fetch`, un
+      bucle envenenado que crecería con cada mensaje del bloqueado. Mismo criterio que
+      `LikeService`. El invite de un bloqueado se descarta **en silencio**: ni timbre, ni fila de
+      perdida, ni señal de ocupado — un "ocupado" le confirmaría que estás ahí.
+      Añadidos también `ChatService.block`/`unblock`/`observeBlocked`/`isBlocked`, porque
+      `BlockRepository.block()` **no lo llamaba nadie**: el bloqueo existía en la base de datos y
+      era inalcanzable. Bloquear conserva contacto e historial a propósito (hace falta para
+      denunciar, 4.4). Cubierto por 4 tests, los tres de guarda falsificados a mano quitándola.
+      **Lo que no cubre**: no corta una llamada ya en curso — `CallService` depende de
+      `ChatService` y no al revés, así que hoy le toca a la UI que llame a `block` (ver 4.3).
 - [ ] 4.2 `BlockedPeersScreen.kt` (lista + desbloquear).
 - [ ] 4.3 Acción "Bloquear" en `ChatScreens.kt` (reusa `ConfirmDeleteDialog`) y en la
       tarjeta de descubrimiento (antes de match).

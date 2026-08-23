@@ -209,6 +209,18 @@ class CallService @Inject constructor(
     }
 
     private suspend fun onInvite(contact: Contact, sig: MessageEnvelope.Decoded.Call) {
+        // Defensa en profundidad. Hoy es **redundante**: los sobres de llamada llegan por
+        // `ChatService.onReceived`, que ya descarta todo lo que venga de un bloqueado antes de
+        // emitir a `callSignals`, así que este `return` no debería dispararse nunca. Se queda
+        // porque el coste es una línea (`chat` ya está inyectado) y porque la propiedad que
+        // protege —que un bloqueado no pueda hacer sonar tu teléfono— es de las que no admiten
+        // un fallo: si algún día aparece otra vía que alimente `callSignals`, aquí ya está.
+        //
+        // Silencio total y a propósito: ni timbre, ni fila de "llamada perdida", ni señal de
+        // ocupado. Un "ocupado" le confirmaría al que llama que estás ahí, que es exactamente
+        // lo que un bloqueo no debe filtrar.
+        if (chat.isBlocked(contact.peerId)) return
+
         val secret = contact.sharedSecret ?: return
         // Un invite rancio (llegó por buzón mucho después; reloj adelantado cuenta como
         // fresco) ya no debe timbrar: fila de "llamada perdida" y listo.

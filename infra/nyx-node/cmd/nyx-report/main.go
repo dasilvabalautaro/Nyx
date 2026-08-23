@@ -61,12 +61,37 @@ func main() {
 	switch os.Args[1] {
 	case "keygen":
 		err = keygen(defaultKeyPath())
+	case "status":
+		err = status()
 	case "decrypt":
 		if len(os.Args) < 3 {
 			usage()
 			os.Exit(1)
 		}
-		err = decryptPath(defaultKeyPath(), os.Args[2])
+		// Por defecto solo lo nuevo: releer 180 días de denuncias buscando las de hoy es
+		// exactamente el motivo por el que uno deja de revisar.
+		todas := len(os.Args) > 3 && os.Args[3] == "-todas"
+		err = decryptPath(defaultKeyPath(), os.Args[2], todas)
+	case "ban":
+		if len(os.Args) < 3 {
+			usage()
+			os.Exit(1)
+		}
+		err = ban(os.Args[2], arg(3), arg(4))
+	case "unban":
+		if len(os.Args) < 3 {
+			usage()
+			os.Exit(1)
+		}
+		err = unban(os.Args[2])
+	case "dismiss":
+		if len(os.Args) < 3 {
+			usage()
+			os.Exit(1)
+		}
+		err = dismiss(os.Args[2], arg(3))
+	case "log":
+		err = showLog()
 	default:
 		usage()
 		os.Exit(1)
@@ -77,11 +102,28 @@ func main() {
 	}
 }
 
+func arg(i int) string {
+	if len(os.Args) > i {
+		return os.Args[i]
+	}
+	return ""
+}
+
 func usage() {
-	fmt.Fprintf(os.Stderr, `uso:
-  nyx-report keygen            genera el par del operador en %s
-  nyx-report decrypt <ruta>    descifra un fichero de denuncia o un directorio entero
-`, defaultKeyPath())
+	fmt.Fprintf(os.Stderr, `nyx-report — revisión de denuncias y moderación del tablón
+
+  status                        cuántas denuncias hay en el nodo y cuántas decisiones llevas
+  decrypt <ruta> [-todas]       descifra las NUEVAS (con -todas, también las ya revisadas)
+  ban <peerid> [nota] [id]      expulsa del tablón y registra la decisión
+  unban <peerid>                levanta la expulsión
+  dismiss <id-denuncia> [nota]  archiva una denuncia revisada sin acción
+  log                           historial de decisiones
+  keygen                        genera el par del operador (una sola vez)
+
+Clave privada: %s
+Registro:      %s
+Nodo:          %s  (cambiable con NYX_NODE=usuario@host)
+`, defaultKeyPath(), statePath(), sshHost())
 }
 
 func keygen(path string) error {
@@ -162,12 +204,16 @@ func open(priv, sealed []byte) ([]byte, error) {
 	return gcm.Open(nil, nonce, ct, []byte(magic))
 }
 
-func decryptPath(keyPath, target string) error {
+func decryptPath(keyPath, target string, todas bool) error {
 	priv, err := loadPrivate(keyPath)
 	if err != nil {
 		return err
 	}
-	n := 0
+	st, err := loadState()
+	if err != nil {
+		return err
+	}
+	n, saltadas := 0, 0
 	err = filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".json") {
 			return nil
@@ -189,9 +235,14 @@ func decryptPath(keyPath, target string) error {
 			fmt.Printf("── %s\n   (blob ilegible)\n\n", path)
 			return nil
 		}
+		id := reportID(sealed)
+		if !todas && st.isReviewed(id) {
+			saltadas++
+			return nil
+		}
 		n++
-		fmt.Printf("── %s\n   entregada por: %s\n   recibida:      %s\n",
-			path, rec.From, time.UnixMilli(rec.Ts).Format(time.RFC3339))
+		fmt.Printf("── denuncia %s\n   entregada por: %s\n   recibida:      %s\n",
+			id, rec.From, time.UnixMilli(rec.Ts).Format(time.RFC3339))
 		plain, openErr := open(priv, sealed)
 		if openErr != nil {
 			fmt.Printf("   NO SE PUDO DESCIFRAR: %v\n\n", openErr)
@@ -203,8 +254,26 @@ func decryptPath(keyPath, target string) error {
 	if err != nil {
 		return err
 	}
-	if n == 0 {
+	switch {
+	case n == 0 && saltadas > 0:
+		if saltadas == 1 {
+			fmt.Printf("Nada nuevo: la única denuncia de %s ya estaba revisada.\n", target)
+		} else {
+			fmt.Printf("Nada nuevo: las %d denuncias de %s ya estaban revisadas.\n", saltadas, target)
+		}
+		fmt.Println("Para verlas otra vez: decrypt <ruta> -todas")
+	case n == 0:
 		fmt.Println("No hay denuncias en", target)
+	default:
+		fmt.Printf("%d sin revisar", n)
+		if saltadas > 0 {
+			fmt.Printf(" (%d ya revisadas, ocultas)", saltadas)
+		}
+		fmt.Println(".")
+		fmt.Println()
+		fmt.Println("Para cada una, decide y deja constancia:")
+		fmt.Println("  nyx-report ban <peerid-denunciado> \"motivo\" <id-denuncia>")
+		fmt.Println("  nyx-report dismiss <id-denuncia> \"por qué no se actúa\"")
 	}
 	return nil
 }

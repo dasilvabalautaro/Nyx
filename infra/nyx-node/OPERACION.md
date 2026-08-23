@@ -229,87 +229,35 @@ Ajustes), no basta con instalar la build nueva.
 
 ## Denuncias y expulsión del tablón
 
-Es lo que hace que Nyx cumpla la política de contenido generado por usuarios de Play sin montar
-un servidor de contenido: existe un canal para denunciar **y** el operador puede actuar. Esta
-sección es la parte de "puede actuar".
+La rutina de revisión —cómo enterarte, leer, decidir y dejar constancia— vive en su propio
+manual: **[MODERACION.md](MODERACION.md)**. Aquí queda solo lo que es operación de la caja.
 
-### Leer las denuncias
+Las denuncias llegan por `/nyx/report/1.0.0` y se guardan en
+`/var/lib/nyx/reports/<peerid-denunciante>/`, un JSON por denuncia, **cifradas a la clave del
+operador**: ni el nodo ni quien entre en la caja pueden leerlas. Topes: sobre ≤64 KiB, ≤50 vivas
+por denunciante (cuota **por denunciante**, así que agotarla no silencia a los demás), TTL 180
+días. Lo que el nodo **sí** ve es quién entregó cada una — identidad del stream de libp2p, no
+ocultable, y guardada a propósito porque sin eso no hay freno a las denuncias falsas.
 
-Llegan por `/nyx/report/1.0.0` y se guardan en `/var/lib/nyx/reports/<peerid-denunciante>/`,
-un fichero JSON por denuncia. **El contenido está cifrado a la clave del operador**: ni el nodo
-ni quien entre en la caja pueden leerlo. Se descifra fuera, con la clave privada.
+Los expulsados son `/var/lib/nyx/banned.txt`, un PeerID por línea, con `#` para comentar. El nodo
+lo **relee al cambiar el mtime**, sin reiniciar. Se edita con `nyx-report ban/unban` (ver el
+manual) o a mano por SSH. La expulsión actúa en tres sitios, y el segundo es el que importa: al
+publicar, **al consultar** y en el barrido — sin el de consulta, expulsar no retiraría la tarjeta
+ya puesta hasta que caducara sola a las 48 h.
 
-```sh
-ssh root@nyx.neto.chat 'ls -R /var/lib/nyx/reports'
-scp -r root@nyx.neto.chat:/var/lib/nyx/reports ./reports-$(date +%F)
-```
-
-Lo que **sí** se ve sin descifrar es **quién denunció** (el nombre del directorio) y cuándo. Sale
-de la identidad del stream de libp2p y no se puede ocultar; se guarda a propósito, porque sin él
-no hay forma de frenar a quien inunde de denuncias falsas.
-
-Topes: sobre ≤64 KiB, ≤50 denuncias vivas por denunciante, TTL 180 días. El TTL es largo a
-propósito — una denuncia es justo lo que no debe caducar antes de que alguien la mire. La cuota
-es **por denunciante**, así que agotarla no impide denunciar a los demás (hay un test).
-
-### Expulsar un PeerID del tablón
-
-La lista es un fichero de texto en `/var/lib/nyx/banned.txt`, un PeerID por línea. Admite
-comentarios con `#`, en su propia línea o detrás del PeerID, que es donde conviene anotar por
-qué:
-
-```sh
-ssh root@nyx.neto.chat
-echo '12D3KooW…  # denuncia 2026-08-23, acoso' >> /var/lib/nyx/banned.txt
-```
-
-**No hace falta reiniciar**: el nodo relee el fichero cuando cambia su fecha de modificación.
-Levantar una expulsión es borrar la línea.
-
-El efecto es inmediato y en tres sitios, y el segundo es el que importa:
-
-1. **No puede publicar** tarjetas nuevas.
-2. **Su tarjeta ya publicada deja de verse** en las consultas. Sin esto, expulsar a alguien no
-   retiraría nada hasta que su tarjeta caducara sola (48 h) y "actuar sobre lo denunciado" sería
-   un gesto vacío.
-3. El barrido horario **borra** sus tarjetas, para que la expulsión libere espacio y no solo
-   esconda.
-
-### El alcance real de la moderación, y hay que ser honesto con él
-
-Se modera **el tablón**, no las conversaciones. Los mensajes son E2EE y el operador no puede
-leerlos ni borrarlos: la única herramienta contra el acoso en una conversación privada es el
-bloqueo, que es local y del usuario. Esto va dicho igual en la política de privacidad y en la
-ficha de Play (Fase 6); disimularlo sería peor que la limitación.
-
-### Por qué no hay protocolo de recogida ni de administración
-
-Ni `/nyx/report/fetch` ni un comando remoto para expulsar. Los dos necesitarían autenticar al
-operador —otra identidad, otro secreto, otra superficie que puede fallar abierta— para resolver
-algo que SSH ya resuelve. Con una caja y un operador, el protocolo sería complejidad sin ganancia.
+**No hay protocolo de recogida ni de administración** a propósito: los dos exigirían autenticar
+al operador —otra identidad, otro secreto, otra superficie que puede fallar abierta— para
+resolver algo que SSH ya resuelve.
 
 ### La clave del operador
 
-Generada el **23 ago 2026** con `go run ./cmd/nyx-report keygen`. Vive en
-`~/keys/nyx-operator/operator.key` (permisos `600`) en la máquina del autor, y su pública
-—`b6de2a9b7cb0e6afd88d8912be5662e25cd3a22ef967d464cdbaf8c8bdd77b5d`— va **compilada en el APK**.
+Generada el **23 ago 2026** con `go run ./cmd/nyx-report keygen`. Privada en
+`~/keys/nyx-operator/operator.key` (permisos `600`) en la máquina del autor; pública
+—`b6de2a9b7cb0e6afd88d8912be5662e25cd3a22ef967d464cdbaf8c8bdd77b5d`— **compilada en el APK**.
 
-**Nunca se copia al VPS.** Ese es el diseño entero: el nodo guarda sobres que no puede abrir, así
-que comprometer la caja no expone ni una denuncia.
-
-Es de la misma familia que `node.key`, y con una consecuencia peor: si se pierde, **todas las
-denuncias quedan ilegibles para siempre** *y* cambiar la clave exige **publicar una versión nueva
-en Play**, porque la pública viaja dentro de cada APK instalado. `keygen` se niega a
-sobreescribir un fichero existente justamente para que eso no pase por repetir un comando.
+**Nunca se copia al VPS.** Es de la familia de `node.key` y con una consecuencia peor: si se
+pierde, todas las denuncias quedan ilegibles para siempre *y* cambiarla exige **publicar una
+versión nueva en Play**, porque la pública viaja dentro de cada APK instalado. `keygen` se niega
+a sobreescribir para que eso no pase por repetir un comando.
 
 Respaldo pendiente fuera de la máquina, igual que se hizo con `node.key`.
-
-```sh
-cd infra/nyx-node
-go run ./cmd/nyx-report decrypt ./reports-2026-08-23   # descifra un fichero o un árbol
-```
-
-El sobre es `"NYXR1" ‖ pública efímera(32) ‖ nonce(12) ‖ AES-256-GCM`, con la clave derivada por
-HKDF-SHA256 del ECDH X25519 entre una clave **efímera** del denunciante y la pública del
-operador. Efímera a propósito: con la clave larga del denunciante, quien tuviera la privada del
-operador podría además **demostrar** quién escribió cada denuncia.

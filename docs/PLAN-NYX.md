@@ -1195,6 +1195,16 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       [infra/nyx-node/OPERACION.md](../infra/nyx-node/OPERACION.md).
       Sube a la Fase 3 desde la 4 porque, con canal único en Play, el reporte con destino real
       es requisito de publicación y no una mejora.
+      **Herramienta de revisión añadida el 23 ago 2026**, porque el mecanismo existía pero la
+      rutina no era sostenible: `decrypt` reimprimía 180 días de denuncias cada vez, no había
+      forma de saber cuáles ya se habían mirado, y decidir *no* actuar no dejaba rastro — o sea,
+      nada que enseñar cuando Play pide demostrar que hay un proceso. Ahora `nyx-report` tiene
+      `status`, `decrypt` que muestra **solo lo nuevo** (id = `sha256(sobre)[:16]`, estable
+      frente a copias y renombrados), `ban`/`unban` que escriben en el nodo por SSH **y**
+      registran la decisión, `dismiss` para archivar sin acción y `log`. El registro vive junto a
+      la clave privada, no es un caché. Más un aviso (`aviso/instalar.sh`, LaunchAgent cada 6 h)
+      que **solo suena cuando el número crece**: repetirlo a diario enseña a ignorarlo. Manual
+      del operador en [infra/nyx-node/MODERACION.md](../infra/nyx-node/MODERACION.md).
       *Falta el redespliegue del nodo con esto (va con PRUEBAS-PENDIENTES §14), y la mitad de
       cliente: clave del operador, cifrado del sobre, puente Go y UI — eso es 4.4/4.4b.*
 - [x] 3.11 Cerrar con entrada en `CLAUDE.md`.

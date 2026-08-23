@@ -40,6 +40,23 @@ internal open class FakeSignalingBase(private val selfPeerId: String = "12D3KooW
     override suspend fun queryBoard(category: String, limit: Int): String = "[]"
     override suspend fun deleteCard(category: String) = Unit
     override suspend fun sendLike(toPeerId: String, ciphertext: ByteArray) = Unit
+
+    /**
+     * Sellado de mentira: el cifrado real vive en Go y aquí no hay puente. Antepone una marca
+     * para que un test pueda distinguir "esto pasó por el sellado" de "esto viajó en claro",
+     * que es lo único que importa comprobar desde Kotlin.
+     */
+    var sealedReports = mutableListOf<ByteArray>()
+    var sentReports = mutableListOf<ByteArray>()
+    var failReportSend = false
+
+    override suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray =
+        ("SEALED:".toByteArray() + plaintext).also { sealedReports += it }
+
+    override suspend fun sendReport(sealed: ByteArray) {
+        if (failReportSend) error("nodo inalcanzable")
+        sentReports += sealed
+    }
     override suspend fun fetchLikes(): Int = 0
     override fun setLikeProcessor(
         processor: suspend (fromPeerId: String, ciphertext: ByteArray, timestamp: Long) -> Boolean,

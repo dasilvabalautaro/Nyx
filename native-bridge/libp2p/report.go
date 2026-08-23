@@ -24,6 +24,7 @@
 package bridge
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -31,12 +32,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"strings"
+	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 )
+
+// reportProtocol debe coincidir con el del nodo (infra/nyx-node/report.go).
+const reportProtocol = protocol.ID("/nyx/report/1.0.0")
 
 const (
 	reportMagic    = "NYXR1"
@@ -94,4 +103,59 @@ func SealReport(operatorPubHex string, plaintext []byte) ([]byte, error) {
 	out = append(out, ephPub...)
 	out = append(out, nonce...)
 	return gcm.Seal(out, nonce, plaintext, []byte(reportMagic)), nil
+}
+
+// --- Entrega al nodo ---------------------------------------------------------
+
+// SendReport entrega un sobre ya cifrado a `/nyx/report/1.0.0`.
+//
+// Política multinodo: **al primero que acepte**, igual que `MailboxPut` y `LikePut`. Una
+// denuncia entregada una vez ya está entregada; mandarla a todos los nodos multiplicaría copias
+// del mismo hecho sin que el operador gane nada, y cada copia consume cuota del denunciante.
+//
+// Nótese que aquí no hay `Fetch` que le haga pareja: el operador recoge las denuncias por SSH
+// desde su propia caja, no por protocolo. Ver el comentario de cabecera de
+// `infra/nyx-node/report.go`.
+func (n *Node) SendReport(reportAddrs string, sealed []byte) error {
+	nodes := parseAddrInfos(reportAddrs)
+	if len(nodes) == 0 {
+		return errors.New("sin nodo configurado para denuncias")
+	}
+	if len(sealed) == 0 {
+		return errors.New("sobre vacío")
+	}
+	var errs []string
+	for _, ai := range nodes {
+		if err := n.sendReportTo(ai, sealed); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", shortID(ai.ID), err))
+			continue
+		}
+		return nil
+	}
+	return errors.New("denuncia: " + strings.Join(errs, "; "))
+}
+
+func (n *Node) sendReportTo(ai peer.AddrInfo, sealed []byte) error {
+	ctx, cancel := context.WithTimeout(n.ctx, 30*time.Second)
+	defer cancel()
+	if err := n.connectNode(ctx, ai); err != nil {
+		return err
+	}
+	s, err := n.h.NewStream(ctx, ai.ID, reportProtocol)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	req, err := json.Marshal(map[string]any{
+		"v":    1,
+		"blob": base64.StdEncoding.EncodeToString(sealed),
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(s, "%s\n", req); err != nil {
+		return err
+	}
+	_ = s.CloseWrite()
+	return readAck(s)
 }

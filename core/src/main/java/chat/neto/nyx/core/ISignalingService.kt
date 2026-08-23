@@ -70,6 +70,16 @@ interface ISignalingService {
     /** Deposita un "me gusta" ya cifrado para [toPeerId] (camino propio, cuota propia). */
     suspend fun sendLike(toPeerId: String, ciphertext: ByteArray)
 
+    /**
+     * Cifra una denuncia para el operador. Va por aquí y no por `MessageCipher` porque el
+     * destinatario no es un contacto: es una clave X25519 suelta, y el cifrado vive en el
+     * puente Go (X25519 en Java exige API 33; el `minSdk` es 30).
+     */
+    suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray
+
+    /** Entrega un sobre de denuncia ya cifrado al primer nodo que lo acepte. */
+    suspend fun sendReport(sealed: ByteArray)
+
     /** Retira los "me gusta" pendientes. Devuelve cuántos confirmó el procesador. */
     suspend fun fetchLikes(): Int
 

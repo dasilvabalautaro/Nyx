@@ -1298,7 +1298,22 @@ resuelve la decisión. Detalle completo en
       `ChatService` y a `CallService` a la vez. Sin eso, bloquear a alguien mientras te llama te
       dejaba hablando con él. También cancela su notificación pendiente.
       *Falta la mitad de la tarjeta de descubrimiento, que depende de 4.8.*
-- [ ] 4.4 Mecanismo de reporte que cumpla la política UGC de Play: bloqueo inmediato +
+- [~] 4.4 **Mecanismo de reporte — máquina hecha el 23 ago 2026; falta la UI (4.4b).**
+      Nodo (3.13), clave del operador, `SealReport`/`SendReport` en el puente Go, `ReportDraft`
+      en `:core` y `ReportService` en `:p2p-signaling`. 6 + 5 + 9 tests.
+      Tres decisiones que conviene no deshacer sin releer el porqué:
+      (a) **Bloquear va antes de enviar, y pase lo que pase con el envío** — quien denuncia
+      quiere dejar de recibir a esa persona ya, y hacerlo depender de la red dejaría a la
+      víctima expuesta justo cuando pidió ayuda; hay un test que falla si se reordena.
+      (b) **El fragmento de conversación es la única excepción al E2EE de la app**, así que
+      `ReportDraft.includeExcerpt` es un campo explícito, por defecto `false`, y hay tests que
+      comprueban que decir "no" significa que **ni una palabra** viaja — comprobado en el
+      formateo *y* de punta a punta sobre lo que sale por la red.
+      (c) Un fallo de entrega **devuelve el texto en claro**, para que la UI pueda ofrecer la
+      exportación local en vez de dejar al usuario creyendo que su denuncia llegó a alguien.
+      *Falta: la UI (4.4b), el redespliegue del nodo y el respaldo de la clave del operador
+      fuera de la máquina.*
+- [ ] 4.4-original Mecanismo de reporte que cumpla la política UGC de Play: bloqueo inmediato +
       evidencia (PeerID, fragmento de conversación, nota libre) **enviada al operador como
       sobre cifrado** (con capacidad de expulsar el PeerID del tablón), más exportación
       local para el usuario. Documentar el alcance real: se modera el tablón, no las

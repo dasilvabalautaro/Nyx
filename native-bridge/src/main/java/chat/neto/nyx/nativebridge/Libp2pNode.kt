@@ -297,6 +297,21 @@ class Libp2pNode @Inject constructor(
         checkNotNull(node) { "nodo no iniciado" }.deleteCard(savedBootstrap().orEmpty(), category)
     }
 
+    /**
+     * Cifra una denuncia para el operador (X25519 efímero + AES-GCM, ver `report.go` del
+     * puente). Se hace en Go porque `KeyAgreement("XDH")` llegó a Android en API 33 y el
+     * `minSdk` es 30.
+     *
+     * No necesita nodo arrancado: es criptografía pura, sin red.
+     */
+    suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray =
+        withContext(Dispatchers.IO) { Bridge.sealReport(operatorPubHex, plaintext) }
+
+    /** Entrega un sobre de denuncia ya cifrado al primer nodo que lo acepte. */
+    suspend fun sendReport(sealed: ByteArray) = withContext(Dispatchers.IO) {
+        checkNotNull(node) { "nodo no iniciado" }.sendReport(savedBootstrap().orEmpty(), sealed)
+    }
+
     /** Deposita un "me gusta" ya cifrado para [to], por el camino de likes (cuota propia). */
     suspend fun likePut(to: String, data: ByteArray) = withContext(Dispatchers.IO) {
         checkNotNull(node) { "nodo no iniciado" }.likePut(savedBootstrap().orEmpty(), to, data)

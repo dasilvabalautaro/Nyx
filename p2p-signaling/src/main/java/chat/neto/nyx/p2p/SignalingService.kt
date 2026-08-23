@@ -134,6 +134,11 @@ class SignalingService @Inject constructor(
     override suspend fun sendLike(toPeerId: String, ciphertext: ByteArray) =
         node.likePut(toPeerId, ciphertext)
 
+    override suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray =
+        node.sealReport(operatorPubHex, plaintext)
+
+    override suspend fun sendReport(sealed: ByteArray) = node.sendReport(sealed)
+
     override suspend fun fetchLikes(): Int = node.likeFetch().toInt()
 
     override fun setLikeProcessor(

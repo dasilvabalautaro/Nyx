@@ -62,6 +62,18 @@ class CallServiceTest {
         lateinit var deliver: suspend (fromPeerId: String, ciphertext: ByteArray) -> Unit
 
         override val events = MutableSharedFlow<SignalingEvent>()
+
+        // El sellado real vive en Go; aquí basta con que exista y no viaje en claro.
+        var sealedReports = mutableListOf<ByteArray>()
+        var sentReports = mutableListOf<ByteArray>()
+        var failReportSend = false
+        override suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray =
+            ("SEALED:".toByteArray() + plaintext).also { sealedReports += it }
+        override suspend fun sendReport(sealed: ByteArray) {
+            if (failReportSend) error("nodo inalcanzable")
+            sentReports += sealed
+        }
+
         override val incomingCallStreams = MutableSharedFlow<Pair<String, CallStream>>(extraBufferCapacity = 4)
 
         var failSend = false

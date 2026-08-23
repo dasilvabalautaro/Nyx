@@ -36,6 +36,18 @@ class ChatServiceTest {
 
     private class FakeSignaling : ISignalingService {
         override val events = MutableSharedFlow<SignalingEvent>()
+
+        // El sellado real vive en Go; aquí basta con que exista y no viaje en claro.
+        var sealedReports = mutableListOf<ByteArray>()
+        var sentReports = mutableListOf<ByteArray>()
+        var failReportSend = false
+        override suspend fun sealReport(operatorPubHex: String, plaintext: ByteArray): ByteArray =
+            ("SEALED:".toByteArray() + plaintext).also { sealedReports += it }
+        override suspend fun sendReport(sealed: ByteArray) {
+            if (failReportSend) error("nodo inalcanzable")
+            sentReports += sealed
+        }
+
         var sentCiphertext: ByteArray? = null
         /** Simula que el arranque del host/mDNS revienta (p. ej. datos móviles sin multicast). */
         var failOnStart = false

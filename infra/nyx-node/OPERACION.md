@@ -287,3 +287,29 @@ ficha de Play (Fase 6); disimularlo sería peor que la limitación.
 Ni `/nyx/report/fetch` ni un comando remoto para expulsar. Los dos necesitarían autenticar al
 operador —otra identidad, otro secreto, otra superficie que puede fallar abierta— para resolver
 algo que SSH ya resuelve. Con una caja y un operador, el protocolo sería complejidad sin ganancia.
+
+### La clave del operador
+
+Generada el **23 ago 2026** con `go run ./cmd/nyx-report keygen`. Vive en
+`~/keys/nyx-operator/operator.key` (permisos `600`) en la máquina del autor, y su pública
+—`b6de2a9b7cb0e6afd88d8912be5662e25cd3a22ef967d464cdbaf8c8bdd77b5d`— va **compilada en el APK**.
+
+**Nunca se copia al VPS.** Ese es el diseño entero: el nodo guarda sobres que no puede abrir, así
+que comprometer la caja no expone ni una denuncia.
+
+Es de la misma familia que `node.key`, y con una consecuencia peor: si se pierde, **todas las
+denuncias quedan ilegibles para siempre** *y* cambiar la clave exige **publicar una versión nueva
+en Play**, porque la pública viaja dentro de cada APK instalado. `keygen` se niega a
+sobreescribir un fichero existente justamente para que eso no pase por repetir un comando.
+
+Respaldo pendiente fuera de la máquina, igual que se hizo con `node.key`.
+
+```sh
+cd infra/nyx-node
+go run ./cmd/nyx-report decrypt ./reports-2026-08-23   # descifra un fichero o un árbol
+```
+
+El sobre es `"NYXR1" ‖ pública efímera(32) ‖ nonce(12) ‖ AES-256-GCM`, con la clave derivada por
+HKDF-SHA256 del ECDH X25519 entre una clave **efímera** del denunciante y la pública del
+operador. Efímera a propósito: con la clave larga del denunciante, quien tuviera la privada del
+operador podría además **demostrar** quién escribió cada denuncia.

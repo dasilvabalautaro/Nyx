@@ -454,6 +454,41 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // --- Bloqueo (4.2 / 4.3) -----------------------------------------------------------
+
+    /** Peers bloqueados, para `BlockedPeersScreen`. */
+    val blockedPeers: StateFlow<List<chat.neto.nyx.core.model.BlockedPeer>> =
+        chat.observeBlocked().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Bloquea a [contact]. Conserva el contacto y el historial a propósito: hacen falta para
+     * denunciar, y borrarlos sería una decisión distinta que el usuario puede tomar aparte.
+     *
+     * **Cuelga primero si hay una llamada en curso con esa persona**, que es el hueco que
+     * `ChatService.block` no puede cerrar por sí solo: `CallService` depende de `ChatService`
+     * y no al revés, así que el corte tiene que venir de aquí, que es quien ve a los dos.
+     * Sin esto, bloquear a alguien mientras te llama te dejaba hablando con él.
+     */
+    fun blockContact(contact: Contact, reason: String? = null) {
+        viewModelScope.launch {
+            val enLlamada = calls.state.value.contact?.peerId == contact.peerId &&
+                calls.state.value.phase != CallPhase.IDLE
+            if (enLlamada) runCatching { calls.hangup() }
+
+            runCatching { chat.block(contact.peerId, reason) }
+                .onFailure { _error.value = "No se pudo bloquear"; return@launch }
+            // Su aviso pendiente no debe seguir en la bandeja después de bloquearle.
+            NyxNotifications.cancel(context, contact.id)
+        }
+    }
+
+    fun unblock(peerId: String) {
+        viewModelScope.launch {
+            runCatching { chat.unblock(peerId) }
+                .onFailure { _error.value = "No se pudo desbloquear" }
+        }
+    }
+
     /**
      * Sonda del gate de llamadas (Fase 7a): apunta los códecs de audio del móvil y mide el
      * RTT al nodo; ambos salen por el panel de diagnóstico.

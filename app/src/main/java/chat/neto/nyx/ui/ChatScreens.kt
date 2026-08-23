@@ -109,6 +109,7 @@ fun NyxApp(
     var current by remember { mutableStateOf<Contact?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
+    var showBlocked by remember { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsState()
 
     // Deep-link desde una notificación: al llegar (o al cargar los contactos) abre esa
@@ -193,6 +194,12 @@ fun NyxApp(
             BackHandler { showHelp = false }
             HelpScreen(onBack = { showHelp = false })
         }
+        // Mismo criterio que la Ayuda: antes de Ajustes, porque se abre desde ahí y "atrás"
+        // debe devolver a Ajustes (showSettings sigue true por debajo), no a la lista.
+        showBlocked -> {
+            BackHandler { showBlocked = false }
+            BlockedPeersScreen(viewModel = viewModel, onBack = { showBlocked = false })
+        }
         showSettings -> {
             BackHandler { showSettings = false }
             val backupMessage by viewModel.backupMessage.collectAsState()
@@ -207,6 +214,7 @@ fun NyxApp(
                 restoredPeerId = restoredPeerId,
                 onBack = { showSettings = false },
                 onOpenHelp = { showHelp = true },
+                onOpenBlocked = { showBlocked = true },
                 onSetBootstrap = viewModel::setBootstrap,
                 onProbeLatency = viewModel::probeCallLatency,
                 onExportBackup = viewModel::exportBackup,
@@ -228,6 +236,7 @@ fun NyxApp(
                 onClearError = viewModel::clearError,
                 onClearChat = viewModel::clearChat,
                 onDeleteContact = viewModel::deleteContact,
+                onBlockContact = { viewModel.blockContact(it) },
             )
         }
     }
@@ -321,6 +330,7 @@ private fun ChatScreen(
     var showMenu by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmBlock by remember { mutableStateOf(false) }
     var captureRequested by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -533,6 +543,17 @@ private fun ChatScreen(
                                 text = { Text("Vaciar chat") },
                                 leadingIcon = { Icon(NyxDeleteIcon, contentDescription = null) },
                                 onClick = { showMenu = false; confirmClear = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Bloquear") },
+                                leadingIcon = {
+                                    Icon(
+                                        NyxBlockIcon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = { showMenu = false; confirmBlock = true },
                             )
                             DropdownMenuItem(
                                 text = { Text("Eliminar contacto") },
@@ -799,6 +820,22 @@ private fun ChatScreen(
                 viewModel.clearChat(contact)
             },
             onDismiss = { confirmClear = false },
+        )
+    }
+    if (confirmBlock) {
+        ConfirmDeleteDialog(
+            title = "¿Bloquear a ${contact.displayName}?",
+            text = "Dejará de poder escribirte y de poder llamarte. " +
+                "No se le avisa: desde su lado todo sigue igual. " +
+                "Se conservan el contacto y los mensajes por si necesitas denunciar, y " +
+                "puedes deshacerlo en Ajustes › Perfiles bloqueados.",
+            confirmLabel = "Bloquear",
+            onConfirm = {
+                confirmBlock = false
+                viewModel.blockContact(contact)
+                onBack()
+            },
+            onDismiss = { confirmBlock = false },
         )
     }
     if (confirmDelete) {

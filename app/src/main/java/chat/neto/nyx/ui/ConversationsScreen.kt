@@ -74,12 +74,14 @@ fun ConversationsScreen(
     onClearError: () -> Unit,
     onClearChat: (Contact) -> Unit,
     onDeleteContact: (Contact) -> Unit,
+    onBlockContact: (Contact) -> Unit,
 ) {
     var showAdd by remember { mutableStateOf(false) }
     // Pulsación larga sobre una conversación → menú de acciones → confirmación destructiva.
     var actionsFor by remember { mutableStateOf<Contact?>(null) }
     var confirmClear by remember { mutableStateOf<Contact?>(null) }
     var confirmDelete by remember { mutableStateOf<Contact?>(null) }
+    var confirmBlock by remember { mutableStateOf<Contact?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -158,6 +160,10 @@ fun ConversationsScreen(
                         actionsFor = null
                         confirmClear = contact
                     }
+                    DialogOption("Bloquear", color = MaterialTheme.colorScheme.error) {
+                        actionsFor = null
+                        confirmBlock = contact
+                    }
                     DialogOption("Eliminar contacto", color = MaterialTheme.colorScheme.error) {
                         actionsFor = null
                         confirmDelete = contact
@@ -179,6 +185,20 @@ fun ConversationsScreen(
                 onClearChat(contact)
             },
             onDismiss = { confirmClear = null },
+        )
+    }
+    confirmBlock?.let { contact ->
+        ConfirmDeleteDialog(
+            title = "¿Bloquear a ${contact.displayName}?",
+            text = "Dejará de poder escribirte y de poder llamarte. No se le avisa: desde su " +
+                "lado todo sigue igual. Se conservan el contacto y los mensajes por si " +
+                "necesitas denunciar, y puedes deshacerlo en Ajustes › Perfiles bloqueados.",
+            confirmLabel = "Bloquear",
+            onConfirm = {
+                confirmBlock = null
+                onBlockContact(contact)
+            },
+            onDismiss = { confirmBlock = null },
         )
     }
     confirmDelete?.let { contact ->

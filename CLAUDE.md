@@ -224,7 +224,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > deliberately keeps the contact and the history, since reporting (4.4) needs them. Four tests,
 > the three guard ones hand-falsified by deleting the guard. Not covered: it does not end a call
 > already in progress — `CallService` depends on `ChatService` and not the reverse, so that falls
-> to whoever calls `block` from the UI (4.3).
+> to whoever calls `block` from the UI — closed the same day by 4.2/4.3.
+>
+> **Blocking has a UI since 23 Aug 2026 (plan 4.2/4.3).** "Bloquear" sits in the chat's ⋮ menu
+> and in the conversation list's long-press menu, both behind `ConfirmDeleteDialog`, and
+> `BlockedPeersScreen` (list + unblock) hangs off a new "Privacidad" card in Settings. That
+> screen is not decoration: since `addContact` rejects a blocked PeerID, without it picking the
+> wrong person would be unfixable from inside the app. It shows the **PeerID rather than a name**
+> on purpose — a block outlives the contact (you can block someone from the board you never
+> talked to, or delete the contact afterwards), so the PeerID is the only thing always present.
+> It is placed **before** `showSettings` in `NyxApp`'s `when`, same reason as Help: opened from
+> Settings, "back" must return to Settings. `ChatViewModel.blockContact` is where the gap 4.1
+> left open gets closed — it **hangs up first if a call with that peer is in progress**, being
+> the only place that sees `ChatService` and `CallService` at once; without it, blocking someone
+> mid-call left you still talking to them. Verified on the TECNO through the accessibility tree
+> (the chat window is FLAG_SECURE, so `screencap` is black there): both entry points show the
+> action, the dialog copy is right, cancel leaves nothing blocked, and back from the blocked list
+> returns to Settings.
 >
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is

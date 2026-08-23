@@ -82,6 +82,7 @@ fun SettingsScreen(
     restoredPeerId: String?,
     onBack: () -> Unit,
     onOpenHelp: () -> Unit,
+    onOpenBlocked: () -> Unit,
     onSetBootstrap: (String) -> Unit,
     onProbeLatency: () -> Unit,
     onExportBackup: (passphrase: String, uri: Uri) -> Unit,
@@ -290,6 +291,21 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            SettingsCard("Privacidad") {
+                Text(
+                    "Quién ha dejado de poder escribirte o llamarte. Bloquear es silencioso: " +
+                        "la otra persona no recibe ningún aviso.",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingsActionButton(
+                    text = "Perfiles bloqueados",
+                    icon = NyxBlockIcon,
+                    onClick = onOpenBlocked,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             SettingsCard("Apariencia") {

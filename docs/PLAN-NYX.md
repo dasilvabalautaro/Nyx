@@ -1265,11 +1265,23 @@ resuelve la decisión. Detalle completo en
       `BlockRepository.block()` **no lo llamaba nadie**: el bloqueo existía en la base de datos y
       era inalcanzable. Bloquear conserva contacto e historial a propósito (hace falta para
       denunciar, 4.4). Cubierto por 4 tests, los tres de guarda falsificados a mano quitándola.
-      **Lo que no cubre**: no corta una llamada ya en curso — `CallService` depende de
-      `ChatService` y no al revés, así que hoy le toca a la UI que llame a `block` (ver 4.3).
-- [ ] 4.2 `BlockedPeersScreen.kt` (lista + desbloquear).
-- [ ] 4.3 Acción "Bloquear" en `ChatScreens.kt` (reusa `ConfirmDeleteDialog`) y en la
-      tarjeta de descubrimiento (antes de match).
+      Lo de la llamada en curso quedó cerrado en 4.3: `ChatViewModel` ve a los dos servicios y
+      cuelga antes de bloquear.
+- [x] 4.2 **`BlockedPeersScreen.kt` — hecha el 23 ago 2026.** Lista + desbloquear, colgada de
+      una tarjeta "Privacidad" nueva en Ajustes. Va **antes** de `showSettings` en el `when` de
+      `NyxApp`, por el mismo motivo que la Ayuda: se abre desde Ajustes y "atrás" tiene que
+      devolver a Ajustes, no a la lista. Muestra el **PeerID y no un nombre** a propósito: un
+      bloqueo sobrevive al contacto (se puede bloquear a alguien del tablón con quien nunca se
+      habló, o borrar el contacto después), así que el PeerID es lo único que siempre existe.
+      No es un adorno: como `addContact` rechaza a un bloqueado, sin esta pantalla equivocarse
+      de persona no tendría arreglo desde la app.
+- [x] 4.3 **Acción "Bloquear" — hecha el 23 ago 2026**, en los **dos** sitios que hoy existen:
+      el menú ⋮ del chat y el de pulsación larga de la lista, ambos con `ConfirmDeleteDialog`.
+      Cierra además el hueco que 4.1 no podía cerrar: `ChatViewModel.blockContact` **cuelga
+      primero si hay una llamada en curso con esa persona** — es el único punto que ve a
+      `ChatService` y a `CallService` a la vez. Sin eso, bloquear a alguien mientras te llama te
+      dejaba hablando con él. También cancela su notificación pendiente.
+      *Falta la mitad de la tarjeta de descubrimiento, que depende de 4.8.*
 - [ ] 4.4 Mecanismo de reporte que cumpla la política UGC de Play: bloqueo inmediato +
       evidencia (PeerID, fragmento de conversación, nota libre) **enviada al operador como
       sobre cifrado** (con capacidad de expulsar el PeerID del tablón), más exportación

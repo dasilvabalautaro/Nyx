@@ -242,6 +242,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > action, the dialog copy is right, cancel leaves nothing blocked, and back from the blocked list
 > returns to Settings.
 >
+> **Reporting is done end to end since 23 Aug 2026 (plan 3.13 / 4.4 / 4.4b).** This is what lets
+> Nyx exist on Play: the UGC policy demands an in-app way to report and block **and** that the
+> developer can act on what is reported. The chain is `ReportDraft` (`:core`) → `ReportService`
+> (`:p2p-signaling`) → `SealReport`/`SendReport` (Go bridge) → `/nyx/report/1.0.0` (node) →
+> `nyx-report decrypt` (operator's machine). Reports are **sealed to the operator's X25519 public
+> key**, so the node stores blobs it cannot read; the private key lives in
+> `~/keys/nyx-operator/operator.key` and **never touches the VPS**. Its public half is compiled
+> into every APK, which is what makes losing it expensive: every past report becomes unreadable
+> *and* a replacement needs a new Play release — same class of commitment as the node PeerID in
+> `DEFAULT_BOOTSTRAP`. The sender's key is **ephemeral**, not their identity: with a long-term
+> key, whoever holds the operator private key could also *prove* who wrote each report. What the
+> node does see is **who delivered it** (libp2p stream identity, unhidable) — kept deliberately,
+> since without it nothing throttles false reports. Ban list is a **text file the operator edits
+> over SSH**, re-read on mtime change, enforced on publish, **on query** and in the sweep; the
+> query one is what matters — without it, banning someone would not pull the card already posted
+> until it expired on its own (48 h), and "the operator can act" would be an empty gesture.
+> Deliberately **no fetch or admin protocol**: both would need to authenticate the operator —
+> another identity, another secret, another surface that can fail open — to solve what SSH
+> already solves. Three client-side rules with tests behind them: **blocking happens before
+> sending and regardless of whether sending works** (the reporter wants it to stop *now*; making
+> that depend on the network would leave the victim exposed exactly when they asked for help);
+> the **conversation excerpt is the only exception to E2EE in the whole app**, so
+> `includeExcerpt` defaults to `false` and tests assert that "no" means not one word travels,
+> checked both in formatting and end-to-end on the bytes that leave; and a delivery failure
+> **returns the plaintext** so the UI can offer a local export instead of letting the user
+> believe someone will read it. Only text goes in the excerpt — attachments are noted as
+> `[imagen]`/`[adjunto]` and their bytes stay put, both for the node's 64 KiB cap and because
+> pulling a file out of E2EE deserves its own consent, not a side effect. UI lives in the chat's
+> ⋮ menu and on **long-press of a received message** (not your own). Found while testing on the
+> TECNO and fixed: with six reasons plus the note, the consent checkbox was the last thing
+> visible on a 1600 px screen, so you could authorise and confirm **without ever seeing** the
+> excerpt — ticking it now scrolls the dialog to the preview. Still open: the board-card entry
+> point (needs 4.8), a node redeploy, and an off-machine backup of the operator key.
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

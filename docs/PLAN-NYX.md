@@ -1298,7 +1298,7 @@ resuelve la decisión. Detalle completo en
       `ChatService` y a `CallService` a la vez. Sin eso, bloquear a alguien mientras te llama te
       dejaba hablando con él. También cancela su notificación pendiente.
       *Falta la mitad de la tarjeta de descubrimiento, que depende de 4.8.*
-- [~] 4.4 **Mecanismo de reporte — máquina hecha el 23 ago 2026; falta la UI (4.4b).**
+- [x] 4.4 **Mecanismo de reporte — hecho el 23 ago 2026, UI incluida.**
       Nodo (3.13), clave del operador, `SealReport`/`SendReport` en el puente Go, `ReportDraft`
       en `:core` y `ReportService` en `:p2p-signaling`. 6 + 5 + 9 tests.
       Tres decisiones que conviene no deshacer sin releer el porqué:
@@ -1311,16 +1311,23 @@ resuelve la decisión. Detalle completo en
       formateo *y* de punta a punta sobre lo que sale por la red.
       (c) Un fallo de entrega **devuelve el texto en claro**, para que la UI pueda ofrecer la
       exportación local en vez de dejar al usuario creyendo que su denuncia llegó a alguien.
-      *Falta: la UI (4.4b), el redespliegue del nodo y el respaldo de la clave del operador
-      fuera de la máquina.*
+      *Falta: el redespliegue del nodo y el respaldo de la clave del operador fuera de la
+      máquina.*
 - [ ] 4.4-original Mecanismo de reporte que cumpla la política UGC de Play: bloqueo inmediato +
       evidencia (PeerID, fragmento de conversación, nota libre) **enviada al operador como
       sobre cifrado** (con capacidad de expulsar el PeerID del tablón), más exportación
       local para el usuario. Documentar el alcance real: se modera el tablón, no las
       conversaciones E2EE.
-- [ ] 4.4b Denunciar accesible **desde cada pieza de contenido** (tarjeta del tablón,
-      cabecera del chat y mensaje individual), no solo desde la tarjeta y el chat —
-      requisito literal de la política UGC.
+- [~] 4.4b **Denunciar desde cada pieza de contenido — hecho el 23 ago 2026** en los dos
+      sitios que existen hoy: el menú ⋮ del chat y la **pulsación larga sobre un mensaje
+      recibido** (sobre uno propio no aparece: denunciarse a uno mismo no tiene sentido). Los
+      dos abren el mismo diálogo, porque el destinatario de la denuncia es la persona y no el
+      mensaje; separarlos daría dos textos de consentimiento que mantener en paralelo.
+      **Un defecto encontrado probándolo en el móvil y corregido**: con seis motivos y la nota,
+      la casilla de adjuntar era lo último visible en una pantalla de 1600 px, así que se podía
+      autorizar y confirmar **sin haber visto nunca** el fragmento — la garantía se quedaba en
+      adorno. Ahora marcarla desplaza el diálogo hasta la vista previa.
+      *Falta la tarjeta del tablón, que depende de 4.8.*
 - [ ] 4.5 `AgeGate.kt`: autodeclaración 18+ al primer inicio, cubre toda la app, guard
       de navegación antes de cualquier pantalla (cubre de sobra el requisito de
       age-gating previo a las funciones de emparejamiento).

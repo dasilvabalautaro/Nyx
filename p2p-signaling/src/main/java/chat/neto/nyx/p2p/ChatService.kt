@@ -9,6 +9,7 @@ import chat.neto.nyx.core.model.Contact
 import chat.neto.nyx.core.model.Message
 import chat.neto.nyx.core.model.MessageContent
 import chat.neto.nyx.core.model.MessageStatus
+import chat.neto.nyx.core.model.ReportedLine
 import chat.neto.nyx.core.repository.BlockRepository
 import chat.neto.nyx.core.repository.ContactRepository
 import chat.neto.nyx.core.repository.LikeRepository
@@ -866,6 +867,33 @@ class ChatService @Inject constructor(
     suspend fun unblock(peerId: String) {
         blocked.unblock(peerId)
         logLine("bloqueo retirado: ${short(peerId)}")
+    }
+
+    /**
+     * Fragmento de conversación para adjuntar a una denuncia (4.4): los últimos [limit]
+     * mensajes, descifrados.
+     *
+     * **Solo texto.** Un adjunto se anota por lo que es (`[imagen]`, `[archivo]`…) y sus bytes
+     * no viajan. Dos motivos: el sobre tiene un tope de 64 KiB en el nodo, en el que no cabe una
+     * foto; y sacar un archivo del cifrado extremo a extremo es una decisión bastante más gorda
+     * que adjuntar unas líneas de texto, así que si algún día hace falta será con su propio
+     * consentimiento explícito, no de rebote.
+     *
+     * No decide **si** se adjunta: eso es de quien construya el [ReportDraft], y por defecto es
+     * que no.
+     */
+    suspend fun reportExcerpt(contact: Contact, limit: Int = 20): List<ReportedLine> {
+        val recientes = messages.observeConversation(contact.id).first().takeLast(limit)
+        return recientes.map { m ->
+            val texto = runCatching {
+                when (val c = content(contact, m)) {
+                    is MessageContent.Text -> c.text
+                    is MessageContent.Image -> "[imagen]"
+                    else -> "[adjunto]"
+                }
+            }.getOrElse { "[no se pudo descifrar]" }
+            ReportedLine(fromMe = m.senderId == SELF, timestamp = m.timestamp, text = texto)
+        }
     }
 
     /** Peers bloqueados, para la pantalla de gestión (4.2). */

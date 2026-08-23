@@ -9,7 +9,11 @@ import chat.neto.nyx.core.model.MessageContent
 import chat.neto.nyx.core.model.MessageStatus
 import chat.neto.nyx.p2p.BootstrapResult
 import chat.neto.nyx.p2p.CallPhase
+import chat.neto.nyx.core.model.ReportDraft
+import chat.neto.nyx.core.model.ReportReason
+import chat.neto.nyx.core.model.ReportedLine
 import chat.neto.nyx.p2p.CallService
+import chat.neto.nyx.p2p.ReportService
 import chat.neto.nyx.p2p.CallState
 import chat.neto.nyx.p2p.ChatService
 import chat.neto.nyx.p2p.WanStatus
@@ -63,6 +67,7 @@ data class ConversationItem(
 class ChatViewModel @Inject constructor(
     private val chat: ChatService,
     private val calls: CallService,
+    private val reports: ReportService,
     private val video: chat.neto.nyx.video.MediaCodecVideoEngine,
     private val backup: chat.neto.nyx.p2p.BackupManager,
     private val notifier: chat.neto.nyx.IncomingNotifier,
@@ -450,6 +455,63 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { chat.deleteContact(contact) }
                 .onFailure { _error.value = "No se pudo eliminar el contacto" }
+            NyxNotifications.cancel(context, contact.id)
+        }
+    }
+
+    // --- Denuncia (4.4 / 4.4b) ---------------------------------------------------------
+
+    private val _reportResult = MutableStateFlow<String?>(null)
+
+    /** Mensaje para la UI tras denunciar; se limpia con [clearReportResult]. */
+    val reportResult: StateFlow<String?> = _reportResult.asStateFlow()
+
+    fun clearReportResult() { _reportResult.value = null }
+
+    /**
+     * Últimos mensajes descifrados de la conversación, para que el diálogo pueda **enseñar** lo
+     * que se adjuntaría. Enseñarlo es parte del consentimiento: autorizar a ciegas el envío de
+     * una conversación al operador no es autorizar nada.
+     */
+    suspend fun reportExcerpt(contact: Contact): List<ReportedLine> =
+        runCatching { chat.reportExcerpt(contact) }.getOrDefault(emptyList())
+
+    /**
+     * Denuncia a [contact]. Bloquea siempre —también si el envío falla, ver `ReportService`— y
+     * deja en [reportResult] qué pasó, distinguiendo entregada de solo bloqueada: si el sobre no
+     * salió, el usuario tiene que saberlo para no quedarse creyendo que alguien lo va a leer.
+     */
+    fun report(
+        contact: Contact,
+        reason: ReportReason,
+        note: String,
+        includeExcerpt: Boolean,
+        excerpt: List<ReportedLine>,
+    ) {
+        viewModelScope.launch {
+            val draft = ReportDraft(
+                reportedPeerId = contact.peerId,
+                reason = reason,
+                note = note,
+                includeExcerpt = includeExcerpt,
+                // Si no hay autorización no se arrastra el fragmento ni hasta el borrador. Es
+                // redundante con la garantía de `ReportDraft.render`, y esa redundancia es
+                // barata comparada con enviar una conversación por descuido.
+                excerpt = if (includeExcerpt) excerpt else emptyList(),
+            )
+            val version = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+            }.getOrDefault("?")
+
+            _reportResult.value = when (
+                val r = reports.report(draft, chat.myPeerId(), version)
+            ) {
+                is ReportService.Result.Sent ->
+                    "Denuncia enviada. ${contact.displayName} queda bloqueado."
+                is ReportService.Result.Blocked ->
+                    "${contact.displayName} queda bloqueado, pero la denuncia no se pudo " +
+                        "enviar (${r.error.take(60)}). Se reintentará cuando denuncies de nuevo."
+            }
             NyxNotifications.cancel(context, contact.id)
         }
     }

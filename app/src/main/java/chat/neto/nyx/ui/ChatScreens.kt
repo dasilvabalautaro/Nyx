@@ -5,7 +5,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -331,6 +333,9 @@ private fun ChatScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmBlock by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
+    var reportFromMessage by remember { mutableStateOf<String?>(null) }
+    var reportExcerpt by remember { mutableStateOf<List<chat.neto.nyx.core.model.ReportedLine>>(emptyList()) }
     var captureRequested by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -387,6 +392,17 @@ private fun ChatScreen(
         vmError?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             viewModel.clearError()
+        }
+    }
+
+    // Resultado de una denuncia. Va aparte de los errores porque el caso "bloqueado pero no
+    // enviado" no es un error del usuario: es información que necesita para no quedarse
+    // creyendo que alguien va a leer su denuncia.
+    val reportMsg by viewModel.reportResult.collectAsState()
+    LaunchedEffect(reportMsg) {
+        reportMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearReportResult()
         }
     }
 
@@ -545,6 +561,17 @@ private fun ChatScreen(
                                 onClick = { showMenu = false; confirmClear = true },
                             )
                             DropdownMenuItem(
+                                text = { Text("Denunciar") },
+                                leadingIcon = {
+                                    Icon(
+                                        NyxFlagIcon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = { showMenu = false; showReport = true },
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Bloquear") },
                                 leadingIcon = {
                                     Icon(
@@ -600,6 +627,12 @@ private fun ChatScreen(
                             row.message,
                             first = row.first,
                             onRetry = { viewModel.retry(contact, row.message.id) },
+                            // La política UGC pide poder denunciar desde **cada pieza de
+                            // contenido**, no solo desde el contacto. Solo tiene sentido sobre
+                            // lo que ha escrito la otra persona: denunciarse a uno mismo, no.
+                            onReport = if (row.message.mine) null else {
+                                { reportFromMessage = row.message.id }
+                            },
                         )
                     }
                 }
@@ -822,6 +855,38 @@ private fun ChatScreen(
             onDismiss = { confirmClear = false },
         )
     }
+    // El fragmento se carga al abrir el diálogo, no antes: si el usuario nunca denuncia, la
+    // conversación no se descifra para nada.
+    LaunchedEffect(showReport, reportFromMessage) {
+        if (showReport || reportFromMessage != null) reportExcerpt = viewModel.reportExcerpt(contact)
+    }
+    // Denunciar un mensaje concreto abre el mismo diálogo: el destinatario de la denuncia es la
+    // persona, no el mensaje, y separar los dos flujos daría dos textos de consentimiento que
+    // mantener en paralelo. El mensaje señalado entra ya en el fragmento adjuntable.
+    if (reportFromMessage != null) {
+        ReportDialog(
+            contactName = contact.displayName,
+            excerpt = reportExcerpt,
+            onDismiss = { reportFromMessage = null },
+            onConfirm = { reason, note, adjuntar ->
+                reportFromMessage = null
+                viewModel.report(contact, reason, note, adjuntar, reportExcerpt)
+                onBack()
+            },
+        )
+    }
+    if (showReport) {
+        ReportDialog(
+            contactName = contact.displayName,
+            excerpt = reportExcerpt,
+            onDismiss = { showReport = false },
+            onConfirm = { reason, note, adjuntar ->
+                showReport = false
+                viewModel.report(contact, reason, note, adjuntar, reportExcerpt)
+                onBack()
+            },
+        )
+    }
     if (confirmBlock) {
         ConfirmDeleteDialog(
             title = "¿Bloquear a ${contact.displayName}?",
@@ -1031,6 +1096,7 @@ private fun MessageBubble(
     message: DisplayMessage,
     first: Boolean,
     onRetry: () -> Unit,
+    onReport: (() -> Unit)? = null,
 ) {
     val align = if (message.mine) Alignment.CenterEnd else Alignment.CenterStart
     val failed = message.mine && message.status == MessageStatus.FAILED
@@ -1055,10 +1121,33 @@ private fun MessageBubble(
         RoundedCornerShape(if (first) big else small, big, big, small)
     }
 
+    var showMsgMenu by remember { mutableStateOf(false) }
     Box(
-        Modifier.fillMaxWidth().padding(top = if (first) 6.dp else 0.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(top = if (first) 6.dp else 0.dp)
+            .then(
+                if (onReport == null) Modifier
+                else Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = { showMsgMenu = true },
+                )
+            ),
         contentAlignment = align,
     ) {
+        DropdownMenu(expanded = showMsgMenu, onDismissRequest = { showMsgMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Denunciar este mensaje") },
+                leadingIcon = {
+                    Icon(
+                        NyxFlagIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = { showMsgMenu = false; onReport?.invoke() },
+            )
+        }
         Column(
             Modifier
                 // Sombra sutil: sin ella, dos mensajes seguidos del mismo lado (mismo color

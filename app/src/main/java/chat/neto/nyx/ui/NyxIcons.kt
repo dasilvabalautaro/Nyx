@@ -126,6 +126,14 @@ val NyxDeleteIcon: ImageVector by lazy {
     )
 }
 
+/** Bandera (equivalente a `Flag`), para denunciar contenido. */
+val NyxFlagIcon: ImageVector by lazy {
+    materialIcon(
+        "Flag",
+        "M14.4,6L14,4H5v17h2v-7h5.6l0.4,2h7V6z",
+    )
+}
+
 /** Círculo tachado (equivalente a `Block`), para bloquear un peer. */
 val NyxBlockIcon: ImageVector by lazy {
     materialIcon(

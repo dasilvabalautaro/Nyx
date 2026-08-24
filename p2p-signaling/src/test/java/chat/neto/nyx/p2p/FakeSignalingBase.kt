@@ -36,7 +36,15 @@ internal open class FakeSignalingBase(private val selfPeerId: String = "12D3KooW
         processor: suspend (fromPeerId: String, ciphertext: ByteArray, envelopeId: String, timestamp: Long) -> Boolean,
     ) = Unit
 
-    override suspend fun publishCard(category: String, card: ByteArray) = Unit
+    /** Última tarjeta publicada, para comprobar qué se subió de verdad. */
+    var publishedCard: ByteArray? = null
+    var publishedCategory: String? = null
+
+    override suspend fun publishCard(category: String, card: ByteArray) {
+        publishedCategory = category
+        publishedCard = card
+    }
+
     override suspend fun queryBoard(category: String, limit: Int): String = "[]"
     override suspend fun deleteCard(category: String) = Unit
     override suspend fun sendLike(toPeerId: String, ciphertext: ByteArray) = Unit

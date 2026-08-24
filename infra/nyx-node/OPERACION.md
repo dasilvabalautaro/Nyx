@@ -260,4 +260,4 @@ pierde, todas las denuncias quedan ilegibles para siempre *y* cambiarla exige **
 versión nueva en Play**, porque la pública viaja dentro de cada APK instalado. `keygen` se niega
 a sobreescribir para que eso no pase por repetir un comando.
 
-Respaldo pendiente fuera de la máquina, igual que se hizo con `node.key`.
+**Respaldada fuera de la máquina el 23 ago 2026**, igual que se hizo con `node.key`.

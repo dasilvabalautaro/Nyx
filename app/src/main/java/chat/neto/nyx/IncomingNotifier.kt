@@ -56,7 +56,7 @@ class IncomingNotifier @Inject constructor(
     // Inyectado, no usado directamente: instanciarlo es lo que registra su procesador de
     // "me gusta" entrantes. Mismo motivo que `calls` — sin alguien que lo cree al arrancar el
     // proceso, un like que llegue en un proceso revivido por el latido se descartaría.
-    @Suppress("unused") private val likes: LikeService,
+    private val likes: LikeService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())
@@ -97,6 +97,30 @@ class IncomingNotifier @Inject constructor(
         // que no depende de que haya un suscriptor vivo. Ver ChatService.setIncomingNotifier.
         chat.setIncomingNotifier { contact, message -> onIncoming(contact, message) }
         scope.launch { calls.state.collect { st -> runCatching { onCallState(st) } } }
+        // Los matches se observan AQUÍ y no en un ViewModel por el mismo motivo que los
+        // mensajes: un like que cierra el match puede llegar con la app cerrada, en un proceso
+        // que revivió solo la alarma del latido. Si el aviso dependiera de que la pantalla del
+        // tablón esté abierta, el match se perdería en silencio — y a diferencia de un mensaje,
+        // aquí no queda ni una fila que ver luego, porque el contacto no existía todavía.
+        scope.launch { likes.matches.collect { like -> runCatching { onMatch(like) } } }
+    }
+
+    /**
+     * Un match nuevo: **se crea el contacto** y se avisa.
+     *
+     * Crear el contacto es lo que convierte el match en algo usable — hasta aquí sólo había un
+     * PeerID en una tabla de likes, sin conversación donde escribir. El nombre sale de
+     * [BoardNames], que lo guardó al dar "me interesa"; si no estuviera, cae a un identificador
+     * corto antes que dejar el contacto sin nombre.
+     *
+     * `addContact` es idempotente sobre el PeerID (es la clave primaria), así que un match
+     * reentregado no duplica nada. Y si esa persona estuviera bloqueada, `addContact` lanza a
+     * propósito: el bloqueo gana sobre el match, no al revés.
+     */
+    private suspend fun onMatch(like: chat.neto.nyx.core.model.Like) {
+        val nombre = BoardNames.nameFor(context, like.peerId)
+        val contacto = runCatching { chat.addContact(nombre, like.peerId) }.getOrNull() ?: return
+        NyxNotifications.notifyMatch(context, contacto.id, contacto.displayName)
     }
 
     /** La pantalla de chat declara qué conversación se está mirando (null al salir). */

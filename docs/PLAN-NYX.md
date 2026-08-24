@@ -1417,14 +1417,30 @@ resuelve la decisión. Detalle completo en
       Verificado en el TECNO contra el nodo de producción con una tarjeta de sonda: se ve
       "Me interesa", el menú ⋮ ofrece Bloquear y Denunciar, el diálogo de denuncia **sin** la
       casilla de fragmento, y cancelar no bloquea a nadie. Tarjeta retirada al terminar.
-- [ ] 4.8b Reescribir el estado vacío de `ConversationsScreen.kt` para el flujo del
-      tablón. Hoy enumera los tres pasos del alta por PeerID (portado de Krypta en
-      `a0a9851`), que es exacto mientras el tablón no exista pero deja de serlo en cuanto
-      aterricen 4.6-4.9: en Nyx la puerta de entrada es descubrir una tarjeta y llegar a
-      match, no pegar un PeerID que no tienes. Sin esta tarea el estado vacío queda
-      enseñando el flujo que el producto está diseñando para dejar atrás.
-- [ ] 4.9 Flujo de match: `Flow` sobre `LikeRepository`, momento "¡Nuevo match!",
-      navegación al chat desbloqueado.
+- [x] 4.9 **Flujo de match — hecho el 24 ago 2026.** Cierra el circuito: publicar → descubrir →
+      me interesa → match → chat.
+      **El observador vive en `IncomingNotifier`, no en un ViewModel**, por el mismo motivo que
+      los mensajes y las llamadas: el like que cierra el match puede llegar con la app cerrada,
+      en un proceso revivido solo por la alarma del latido. Y aquí es peor que con un mensaje —
+      si el aviso dependiera de tener el tablón abierto, no quedaría **ni una fila que ver
+      luego**, porque el contacto todavía no existía.
+      Al cerrarse el match **se crea el contacto**, que es lo que convierte el match en algo
+      usable: hasta entonces sólo hay un PeerID en la tabla de likes, sin conversación donde
+      escribir. `addContact` es idempotente sobre el PeerID, así que un match reentregado no
+      duplica; y si esa persona está bloqueada lanza a propósito — el bloqueo gana sobre el
+      match, no al revés.
+      **`BoardNames`** (nuevo, prefs propias) guarda el apodo al dar "me interesa", porque el
+      sobre `L` no lleva nombre a propósito y un contacto llamado `12D3KooWAy…` no le dice nada a
+      nadie. Se guarda **antes** de enviar: si el match se cierra en el sitio, el contacto se
+      crea de inmediato. No va en la tabla `likes` para no migrar a la v6 por un dato que no es
+      del dominio del like — y porque es texto ajeno sin verificar, no una identidad.
+      Su nombre de emergencia usa los **últimos** caracteres del PeerID, no los primeros: todos
+      empiezan por `12D3KooW` y con el prefijo dos matches se llamarían igual. Su test cazó de
+      paso que con PeerID vacío devolvía cadena vacía.
+- [x] 4.8b **Estado vacío reescrito** (24 ago 2026), como pedía la tarea: ya no enumera el alta
+      por PeerID —que era exacta mientras no hubo tablón— sino que explica que en Nyx las
+      conversaciones se abren con un match, y deja el alta directa como segunda opción para
+      quien ya conozca a alguien.
 - [ ] 4.10 Iconos nuevos en `NyxIcons.kt` (like/corazón, bloquear, reportar/bandera).
 - [ ] 4.11 Prueba en vivo end-to-end: publicar tarjeta con avatar, descubrir, like
       unidireccional (sin chat), like mutuo (match + chat), bloquear, gate de edad.

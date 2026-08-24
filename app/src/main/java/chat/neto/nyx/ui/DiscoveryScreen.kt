@@ -65,6 +65,7 @@ fun DiscoveryScreen(
     viewModel: DiscoveryViewModel,
     onBack: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenChat: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     val likeStates by viewModel.likeStates.collectAsState()
@@ -150,6 +151,7 @@ fun DiscoveryScreen(
                             onLike = { viewModel.like(c.peerId, c.card.nickname) },
                             onBlock = { confirmBlock = c },
                             onReport = { reportCard = c },
+                            onOpenChat = { onOpenChat(c.peerId) },
                         )
                     }
                 }
@@ -181,6 +183,7 @@ private fun DiscoveryCardView(
     onLike: () -> Unit,
     onBlock: () -> Unit,
     onReport: () -> Unit,
+    onOpenChat: () -> Unit,
 ) {
     val card = discovered.card
     var menu by remember { mutableStateOf(false) }
@@ -254,9 +257,11 @@ private fun DiscoveryCardView(
         // estaría contradiciendo en la única pantalla donde el usuario la va a aprender.
         Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
             when {
-                like?.isMatch == true -> FilledTonalButton(
-                    onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(),
-                ) { Text("Match · ya podéis hablar") }
+                // El match es el único estado que lleva a algún sitio: abre la conversación,
+                // que es lo que el match acaba de desbloquear.
+                like?.isMatch == true -> Button(
+                    onClick = onOpenChat, modifier = Modifier.fillMaxWidth(),
+                ) { Text("Match · abrir conversación") }
 
                 like?.sentAt != null -> FilledTonalButton(
                     onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(),

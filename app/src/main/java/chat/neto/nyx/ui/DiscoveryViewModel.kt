@@ -2,6 +2,7 @@ package chat.neto.nyx.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import chat.neto.nyx.BoardNames
 import chat.neto.nyx.core.model.DiscoveredCard
 import chat.neto.nyx.core.model.Like
 import chat.neto.nyx.core.repository.LikeRepository
@@ -91,6 +92,10 @@ class DiscoveryViewModel @Inject constructor(
      */
     fun like(peerId: String, nickname: String) {
         viewModelScope.launch {
+            // Recordar el apodo ANTES de enviar: si el match se cierra en el sitio (porque su
+            // like ya estaba esperando), `IncomingNotifier` va a crear el contacto de inmediato
+            // y necesita el nombre ya guardado. Es la única ventana en la que puede faltar.
+            BoardNames.remember(context, peerId, nickname)
             _action.value = runCatching { likes.sendLike(peerId) }.fold(
                 onSuccess = { estado ->
                     if (estado.isMatch) "¡Hay match con $nickname! Ya podéis escribiros."

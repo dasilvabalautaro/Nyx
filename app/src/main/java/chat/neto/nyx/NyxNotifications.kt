@@ -136,6 +136,32 @@ object NyxNotifications {
             .notify(contactId.hashCode(), notification)
     }
 
+    /**
+     * Aviso de match nuevo.
+     *
+     * Va por el canal de **mensajes** y no por uno propio: un match es el momento en que se
+     * abre una conversación, así que pertenece al mismo sitio donde el usuario ya espera que le
+     * avisen de que alguien quiere hablarle. Un canal más sería una casilla más que silenciar
+     * por error justo en el aviso que menos conviene perderse.
+     *
+     * **No** usa MessagingStyle: no es un mensaje de nadie, y meterlo en el hilo de la
+     * conversación haría creer que la otra persona escribió algo.
+     */
+    fun notifyMatch(context: Context, contactId: String, contactName: String) {
+        val notification = Notification.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_stat_nyx)
+            .setContentTitle("¡Nuevo match!")
+            .setContentText("A $contactName también le interesas. Ya podéis escribiros.")
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .setContentIntent(openAppIntent(context, contactId, requestCode = contactId.hashCode()))
+            .setCategory(Notification.CATEGORY_SOCIAL)
+            .setAutoCancel(true)
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(contactId.hashCode(), notification)
+    }
+
     /** Cancela la notificación de [contactId] (al abrir su chat) y olvida su hilo. */
     fun cancel(context: Context, contactId: String) {
         synchronized(recent) { recent.remove(contactId) }

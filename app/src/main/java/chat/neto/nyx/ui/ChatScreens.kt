@@ -235,6 +235,15 @@ fun NyxApp(
                 viewModel = androidx.hilt.navigation.compose.hiltViewModel(),
                 onBack = { showDiscovery = false },
                 onOpenProfile = { showProfile = true },
+                // El contacto lo creó `IncomingNotifier` al cerrarse el match; aquí solo se
+                // busca. Si aún no estuviera (la creación es asíncrona), no se navega a un
+                // chat vacío: se deja el tablón como está y el usuario reintenta.
+                onOpenChat = { peerId ->
+                    contacts.find { it.peerId == peerId }?.let {
+                        current = it
+                        showDiscovery = false
+                    }
+                },
             )
         }
         showBlocked -> {

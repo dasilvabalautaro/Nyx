@@ -1468,6 +1468,27 @@ resuelve la decisión. Detalle completo en
       enumerable. Esto no lo arregla — lo hace visible. **No es defensa contra suplantación**:
       para eso está el número de seguridad, y un nombre nunca es identidad.
 
+- [x] 4.14 **Proporción de la tarjeta y topes de perfil** (24 ago 2026). Se **miró** una
+      tarjeta llena en el móvil antes de decidir, y cambió el orden de importancia: diez
+      intereses ocupaban **diez líneas** —media tarjeta, más que el nombre y la bio juntos— y un
+      apodo de 32 caracteres se comía tres renglones. El problema no era la longitud de la bio,
+      que la tarjeta ya cortaba.
+      Topes nuevos: **apodo 32→20, "Sobre ti" 300→250, intereses 10→5**. El criterio de producto
+      que los fija, y que conviene no perder: **la tarjeta es el anzuelo, no la biografía** —
+      para contar quién eres está la conversación, que además va cifrada. Se hizo ahora porque
+      bajar un tope **recorta en silencio** el texto ya guardado (`sanitize` corre al cargar):
+      sale gratis sin usuarios, no después de publicar en Play.
+      Los tres campos de la tarjeta van ahora **acotados y con `…`**. Eso no es cosmético: la
+      tarjeta la escribe un desconocido y **no tiene por qué respetar nuestros topes**, así que
+      acotar en el lector es lo único que garantiza la proporción. Comprobado con una tarjeta
+      hostil (10 intereses, bio de 300): la altura baja de ~850 a ~560 px. Y el `…` importa
+      tanto como el tope — cortando en seco no se distingue "esto es todo" de "hay más".
+      **Contadores en el editor**, porque el recorte era **mudo**: como el campo lee el valor ya
+      saneado, al llegar al tope los caracteres dejaban de aparecer sin aviso. El de intereses
+      cuenta los **escritos**, no los guardados, para que 6/5 se vea en rojo en vez de fingir que
+      todo fue bien. Más una recomendación arriba del todo —antes de los campos, que leída
+      después de escribir un párrafo no sirve— orientando a lo concreto.
+
 ### 5. Identidad visual
 - [ ] 5.1 Nueva semilla + regenerar todos los roles M3 en `Color.kt`.
 - [ ] 5.2 Rename `KryptaTheme`→`NyxTheme` en `Theme.kt` (si no quedó ya cubierto en 1.3).

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -62,8 +63,22 @@ func TestBoardPublishAgainstLiveNode(t *testing.T) {
 
 	// Formato P1 de BoardCard.kt, a mano: cabecera por líneas + bio detrás, sin avatar (la app
 	// dibuja entonces el rostro derivado del PeerID, que es justo lo que interesa ver).
-	bio := "Tarjeta de prueba publicada desde el Mac para verificar el tablon."
-	card := fmt.Sprintf("P1\nSonda\n29\n35\nsenderismo\tcine\n\n%d\n0\n%s", len(bio), bio)
+	// BOARD_MAX=1 publica una tarjeta con el contenido máximo que la app permite hoy, para
+	// mirar si la tarjeta se ve proporcionada en el peor caso y no solo en el bonito.
+	nick, bio, intereses := "Sonda", "Tarjeta de prueba publicada desde el Mac para verificar el tablon.", "senderismo\tcine"
+	if os.Getenv("BOARD_MAX") != "" {
+		nick = strings.Repeat("N", 32)
+		bio = strings.Repeat("Palabra ", 37) + "fin."
+		if len(bio) > 300 {
+			bio = bio[:300]
+		}
+		partes := make([]string, 10)
+		for i := range partes {
+			partes[i] = fmt.Sprintf("interes-largo-num-%02d", i)
+		}
+		intereses = strings.Join(partes, "\t")
+	}
+	card := fmt.Sprintf("P1\n%s\n29\n35\n%s\n\n%d\n0\n%s", nick, intereses, len(bio), bio)
 	if err := n.PublishCard(addr, cat, []byte(card)); err != nil {
 		t.Fatalf("no se pudo publicar: %v", err)
 	}

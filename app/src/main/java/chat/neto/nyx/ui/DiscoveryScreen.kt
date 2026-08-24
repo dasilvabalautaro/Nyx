@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import chat.neto.nyx.avatar.AvatarRenderer
 import chat.neto.nyx.core.avatar.AvatarIdentity
@@ -206,23 +207,37 @@ private fun DiscoveryCardView(
                 Text(
                     card.nickname.ifBlank { "Sin apodo" },
                     style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "${card.ageMin}–${card.ageMax} años",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Acotado y con "…" en los tres campos libres. La tarjeta la escribe un
+                // desconocido y no tiene por qué respetar los topes de nuestra app: la versión
+                // sin acotar se comprobó en el móvil con una tarjeta llena y los intereses
+                // ocupaban diez líneas, media tarjeta. El `…` importa tanto como el tope —
+                // cortando en seco no se distingue "esto es todo" de "hay más".
                 if (card.interests.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         card.interests.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (card.bio.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(card.bio, style = MaterialTheme.typography.bodyMedium, maxLines = 4)
+                    Text(
+                        card.bio,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Box {

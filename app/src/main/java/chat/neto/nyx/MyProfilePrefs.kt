@@ -26,10 +26,20 @@ import java.io.File
  */
 object MyProfilePrefs {
 
-    // Topes. Son de producto, no técnicos: caben de sobra en el presupuesto de una tarjeta.
-    const val MAX_NICKNAME_CHARS = 32
-    const val MAX_BIO_CHARS = 300
-    const val MAX_INTERESTS = 10
+    // Topes. Son de producto, no técnicos —el texto entero ocupa menos de 1 KiB de los 96 KiB
+    // de la tarjeta— y se bajaron el 24 ago 2026 después de **mirar** una tarjeta llena en el
+    // móvil: con los valores viejos, diez intereses ocupaban diez líneas (media tarjeta, más
+    // que el nombre y la bio juntos) y un apodo de 32 caracteres se comía tres renglones,
+    // dejando el avatar perdido al lado de un bloque de texto.
+    //
+    // El criterio de producto que los fija: la tarjeta es el **anzuelo**, no la biografía. Para
+    // contar quién eres está la conversación, que es donde además va cifrada.
+    //
+    // Bajarlos **recorta en silencio** el texto ya guardado (`sanitize` corre al cargar), así
+    // que sale gratis ahora y no después de publicar en Play.
+    const val MAX_NICKNAME_CHARS = 20
+    const val MAX_BIO_CHARS = 250
+    const val MAX_INTERESTS = 5
     const val MAX_INTEREST_CHARS = 24
     const val MAX_TIP_ADDRESS_CHARS = 128
 

@@ -161,21 +161,34 @@ fun ProfileEditorScreen(
             }
 
             ProfileCard("Cómo te presentas") {
+                // La recomendación va arriba del todo, antes de los campos: leída después de
+                // escribir un párrafo no sirve de nada.
+                Text(
+                    "Esto es un anzuelo, no tu biografía. Unas pocas cosas concretas funcionan " +
+                        "mejor que un párrafo general — y lo que de verdad quieras contar cabe " +
+                        "en la conversación, que además va cifrada.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
                 TextField(
                     value = profile.nickname,
                     onValueChange = viewModel::setNickname,
                     label = { Text("Apodo") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Counter(profile.nickname.length, MyProfilePrefs.MAX_NICKNAME_CHARS) },
                 )
                 Spacer(Modifier.height(8.dp))
                 TextField(
                     value = profile.bio,
                     onValueChange = viewModel::setBio,
                     label = { Text("Sobre ti") },
+                    placeholder = { Text("Dos o tres cosas concretas: a qué dedicas el tiempo, qué buscas.") },
                     minLines = 3,
                     maxLines = 6,
                     modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Counter(profile.bio.length, MyProfilePrefs.MAX_BIO_CHARS) },
                 )
                 Spacer(Modifier.height(8.dp))
                 InterestsField(profile.interests, viewModel::setInterests)
@@ -290,6 +303,10 @@ private fun InterestsField(interests: List<String>, onChange: (List<String>) -> 
     // reconstruyera el texto desde la lista guardada en cada pulsación, la coma desaparecería
     // en cuanto se teclea y no se podría separar nada.
     var text by remember(interests) { mutableStateOf(interests.joinToString(", ")) }
+    // Cuántos se han escrito, no cuántos quedaron guardados: si el usuario escribe seis y solo
+    // se guardan cinco, el contador tiene que enseñar el choque (6/5 en rojo), no fingir que
+    // todo fue bien. El recorte silencioso era justo el problema.
+    val escritos = text.split(",").map(String::trim).filter(String::isNotEmpty).size
     TextField(
         value = text,
         onValueChange = {
@@ -297,8 +314,35 @@ private fun InterestsField(interests: List<String>, onChange: (List<String>) -> 
             onChange(it.split(",").map(String::trim).filter(String::isNotEmpty))
         },
         label = { Text("Intereses, separados por comas") },
+        placeholder = { Text("cine, senderismo, cocinar") },
         modifier = Modifier.fillMaxWidth(),
         maxLines = 2,
+        supportingText = {
+            Counter(
+                escritos,
+                MyProfilePrefs.MAX_INTERESTS,
+                sufijo = if (escritos > MyProfilePrefs.MAX_INTERESTS) " · solo se guardan los primeros" else "",
+            )
+        },
+    )
+}
+
+/**
+ * Contador de un campo con tope.
+ *
+ * Existe porque el recorte era **mudo**: `sanitize` cortaba al guardar y, como el campo lee el
+ * valor ya saneado, al llegar al tope los caracteres simplemente dejaban de aparecer. Sin aviso.
+ * Se pone en rojo al pasarse en vez de solo al llegar, para que el aviso llegue **mientras** se
+ * escribe de más y no cuando ya se perdió texto.
+ */
+@Composable
+private fun Counter(actual: Int, maximo: Int, sufijo: String = "") {
+    val pasado = actual > maximo
+    Text(
+        "$actual/$maximo$sufijo",
+        style = MaterialTheme.typography.bodySmall,
+        color = if (pasado) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 

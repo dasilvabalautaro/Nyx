@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,6 +117,15 @@ fun ProfileEditorScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // imePadding ANTES del scroll: encoge el área desplazable al abrirse el
+                // teclado, en vez de dejar que lo tape. Sin esto, el campo que se está
+                // editando quedaba oculto detrás del teclado — mismo fallo que ya se arregló
+                // en la pantalla de chat, y por el mismo motivo: esta pantalla es casi toda
+                // campos de texto y el usuario escribe con ellos delante.
+                //
+                // Con el contenedor desplazable consciente del IME, Compose además trae solo
+                // el campo enfocado a la vista al recibir el foco.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -171,24 +182,39 @@ fun ProfileEditorScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
+                // Los campos guardan estado LOCAL en vez de leer el perfil ya saneado, y eso
+                // arregla dos fallos que se vieron escribiendo en el móvil:
+                //
+                //  - En el apodo, `sanitizeNickname` hace `trim()`, así que el espacio que
+                //    acabas de teclear desaparecía antes de poder escribir la letra siguiente:
+                //    "Ana Maria" salía "AnaMaria" y era **imposible** poner un espacio.
+                //  - En intereses era peor: al reinicializarse el campo con la lista guardada,
+                //    el cursor se perdía y el texto salía mezclado — "aa,bb,cc,dd,ee,ff" quedó
+                //    en "aa, cbc, ed, ff".
+                //
+                // El saneado sigue existiendo donde importa, al **persistir**; lo que no puede
+                // hacer es reescribir lo que el usuario está tecleando.
+                var nickname by rememberSaveable { mutableStateOf(profile.nickname) }
+                var bio by rememberSaveable { mutableStateOf(profile.bio) }
+
                 TextField(
-                    value = profile.nickname,
-                    onValueChange = viewModel::setNickname,
+                    value = nickname,
+                    onValueChange = { nickname = it; viewModel.setNickname(it) },
                     label = { Text("Apodo") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Counter(profile.nickname.length, MyProfilePrefs.MAX_NICKNAME_CHARS) },
+                    supportingText = { Counter(nickname.length, MyProfilePrefs.MAX_NICKNAME_CHARS) },
                 )
                 Spacer(Modifier.height(8.dp))
                 TextField(
-                    value = profile.bio,
-                    onValueChange = viewModel::setBio,
+                    value = bio,
+                    onValueChange = { bio = it; viewModel.setBio(it) },
                     label = { Text("Sobre ti") },
                     placeholder = { Text("Dos o tres cosas concretas: a qué dedicas el tiempo, qué buscas.") },
                     minLines = 3,
                     maxLines = 6,
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Counter(profile.bio.length, MyProfilePrefs.MAX_BIO_CHARS) },
+                    supportingText = { Counter(bio.length, MyProfilePrefs.MAX_BIO_CHARS) },
                 )
                 Spacer(Modifier.height(8.dp))
                 InterestsField(profile.interests, viewModel::setInterests)
@@ -302,7 +328,10 @@ private fun InterestsField(interests: List<String>, onChange: (List<String>) -> 
     // Estado local para no reordenar lo que el usuario escribe mientras lo escribe: si se
     // reconstruyera el texto desde la lista guardada en cada pulsación, la coma desaparecería
     // en cuanto se teclea y no se podría separar nada.
-    var text by remember(interests) { mutableStateOf(interests.joinToString(", ")) }
+    // Sin `key`: reinicializarse con la lista guardada es lo que mezclaba el texto mientras se
+    // escribía (ver el comentario de los campos de arriba). Se toma el valor una vez al entrar
+    // en la pantalla y a partir de ahí manda lo que teclea el usuario.
+    var text by rememberSaveable { mutableStateOf(interests.joinToString(", ")) }
     // Cuántos se han escrito, no cuántos quedaron guardados: si el usuario escribe seis y solo
     // se guardan cinco, el contador tiene que enseñar el choque (6/5 en rojo), no fingir que
     // todo fue bien. El recorte silencioso era justo el problema.

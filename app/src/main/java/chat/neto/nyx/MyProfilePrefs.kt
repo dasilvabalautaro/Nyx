@@ -101,6 +101,7 @@ object MyProfilePrefs {
 
     /** Bytes del avatar, o `null` si no hay. Se leen del fichero, no de prefs. */
     fun avatarBytes(context: Context): ByteArray? {
+        init(context)
         if (!_profile.value.hasAvatar) return null
         val f = avatarFile(context)
         return runCatching { if (f.isFile) f.readBytes() else null }.getOrNull()
@@ -147,6 +148,15 @@ object MyProfilePrefs {
     }
 
     private fun update(context: Context, edit: (MyProfile) -> MyProfile) {
+        // Cargar antes de escribir, siempre. Esta línea arregla una pérdida de datos real y
+        // silenciosa: `update` reescribe **todos** los campos desde `_profile.value`, así que
+        // si nadie había llamado a [init] —y durante un tiempo nadie lo hacía— el estado en
+        // memoria era el perfil vacío y editar un solo campo tras reiniciar la app borraba del
+        // disco todos los demás.
+        //
+        // Va aquí y no sólo en el arranque a propósito: depender de que alguien acuerde llamar
+        // a `init` es exactamente lo que falló. Es idempotente, así que no cuesta nada.
+        init(context)
         val next = sanitize(edit(_profile.value))
         settings(context).edit()
             .putString(KEY_NICKNAME, next.nickname)

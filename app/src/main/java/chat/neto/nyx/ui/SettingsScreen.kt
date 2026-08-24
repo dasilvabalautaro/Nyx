@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Card
@@ -141,6 +142,9 @@ fun SettingsScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // Igual que en el editor de perfil: el campo de nodos WAN está abajo del
+                // todo y sin esto el teclado lo tapaba justo al ir a escribir en él.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {

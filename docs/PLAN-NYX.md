@@ -1489,6 +1489,29 @@ resuelve la decisión. Detalle completo en
       todo fue bien. Más una recomendación arriba del todo —antes de los campos, que leída
       después de escribir un párrafo no sirve— orientando a lo concreto.
 
+- [x] 4.15 **Tres fallos del editor de perfil, encontrados escribiendo en el móvil** (24 ago
+      2026). Ninguno se veía leyendo el código.
+      **(a) Pérdida de datos.** `MyProfilePrefs.init()` **no lo llamaba nadie**, y `update()`
+      reescribe *todos* los campos desde `_profile.value` — que sin cargar es el perfil vacío.
+      Resultado: editar un solo campo tras reiniciar la app **borraba del disco todos los
+      demás**. Arreglado haciendo que `update` llame a `init` (idempotente) además de cablearlo
+      en `MainActivity`: depender de que alguien se acuerde de inicializar es justo lo que
+      falló.
+      **(b) No se podía escribir un espacio en el apodo.** `sanitizeNickname` hace `trim()` y el
+      campo releía el valor saneado, así que el espacio desaparecía antes de teclear la letra
+      siguiente: "Ana Maria" salía **"AnaMaria"**.
+      **(c) El campo de intereses mezclaba el texto.** Se reinicializaba con la lista guardada en
+      cada pulsación, perdiendo el cursor: `aa,bb,cc,dd,ee,ff` quedó en **`aa, cbc, ed, ff`**.
+      (b) y (c) son la misma raíz —sanear en cada tecla mientras el campo muestra lo saneado— y
+      se arreglan igual: **estado local** para lo que se teclea, saneado sólo al **persistir**.
+      Efecto secundario que confirma el arreglo: el contador `6/5` en rojo ahora es visible;
+      antes era **imposible**, porque el texto se reseteaba a cinco antes de poder verlo.
+- [x] 4.16 **El teclado tapaba el campo que se editaba** (24 ago 2026, reportado por el autor).
+      `imePadding()` en el contenedor desplazable del editor de perfil **y** de Ajustes — el
+      mismo arreglo que ya tenía la pantalla de chat, que no se había llevado a las pantallas
+      nuevas. Con el contenedor consciente del IME, Compose además sube solo el campo enfocado.
+      Auditadas las cuatro pantallas: sólo esas dos tienen campos de texto.
+
 ### 5. Identidad visual
 - [ ] 5.1 Nueva semilla + regenerar todos los roles M3 en `Color.kt`.
 - [ ] 5.2 Rename `KryptaTheme`→`NyxTheme` en `Theme.kt` (si no quedó ya cubierto en 1.3).

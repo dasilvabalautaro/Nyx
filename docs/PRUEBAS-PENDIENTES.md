@@ -372,12 +372,24 @@ Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por 
 APK que mandar a la persona que colabora. **Ya lo hay**: `~/Desktop/nyx-arm64-debug.apk`
 — 61 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
 
-**Regenerado el 21 ago 2026**, porque el del 16 ago ya no estaba en el Escritorio: se
-reconstruye con `./gradlew :app:assembleDebug -PslimAbi` y copiando
-`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. El de ahora incluye el porte de UI
-de ese día (lista vacía con los tres pasos, jerarquía en Ajustes), así que sirve además
-para la comprobación visual anotada más abajo — y conviene mandar **este**, no uno viejo,
-para que los dos móviles muestren lo mismo durante la sesión.
+**Regenerado el 24 ago 2026.** Se reconstruye con `./gradlew :app:assembleDebug -PslimAbi` y
+copiando `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. Conviene mandar **este**, no uno
+viejo, para que los dos móviles muestren lo mismo durante la sesión.
+
+Firma comprobada **contra el APK instalado en el TECNO**: mismo certificado
+(`4a223c54…bd40f`, `CN=Android Debug`), que es la propiedad que hace que ninguno de los dos
+tenga que desinstalar — y desinstalar borra la identidad Ed25519.
+
+Lo que este build trae y el del 21 ago no tenía, o sea lo que hay que probar además de la §13:
+
+- **Tablón de descubrimiento** completo: publicar perfil, descubrir, "me interesa", match, y
+  la conversación que se abre sola al hacer match.
+- **Editor de perfil** con avatar (derivado del PeerID o descrito con "Elegir rasgos").
+- **Bloquear y denunciar** desde el chat, la lista y la tarjeta del tablón.
+- **Puerta de edad 18+** al primer arranque, y Términos antes de publicar la primera tarjeta.
+
+Aviso para esa sesión: **el nodo todavía no tiene `report.go`**, así que denunciar bloquea
+correctamente pero el envío falla y la app lo dice. No es un fallo de la app.
 
 Dos cosas que hay que decirle a quien lo instale:
 

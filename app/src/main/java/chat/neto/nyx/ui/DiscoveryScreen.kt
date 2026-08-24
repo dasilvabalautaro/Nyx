@@ -42,6 +42,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import chat.neto.nyx.avatar.AvatarRenderer
 import chat.neto.nyx.core.avatar.AvatarIdentity
+import android.widget.Toast
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import chat.neto.nyx.core.model.Like
 import chat.neto.nyx.core.model.DiscoveredCard
 
 /**
@@ -58,6 +67,48 @@ fun DiscoveryScreen(
     onOpenProfile: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val likeStates by viewModel.likeStates.collectAsState()
+    val action by viewModel.action.collectAsState()
+    val context = LocalContext.current
+
+    var confirmBlock by remember { mutableStateOf<DiscoveredCard?>(null) }
+    var reportCard by remember { mutableStateOf<DiscoveredCard?>(null) }
+
+    LaunchedEffect(action) {
+        action?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearAction()
+        }
+    }
+
+    confirmBlock?.let { c ->
+        ConfirmDeleteDialog(
+            title = "¿Bloquear a ${c.card.nickname}?",
+            text = "Dejará de aparecer en el tablón y no podrá escribirte ni llamarte. " +
+                "No se le avisa. Puedes deshacerlo en Ajustes › Perfiles bloqueados.",
+            confirmLabel = "Bloquear",
+            onConfirm = {
+                viewModel.block(c.peerId, c.card.nickname)
+                confirmBlock = null
+            },
+            onDismiss = { confirmBlock = null },
+        )
+    }
+
+    reportCard?.let { c ->
+        ReportDialog(
+            contactName = c.card.nickname,
+            excerpt = emptyList(),
+            // Desde el tablón no hay conversación que adjuntar: ofrecer la casilla sería
+            // enseñar algo que no existe.
+            allowExcerpt = false,
+            onDismiss = { reportCard = null },
+            onConfirm = { reason, note, _ ->
+                viewModel.report(c.peerId, c.card.nickname, reason, note)
+                reportCard = null
+            },
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -92,7 +143,15 @@ fun DiscoveryScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(s.cards, key = { it.peerId }) { DiscoveryCardView(it) }
+                    items(s.cards, key = { it.peerId }) { c ->
+                        DiscoveryCardView(
+                            discovered = c,
+                            like = likeStates[c.peerId],
+                            onLike = { viewModel.like(c.peerId, c.card.nickname) },
+                            onBlock = { confirmBlock = c },
+                            onReport = { reportCard = c },
+                        )
+                    }
                 }
 
                 // Vacío y error se distinguen a propósito: en uno no hay nadie publicando, en el
@@ -116,8 +175,15 @@ fun DiscoveryScreen(
 }
 
 @Composable
-private fun DiscoveryCardView(discovered: DiscoveredCard) {
+private fun DiscoveryCardView(
+    discovered: DiscoveredCard,
+    like: Like?,
+    onLike: () -> Unit,
+    onBlock: () -> Unit,
+    onReport: () -> Unit,
+) {
     val card = discovered.card
+    var menu by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -129,6 +195,7 @@ private fun DiscoveryCardView(discovered: DiscoveredCard) {
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
+      Column {
         Row(Modifier.padding(16.dp)) {
             CardAvatar(discovered)
             Spacer(Modifier.size(14.dp))
@@ -155,7 +222,56 @@ private fun DiscoveryCardView(discovered: DiscoveredCard) {
                     Text(card.bio, style = MaterialTheme.typography.bodyMedium, maxLines = 4)
                 }
             }
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Icon(NyxMoreIcon, contentDescription = "Más opciones")
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Bloquear") },
+                        leadingIcon = {
+                            Icon(NyxBlockIcon, null, tint = MaterialTheme.colorScheme.error)
+                        },
+                        onClick = { menu = false; onBlock() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Denunciar") },
+                        leadingIcon = {
+                            Icon(NyxFlagIcon, null, tint = MaterialTheme.colorScheme.error)
+                        },
+                        onClick = { menu = false; onReport() },
+                    )
+                }
+            }
         }
+
+        // La acción, abajo y a lo ancho: es lo único que se hace en esta pantalla.
+        //
+        // Los tres estados se distinguen a propósito. "Le interesas" (like recibido y no
+        // correspondido) se enseña como invitación a responder, no como match: la regla que
+        // sostiene todo el diseño anti-acoso es que un like recibido NO abre la mensajería
+        // (`Like.canMessage`), y una tarjeta que dijera "podéis hablar" antes de tiempo la
+        // estaría contradiciendo en la única pantalla donde el usuario la va a aprender.
+        Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+            when {
+                like?.isMatch == true -> FilledTonalButton(
+                    onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(),
+                ) { Text("Match · ya podéis hablar") }
+
+                like?.sentAt != null -> FilledTonalButton(
+                    onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(),
+                ) { Text("Le has dicho que te interesa") }
+
+                like?.receivedAt != null -> Button(
+                    onClick = onLike, modifier = Modifier.fillMaxWidth(),
+                ) { Text("Le interesas · corresponder") }
+
+                else -> Button(onClick = onLike, modifier = Modifier.fillMaxWidth()) {
+                    Text("Me interesa")
+                }
+            }
+        }
+      }
     }
 }
 

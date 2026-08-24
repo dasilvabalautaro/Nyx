@@ -59,6 +59,12 @@ fun ReportDialog(
     excerpt: List<ReportedLine>,
     onDismiss: () -> Unit,
     onConfirm: (ReportReason, String, Boolean) -> Unit,
+    /**
+     * Si se puede adjuntar conversación. En una denuncia desde el **tablón** no hay ninguna —
+     * no habéis hablado— y enseñar la casilla ahí sería ofrecer algo que no existe y hacer
+     * dudar de si se está enviando algo más de lo que se ve.
+     */
+    allowExcerpt: Boolean = true,
 ) {
     var reason by remember { mutableStateOf(ReportReason.HARASSMENT) }
     var note by remember { mutableStateOf("") }
@@ -110,6 +116,7 @@ fun ReportDialog(
                     maxLines = 4,
                 )
 
+                if (allowExcerpt) {
                 Spacer(Modifier.height(12.dp))
                 Row(
                     Modifier
@@ -131,8 +138,10 @@ fun ReportDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
+                }
+
                 // Enseñar lo que se envía es parte del consentimiento, no un extra.
-                if (adjuntar) {
+                if (allowExcerpt && adjuntar) {
                     Spacer(Modifier.height(8.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,

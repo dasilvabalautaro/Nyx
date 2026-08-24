@@ -1399,8 +1399,24 @@ resuelve la decisión. Detalle completo en
       descripción legítima lo redibuja; **"adolescente" lo rechaza** con
       *"La descripción sugiere una persona menor de edad; sólo se generan rostros de adultos"*
       y **deja el avatar anterior intacto**; "El mío" vuelve al derivado.
-- [ ] 4.8 `DiscoveryCard.kt` (apodo/edad/intereses/bio/avatar, "Me interesa" → `sendLike`,
-      overflow → Bloquear/Reportar).
+- [x] 4.8 **Acciones sobre la tarjeta — hechas el 24 ago 2026**, y con ellas caen las mitades
+      de **4.3** y **4.4b** que esperaban a que existiera el tablón.
+      El botón principal tiene **cuatro estados y se distinguen a propósito**: "Me interesa",
+      "Le has dicho que te interesa" (enviado, sin respuesta), "Le interesas · corresponder"
+      (recibido y **no** correspondido) y "Match · ya podéis hablar". El tercero es el que
+      importa: un like **recibido** no abre la mensajería (`Like.canMessage`), y una tarjeta que
+      dijera "podéis hablar" antes de tiempo estaría contradiciendo la regla anti-acoso en la
+      única pantalla donde el usuario la va a aprender.
+      El estado sale del **repositorio**, no de estado local de la pantalla: un like del otro
+      lado puede llegar mientras miras el tablón, y entonces la tarjeta pasa a match sin recargar.
+      **Denunciar desde el tablón no ofrece adjuntar conversación** (`allowExcerpt = false`):
+      allí no habéis hablado, y enseñar la casilla sería ofrecer algo que no existe y hacer dudar
+      de si se envía más de lo que se ve.
+      Bloquear y denunciar **refrescan** la lista, para que quien acabas de bloquear desaparezca
+      en el sitio — seguir viéndolo es justo lo que el filtro de `BoardService` evita.
+      Verificado en el TECNO contra el nodo de producción con una tarjeta de sonda: se ve
+      "Me interesa", el menú ⋮ ofrece Bloquear y Denunciar, el diálogo de denuncia **sin** la
+      casilla de fragmento, y cancelar no bloquea a nadie. Tarjeta retirada al terminar.
 - [ ] 4.8b Reescribir el estado vacío de `ConversationsScreen.kt` para el flujo del
       tablón. Hoy enumera los tres pasos del alta por PeerID (portado de Krypta en
       `a0a9851`), que es exacto mientras el tablón no exista pero deja de serlo en cuanto

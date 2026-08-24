@@ -126,6 +126,15 @@ val NyxDeleteIcon: ImageVector by lazy {
     )
 }
 
+/** Silueta de persona (equivalente a `Person`), para "mi perfil". */
+val NyxPersonIcon: ImageVector by lazy {
+    materialIcon(
+        "Person",
+        "M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 " +
+            "-8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z",
+    )
+}
+
 /** Flecha circular (equivalente a `Refresh`), para recargar el tablón. */
 val NyxRefreshIcon: ImageVector by lazy {
     materialIcon(

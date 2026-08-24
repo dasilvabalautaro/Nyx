@@ -30,27 +30,43 @@ object ImageCodec {
     /** Lee [uri], reduce y comprime bajo [MAX_BYTES]. Devuelve null si no se puede. */
     fun compress(context: Context, uri: Uri): ByteArray? {
         val original = decodeScaled(context, uri, MAX_DIMENSION) ?: return null
-        try {
-            val format = formatFor(original)
-            var quality = 85
-            var out = encode(original, format, quality)
-            // Baja calidad mientras no quepa (suelo de 40 para no destrozar la imagen).
-            while (out.size > MAX_BYTES && quality > 40) {
-                quality -= 10
-                out = encode(original, format, quality)
-            }
-            // Si aún no cabe, reduce a la mitad y reintenta una vez.
-            if (out.size > MAX_BYTES) {
-                val half = Bitmap.createScaledBitmap(
-                    original, max(1, original.width / 2), max(1, original.height / 2), true,
-                )
-                out = encode(half, format, 80)
-                half.recycle()
-            }
-            return if (out.size <= MAX_BYTES) out else null
+        return try {
+            squeeze(original)
         } finally {
             original.recycle()
         }
+    }
+
+    /**
+     * Comprime un [Bitmap] que ya está en memoria — el avatar que dibuja `AvatarRenderer`
+     * (plan 3b.5). Mismo presupuesto que una imagen del chat, que no es casualidad: el tope de
+     * 58 KiB del avatar sale de que la tarjeta del tablón tiene que caber en los 96 KiB del
+     * nodo, y reutilizar este bucle evita que los dos límites se separen sin querer.
+     *
+     * **No recicla** el bitmap: lo trajo quien llama y puede seguir pintándolo en la vista
+     * previa. La versión de [Uri] sí lo hace porque el bitmap lo creó ella.
+     */
+    fun compress(bitmap: Bitmap): ByteArray? = squeeze(bitmap)
+
+    /** El regateo de calidad y tamaño, común a las dos entradas. */
+    private fun squeeze(original: Bitmap): ByteArray? {
+        val format = formatFor(original)
+        var quality = 85
+        var out = encode(original, format, quality)
+        // Baja calidad mientras no quepa (suelo de 40 para no destrozar la imagen).
+        while (out.size > MAX_BYTES && quality > 40) {
+            quality -= 10
+            out = encode(original, format, quality)
+        }
+        // Si aún no cabe, reduce a la mitad y reintenta una vez.
+        if (out.size > MAX_BYTES) {
+            val half = Bitmap.createScaledBitmap(
+                original, max(1, original.width / 2), max(1, original.height / 2), true,
+            )
+            out = encode(half, format, 80)
+            half.recycle()
+        }
+        return if (out.size <= MAX_BYTES) out else null
     }
 
     /** Decodifica una imagen recibida (JPEG o WebP) a [ImageBitmap] para pintarla. */

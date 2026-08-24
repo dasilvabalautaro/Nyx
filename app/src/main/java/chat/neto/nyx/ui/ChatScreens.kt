@@ -114,6 +114,7 @@ fun NyxApp(
     var showHelp by remember { mutableStateOf(false) }
     var showBlocked by remember { mutableStateOf(false) }
     var showDiscovery by remember { mutableStateOf(false) }
+    var showProfile by remember { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsState()
 
     // Deep-link desde una notificación: al llegar (o al cargar los contactos) abre esa
@@ -219,11 +220,21 @@ fun NyxApp(
         }
         // Mismo criterio que la Ayuda: antes de Ajustes, porque se abre desde ahí y "atrás"
         // debe devolver a Ajustes (showSettings sigue true por debajo), no a la lista.
+        // Antes de Descubrir, por el mismo criterio que la Ayuda sobre Ajustes: el perfil se
+        // abre desde el tablón y "atrás" tiene que devolver al tablón, no a la lista.
+        showProfile -> {
+            BackHandler { showProfile = false }
+            ProfileEditorScreen(
+                viewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+                onBack = { showProfile = false },
+            )
+        }
         showDiscovery -> {
             BackHandler { showDiscovery = false }
             DiscoveryScreen(
                 viewModel = androidx.hilt.navigation.compose.hiltViewModel(),
                 onBack = { showDiscovery = false },
+                onOpenProfile = { showProfile = true },
             )
         }
         showBlocked -> {

@@ -1175,7 +1175,9 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       mutuo que cierra match, rate-limit efectivo y en el sitio correcto, caché de secretos,
       cuota de likes que no toca la del buzón, reentrega si la persistencia falla, y sobres
       de peers bloqueados o con tag roto.
-- [ ] 3.12 Borrar tarjeta del tablón desde la app (no esperar al TTL). *El protocolo y
+- [x] 3.12 **Hecho el 24 ago 2026**: botón "Retirarlo del tablón" en el editor de perfil. El
+      error se enseña en vez de tragarse, porque `deleteCard` lanza si falla en **algún** nodo y
+      un éxito parcial deja el perfil visible donde falló. *(Texto original: el protocolo y*
       `deleteCard` están hechos y probados (3.1/3.5/3.6); falta el botón, que es Fase 4.*
 - [x] 3.13 **`/nyx/report/1.0.0` + expulsión del tablón — hecho en el nodo el 23 ago 2026**
       (`infra/nyx-node/report.go`, 9 tests). El nodo guarda sobres **opacos** cifrados a la clave
@@ -1258,7 +1260,12 @@ resuelve la decisión. Detalle completo en
       que **no sustituye al número de seguridad** y no debe presentarse como verificación. Y un
       avatar *elegido* nunca debe mostrarse como seña de identidad, o el atacante sólo tiene que
       escribir la misma descripción.
-- [ ] 3b.5 Integrar con `ImageCodec` existente para compresión/tope de tamaño.
+- [x] 3b.5 **Integrado el 24 ago 2026**: `ImageCodec.compress(Bitmap)`, un hermano de la
+      versión de `Uri` que comparte el mismo bucle de regateo de calidad. Comparten presupuesto
+      a propósito — el tope de 58 KiB del avatar sale de que la tarjeta quepa en los 96 KiB del
+      nodo, y reutilizar el bucle evita que los dos límites se separen sin querer. **No recicla**
+      el bitmap, a diferencia de la de `Uri`: lo trajo quien llama y sigue pintándolo en la vista
+      previa.
 - [x] 3b.8 **Dos reglas de coherencia, hechas el 21 ago 2026.** (a) Con peinado largo se apaga
       el vello facial — decisión normativa deliberada, tomada a petición del autor tras haberla
       descartado primero; el camino de texto no se toca. (b) Contraste mínimo entre pelo y piel:
@@ -1380,8 +1387,18 @@ resuelve la decisión. Detalle completo en
       Estados separados `Vacío` y `Error` a propósito: se parecen en pantalla y significan lo
       contrario — a uno se responde esperando y al otro reintentando.
       *Falta lo de 4.8: las acciones sobre la tarjeta (me interesa, bloquear, denunciar).*
-- [ ] 4.7 `ProfileEditorScreen.kt` (edita `MyProfilePrefs`, incluye el flujo de
-      creación de avatar de la Fase 3b, botón "Publicar").
+- [x] 4.7 **`ProfileEditorScreen` — hecho el 24 ago 2026**, y con él caen tres pendientes que
+      esperaban a que existiera: **4.5b** (la llamada a `TermsScreen`, ahora sí antes de
+      publicar), **3b.5** (`ImageCodec.compress(Bitmap)`) y **3.12** (retirar la tarjeta).
+      Lo que se edita se guarda **en el móvil al vuelo**; publicar es un botón aparte, y la
+      pantalla lo dice con palabras: se puede rellenar el perfil, mirarlo y no enseñárselo a
+      nadie. Lo que sale al publicar es una copia — editar después no actualiza el tablón.
+      El avatar **arranca derivado del PeerID**, así que el editor nunca se abre con un hueco.
+      Describir otro pasa siempre por `AvatarPrompt` (RF-09) **antes** de dibujar.
+      Verificado en el TECNO: el editor abre con el rostro derivado del teléfono; una
+      descripción legítima lo redibuja; **"adolescente" lo rechaza** con
+      *"La descripción sugiere una persona menor de edad; sólo se generan rostros de adultos"*
+      y **deja el avatar anterior intacto**; "El mío" vuelve al derivado.
 - [ ] 4.8 `DiscoveryCard.kt` (apodo/edad/intereses/bio/avatar, "Me interesa" → `sendLike`,
       overflow → Bloquear/Reportar).
 - [ ] 4.8b Reescribir el estado vacío de `ConversationsScreen.kt` para el flujo del

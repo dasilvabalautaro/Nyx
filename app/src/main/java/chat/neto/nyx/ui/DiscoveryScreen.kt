@@ -55,6 +55,7 @@ import chat.neto.nyx.core.model.DiscoveredCard
 fun DiscoveryScreen(
     viewModel: DiscoveryViewModel,
     onBack: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -69,6 +70,9 @@ fun DiscoveryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenProfile) {
+                        Icon(NyxPersonIcon, contentDescription = "Mi perfil")
+                    }
                     IconButton(onClick = viewModel::refresh) {
                         Icon(NyxRefreshIcon, contentDescription = "Actualizar")
                     }
@@ -98,6 +102,7 @@ fun DiscoveryScreen(
                     title = "Todavía no hay nadie por aquí",
                     body = "Cuando alguien publique su perfil en esta categoría, aparecerá en " +
                         "esta lista. Publica el tuyo para que te encuentren.",
+                    action = "Crear mi perfil" to onOpenProfile,
                 )
 
                 is DiscoveryState.Error -> CenteredMessage(
@@ -197,7 +202,12 @@ private fun CardAvatar(discovered: DiscoveredCard, size: androidx.compose.ui.uni
 }
 
 @Composable
-private fun CenteredMessage(title: String, body: String, onRetry: (() -> Unit)? = null) {
+private fun CenteredMessage(
+    title: String,
+    body: String,
+    onRetry: (() -> Unit)? = null,
+    action: Pair<String, () -> Unit>? = null,
+) {
     Column(
         Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -214,6 +224,10 @@ private fun CenteredMessage(title: String, body: String, onRetry: (() -> Unit)? 
         onRetry?.let {
             Spacer(Modifier.height(20.dp))
             Button(onClick = it) { Text("Reintentar") }
+        }
+        action?.let { (label, onClick) ->
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onClick) { Text(label) }
         }
     }
 }

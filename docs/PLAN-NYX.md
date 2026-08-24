@@ -1446,6 +1446,28 @@ resuelve la decisión. Detalle completo en
       unidireccional (sin chat), like mutuo (match + chat), bloquear, gate de edad.
 - [ ] 4.12 Cerrar con entrada en `CLAUDE.md`.
 
+- [x] 4.13 **Ayuda para construir el avatar, y apodos repetidos** (24 ago 2026).
+      **`AvatarVocabulary`** (`:core`): el usuario toca rasgos **en español** y el campo se
+      rellena con el término que el parser entiende. Hacía falta porque `AttributeParser` sólo
+      lee **inglés** y exige contexto —«brown» suelto no asigna nada, hace falta «brown hair»—,
+      así que delante de alguien que habla español el campo libre era un juego de adivinanzas
+      donde casi todo se ignora **en silencio**: el peor fallo posible, porque no distingue "no
+      te he entendido" de "eso ya era el valor por defecto".
+      Traducir el parser habría sido peor: el vocabulario vive por duplicado en Kotlin y Python
+      —tienen que dibujar lo mismo— así que un segundo idioma son cuatro sitios que se
+      desincronizan. El idioma se resuelve **en la interfaz**.
+      Lo sostiene `AvatarVocabularyTest`, que recorre la tabla entera contra el parser: una
+      sugerencia que se ignore es peor que no ofrecerla. **Encontró cuatro entradas mal
+      clasificadas** en su primera pasada.
+      **Corregido de paso un fallo introducido en 4.7**: el campo ponía de ejemplo *"pelo rizado
+      y gafas redondas"*, en español, que el parser **no entiende** — o sea que la propia pista
+      enseñaba a escribir algo que no funciona.
+      **`DisplayNames`** (`:core`) desambigua apodos repetidos con una cola del PeerID, sólo en
+      los que chocan. Los apodos del tablón **no son únicos y no pueden serlo**: no hay registro
+      central, el nodo no interpreta las tarjetas, y un "¿está libre este nombre?" sería
+      enumerable. Esto no lo arregla — lo hace visible. **No es defensa contra suplantación**:
+      para eso está el número de seguridad, y un nombre nunca es identidad.
+
 ### 5. Identidad visual
 - [ ] 5.1 Nueva semilla + regenerar todos los roles M3 en `Color.kt`.
 - [ ] 5.2 Rename `KryptaTheme`→`NyxTheme` en `Theme.kt` (si no quedó ya cubierto en 1.3).

@@ -47,6 +47,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.SuggestionChip
+import chat.neto.nyx.core.avatar.AvatarVocabulary
 import chat.neto.nyx.MyProfilePrefs
 import kotlin.math.roundToInt
 
@@ -71,6 +75,7 @@ fun ProfileEditorScreen(
 
     var showTerms by remember { mutableStateOf(false) }
     var avatarPrompt by remember { mutableStateOf("") }
+    var showVocab by remember { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -120,7 +125,8 @@ fun ProfileEditorScreen(
                     Spacer(Modifier.size(16.dp))
                     Text(
                         "Nyx te da un rostro propio derivado de tu identidad. Puedes " +
-                            "describir otro si prefieres.",
+                            "describir otro con \"Elegir rasgos\", que va componiendo la " +
+                            "descripción por ti.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -129,10 +135,18 @@ fun ProfileEditorScreen(
                 TextField(
                     value = avatarPrompt,
                     onValueChange = { avatarPrompt = it },
-                    label = { Text("Descríbelo (p. ej. \"pelo rizado y gafas redondas\")") },
+                    label = { Text("Descripción del rostro") },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 2,
+                    maxLines = 3,
                 )
+                TextButton(onClick = { showVocab = !showVocab }) {
+                    Text(if (showVocab) "Ocultar opciones" else "Elegir rasgos")
+                }
+                if (showVocab) {
+                    AvatarVocabularyPicker(
+                        onPick = { term -> avatarPrompt = AvatarVocabulary.append(avatarPrompt, term) },
+                    )
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { viewModel.setAvatarFromText(avatarPrompt) },
@@ -286,4 +300,53 @@ private fun InterestsField(interests: List<String>, onChange: (List<String>) -> 
         modifier = Modifier.fillMaxWidth(),
         maxLines = 2,
     )
+}
+
+
+/**
+ * Selector de rasgos: el usuario toca en español y el campo se rellena con lo que el parser
+ * entiende.
+ *
+ * # Por qué existe
+ *
+ * `AttributeParser` sólo lee **inglés** y exige contexto — «brown» suelto no asigna nada, hace
+ * falta «brown hair». Delante de alguien que habla español, un campo de texto libre es un juego
+ * de adivinanzas donde casi todo lo que escriba se ignora **en silencio**, que es el peor fallo
+ * posible: no distingue "no te he entendido" de "eso ya era el valor por defecto".
+ *
+ * Traducir el parser habría sido peor: el vocabulario vive por duplicado en Kotlin y Python —
+ * tienen que dibujar lo mismo— así que añadir un segundo idioma son cuatro sitios que se
+ * desincronizan. Aquí el idioma se resuelve en la interfaz y el contrato con el parser no cambia.
+ *
+ * Escribir a mano sigue funcionando para quien conozca el vocabulario; esto es un atajo, no un
+ * sustituto.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AvatarVocabularyPicker(onPick: (String) -> Unit) {
+    Column {
+        Text(
+            "Toca los rasgos que quieras. Se van sumando a la descripción, y lo que no elijas " +
+                "queda como está.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        AvatarVocabulary.groups.forEach { grupo ->
+            Text(
+                grupo.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                grupo.options.forEach { opcion ->
+                    SuggestionChip(
+                        onClick = { onPick(opcion.term) },
+                        label = { Text(opcion.label, style = MaterialTheme.typography.bodySmall) },
+                    )
+                }
+            }
+        }
+    }
 }

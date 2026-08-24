@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.neto.nyx.core.model.Contact
+import chat.neto.nyx.core.model.DisplayNames
 import chat.neto.nyx.core.model.MessageStatus
 import chat.neto.nyx.p2p.WanStatus
 import chat.neto.nyx.ui.theme.AvatarColors
@@ -83,6 +84,12 @@ fun ConversationsScreen(
     var confirmClear by remember { mutableStateOf<Contact?>(null) }
     var confirmDelete by remember { mutableStateOf<Contact?>(null) }
     var confirmBlock by remember { mutableStateOf<Contact?>(null) }
+
+    // Apodos repetidos: dos matches pueden llamarse igual y no hay forma de impedirlo (ver
+    // `DisplayNames`). Se calcula una vez por lista y no por fila, que si no sería cuadrático.
+    val shownNames = remember(conversations) {
+        DisplayNames.disambiguate(conversations.map { it.contact.peerId to it.contact.displayName })
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -134,6 +141,7 @@ fun ConversationsScreen(
                     items(conversations, key = { it.contact.id }) { item ->
                         ConversationRow(
                             item = item,
+                            shownName = shownNames[item.contact.peerId] ?: item.contact.displayName,
                             isOnline = item.contact.peerId in online,
                             onClick = { onOpen(item.contact) },
                             onLongClick = { actionsFor = item.contact },
@@ -262,6 +270,8 @@ private fun WanStatusSubtitle(status: WanStatus) {
 @Composable
 private fun ConversationRow(
     item: ConversationItem,
+    /** Nombre ya desambiguado si choca con otro contacto; ver `DisplayNames`. */
+    shownName: String,
     isOnline: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -289,7 +299,7 @@ private fun ConversationRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        contact.displayName,
+                        shownName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (item.unread > 0) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,

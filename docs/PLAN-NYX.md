@@ -1360,8 +1360,26 @@ resuelve la decisión. Detalle completo en
       editor de perfil es 4.7. Es una línea allí. Se dejó así en vez de colgarla del primer
       arranque a propósito — unos términos aceptados tres semanas antes de publicar nada son una
       casilla que nadie lee; pegados al acto que gobiernan, significan algo.
-- [ ] 4.6 `DiscoveryScreen.kt` + `DiscoveryViewModel.kt` + `BoardService`
-      (`:p2p-signaling`).
+- [x] 4.6 **`BoardService` + `DiscoveryViewModel` + `DiscoveryScreen` — hecho el 24 ago 2026**,
+      y **verificado de punta a punta contra el nodo de producción**: una tarjeta publicada desde
+      el Mac con una identidad derivada de semilla (sonda `TestBoardPublishAgainstLiveNode`)
+      aparece en el móvil con apodo, franja de edad, intereses y bio; retirada después con
+      `BOARD_DELETE=1`, y el tablón queda vacío.
+      **`BoardCard` va en `:core`** con formato propio (no JSON): el avatar son hasta 58 KiB que
+      en base64 se vuelven ~78, con el tope del nodo en 96 KiB queda muy justo y una consulta de
+      50 tarjetas movería casi 1 MiB de relleno; además `org.json` es un stub en un test JVM y el
+      formato no se podría probar donde toca. Bio y avatar con longitud declarada y al final;
+      apodo saneado **al serializar**, porque el emisor podría no ser nuestro cliente.
+      **El filtrado va en el cliente y no en el nodo** a propósito: el nodo no sabe quién
+      pregunta, y decírselo sería darle el grafo social que todo el diseño evita. Filtra la mía y
+      las de bloqueados — sin esto último el bloqueo estaría a medias, porque el bloqueado
+      dejaría de escribirte pero seguirías viendo su cara.
+      **Hallazgo que paga solo el avatar derivado**: una tarjeta sin avatar se dibuja con el
+      rostro de `AvatarIdentity`, así que el tablón tiene caras **antes** de que exista el editor
+      de perfil (4.7) y ninguna tarjeta sale con un hueco gris.
+      Estados separados `Vacío` y `Error` a propósito: se parecen en pantalla y significan lo
+      contrario — a uno se responde esperando y al otro reintentando.
+      *Falta lo de 4.8: las acciones sobre la tarjeta (me interesa, bloquear, denunciar).*
 - [ ] 4.7 `ProfileEditorScreen.kt` (edita `MyProfilePrefs`, incluye el flujo de
       creación de avatar de la Fase 3b, botón "Publicar").
 - [ ] 4.8 `DiscoveryCard.kt` (apodo/edad/intereses/bio/avatar, "Me interesa" → `sendLike`,

@@ -70,6 +70,7 @@ fun ConversationsScreen(
     onOpen: (Contact) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
+    onOpenDiscovery: () -> Unit,
     onAddContact: (String, String) -> Unit,
     onClearError: () -> Unit,
     onClearChat: (Contact) -> Unit,
@@ -94,6 +95,9 @@ fun ConversationsScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenDiscovery) {
+                        Icon(NyxDiscoverIcon, contentDescription = "Descubrir")
+                    }
                     IconButton(onClick = onOpenHelp) {
                         Icon(NyxHelpIcon, contentDescription = "Ayuda")
                     }

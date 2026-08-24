@@ -126,6 +126,25 @@ val NyxDeleteIcon: ImageVector by lazy {
     )
 }
 
+/** Flecha circular (equivalente a `Refresh`), para recargar el tablón. */
+val NyxRefreshIcon: ImageVector by lazy {
+    materialIcon(
+        "Refresh",
+        "M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -8,8s3.58,8 8,8c3.73,0 6.84," +
+            "-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6," +
+            "-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z",
+    )
+}
+
+/** Corazón/brújula del tablón: acceso a "Descubrir" desde la lista. */
+val NyxDiscoverIcon: ImageVector by lazy {
+    materialIcon(
+        "Discover",
+        "M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM14.19,14.19" +
+            "L6,18l3.81,-8.19L18,6l-3.81,8.19z",
+    )
+}
+
 /** Bandera (equivalente a `Flag`), para denunciar contenido. */
 val NyxFlagIcon: ImageVector by lazy {
     materialIcon(

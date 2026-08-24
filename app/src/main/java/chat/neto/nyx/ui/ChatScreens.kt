@@ -113,6 +113,7 @@ fun NyxApp(
     var showSettings by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     var showBlocked by remember { mutableStateOf(false) }
+    var showDiscovery by remember { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsState()
 
     // Deep-link desde una notificación: al llegar (o al cargar los contactos) abre esa
@@ -218,6 +219,13 @@ fun NyxApp(
         }
         // Mismo criterio que la Ayuda: antes de Ajustes, porque se abre desde ahí y "atrás"
         // debe devolver a Ajustes (showSettings sigue true por debajo), no a la lista.
+        showDiscovery -> {
+            BackHandler { showDiscovery = false }
+            DiscoveryScreen(
+                viewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+                onBack = { showDiscovery = false },
+            )
+        }
         showBlocked -> {
             BackHandler { showBlocked = false }
             BlockedPeersScreen(viewModel = viewModel, onBack = { showBlocked = false })
@@ -254,6 +262,7 @@ fun NyxApp(
                 onOpen = { current = it },
                 onOpenSettings = { showSettings = true },
                 onOpenHelp = { showHelp = true },
+                onOpenDiscovery = { showDiscovery = true },
                 onAddContact = viewModel::addContact,
                 onClearError = viewModel::clearError,
                 onClearChat = viewModel::clearChat,

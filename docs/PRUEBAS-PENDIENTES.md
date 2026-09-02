@@ -461,6 +461,47 @@ faltaba era **la caja**, y ya está: **desplegado el 21 ago 2026**. Un solo desp
 
 ---
 
+## 15. Audio mudo en un sentido en la llamada (2 sep 2026) — **CORREGIDO A CIEGAS, FALTA REPETIR**
+**Reporte del autor (2 sep 2026)**: llamada de prueba entre los dos móviles; en el **TECNO no
+se oía nada**, mientras que **en el otro lado se oía bien**. O sea: la captura, el cifrado, el
+stream y el decodificador del otro extremo funcionaban; lo que falló fue la **reproducción en
+el TECNO**. Descartado en el propio aparato antes de tocar código: el volumen de llamada estaba
+en **14/15** (`dumpsys audio`, `STREAM_VOICE_CALL`) y el decodificador Opus existe
+(`c2.android.opus.decoder`). No hubo rastro en logcat porque el limitador de Transsion silencia
+el del proceso y, sobre todo, porque **el motor de audio no informaba de nada**: sus dos hilos
+iban envueltos en `runCatching {}` sin `onFailure`, así que un decodificador que no arranca se
+veía exactamente igual que una llamada normal, solo que sin voz.
+
+Se corrigieron cuatro cosas plausibles a la vez (ninguna verificada todavía como *la* causa):
+el anuncio de códec `'H'` viajaba **una sola vez** por llamada y perderlo dejaba ese sentido
+mudo *entera* — ahora se **reanuncia cada ~2 s**; `onRemoteFrame` **descartaba** los frames que
+llegaban antes de `start()` y `CallService` arrancaba el motor **después** del bombeo RX —
+ahora se encolan y el motor arranca antes; no se pedía **foco de audio**; y el manos libres iba
+por `isSpeakerphoneOn`, deprecada y no-op en varios OEM — ahora `setCommunicationDevice` en
+API 31+. Además el motor **traza al panel de Diagnóstico**, que es lo que convierte la próxima
+prueba en un diagnóstico en vez de otra conjetura.
+
+**Los dos móviles deben llevar el build nuevo**: el reanuncio del `'H'` lo emite el que habla,
+no el que escucha.
+
+1. - [ ] Llamada de voz entre los dos móviles. **Esperado**: se oye en ambos sentidos.
+2. - [ ] Pase lo que pase, abrir **Ajustes → Diagnóstico** en el TECNO y anotar las líneas del
+     motor. Es lo que dice cuál de las cuatro hipótesis era:
+     - `🎤 enviando audio en Opus` — la captura arrancó.
+     - `🔊 recibiendo audio en Opus` + `🔊 sonando la voz del otro lado` — camino completo, y
+       si aun así no se oye el problema es de **encaminamiento/volumen**, no de código.
+     - `⚠️ audio: el otro lado nunca anunció su códec` — era la pérdida del `'H'`.
+     - `⚠️ audio: N paquetes recibidos y ninguno decodificado` — es el **decodificador** del
+       chip, y toca probar forzando AMR-WB.
+     - `⚠️ audio: no se pudo abrir la salida de voz` / `el sistema rechazó el modo llamada` /
+       `no dio el foco` — es la **política de audio del OEM** (HiOS).
+3. - [ ] Probar el botón de **altavoz** durante la llamada: si con altavoz sí se oye y por el
+     auricular no, el fallo es de encaminamiento del OEM y no del códec.
+4. - [ ] Repetir invirtiendo quién llama: la ventana que se cerró en `startMedia` afectaba
+     sobre todo al **que llama**, así que conviene cubrir los dos papeles.
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.

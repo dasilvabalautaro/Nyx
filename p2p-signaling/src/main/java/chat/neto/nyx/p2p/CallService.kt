@@ -97,6 +97,9 @@ class CallService @Inject constructor(
     val remoteVideoFrames: kotlinx.coroutines.flow.Flow<ByteArray> = _remoteVideo
 
     init {
+        // Los hilos del motor de audio no viven en corrutinas: sin este puente sus fallos
+        // (códec que no arranca, salida de voz que no abre) no se ven en ningún sitio.
+        runCatching { audio.setDiagnostics { chat.diagnose(it) } }
         scope.launch {
             chat.callSignals.collect { (contact, sig) ->
                 runCatching { onSignal(contact, sig) }
@@ -277,6 +280,7 @@ class CallService @Inject constructor(
 
     /** Arranca los bombeos TX/RX y el motor de audio; pasa a ACTIVE. */
     private suspend fun startMedia(s: CallStream) {
+        var audioFailed = false
         val ok = mutex.withLock {
             val st = _state.value
             val key = callKey
@@ -287,6 +291,12 @@ class CallService @Inject constructor(
             // perder un frame viejo que acumular latencia); un solo TX preserva el orden.
             val tx = Channel<ByteArray>(64, BufferOverflow.DROP_OLDEST)
             txFrames = tx
+            // El motor arranca ANTES del bombeo RX: el primer frame del otro extremo es su
+            // anuncio de códec, y si entra con el motor parado no hay quien lo reciba.
+            if (runCatching { audio.start { frame -> txFrames?.trySend(frame) } }.isFailure) {
+                audioFailed = true
+                return@withLock false
+            }
             mediaJobs = listOf(
                 scope.launch {
                     for (frame in tx) {
@@ -305,13 +315,15 @@ class CallService @Inject constructor(
             _state.value = st.copy(phase = CallPhase.ACTIVE, startedAt = System.currentTimeMillis())
             true
         }
+        if (audioFailed) {
+            endCall("error de audio", sendHangup = true) // cierra el stream en el teardown
+            return
+        }
         if (!ok) {
             s.close()
             return
         }
         chat.diagnose("📞 en llamada")
-        runCatching { audio.start { frame -> txFrames?.trySend(frame) } }
-            .onFailure { endCall("error de audio", sendHangup = true) }
     }
 
     // --- Vídeo (Fase 7c) --------------------------------------------------------------------

@@ -295,6 +295,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Verified on the TECNO: gate shows on first launch, **back exits the app rather than skipping
 > it**, reopening shows it again, confirming enters, and a cold restart no longer asks.
 >
+> **Call audio went mute in one direction (2 Sep 2026) — fixed blind, retest pending.** Live
+> two-phone call: the **TECNO heard nothing** while the other side heard it fine, so capture,
+> encryption and transport were all working and the failure was on the TECNO's **playback**
+> half. Ruled out on the device first: in-call volume was **14/15** and `c2.android.opus.decoder`
+> is present. The reason there was nothing to look at is itself the first defect —
+> `MediaCodecAudioEngine`'s two media threads ran inside a bare `runCatching {}`, so a decoder
+> that fails to configure looks *exactly* like a normal call with no voice; the engine now takes
+> a diagnostics sink (`AudioEngine.setDiagnostics`, default no-op so the JVM fakes keep
+> compiling) that `CallService` wires to the in-app panel. Four plausible causes were closed at
+> once, none yet confirmed as *the* one. **The `'H'` codec announcement travelled once per call**
+> — it is what tells the far end which decoder to build, and `playLoop` discards audio until it
+> arrives, so losing those 2 bytes muted that direction for the **whole call**; it is now
+> **re-announced every ~2 s** (100 packets), which turns a lost hello into a 2 s gap. Two things
+> could lose it locally: `onRemoteFrame` **dropped frames while `!running`** (it now enqueues,
+> and the queue is cleared in `stop()` instead of `start()`), and `CallService.startMedia`
+> launched the RX pump **before** `audio.start()`, so the window was real — the engine now starts
+> first, inside the lock, and the TX `Channel(64)` buffers our own hello until its pump is
+> launched. Beyond that the engine never requested **audio focus** (some OEM audio policies duck
+> or drop a voice track without it) and routed hands-free through the deprecated
+> `isSpeakerphoneOn`, a silent no-op on several OEMs in `MODE_IN_COMMUNICATION` — now
+> `setCommunicationDevice` on API 31+, and turning the speaker *off* **clears** the device rather
+> than forcing the earpiece, so a headset or a Bluetooth handsfree keeps the output. No new unit
+> test: the ordering one would pass against the old code too (a single-threaded `TestScope` never
+> yields between the two statements), and everything else lives behind `MediaCodec`/`AudioTrack`.
+> **Both phones need the new build** — the re-announcement is emitted by the talker, not the
+> listener. Retest steps and what each diagnostics line means are in PRUEBAS-PENDIENTES §15.
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

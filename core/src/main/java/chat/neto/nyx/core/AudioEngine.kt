@@ -17,8 +17,20 @@ interface AudioEngine {
      */
     fun start(onFrame: (ByteArray) -> Unit)
 
-    /** Frame remoto ya descifrado: decodificar y reproducir. Ignora frames malformados. */
+    /**
+     * Frame remoto ya descifrado: decodificar y reproducir. Ignora frames malformados.
+     * Se puede llamar **antes** de [start]: el motor lo encola, porque el anuncio de códec
+     * del otro extremo puede adelantarse unos ms al arranque local y perderlo dejaría ese
+     * sentido mudo hasta el siguiente reanuncio.
+     */
     fun onRemoteFrame(frame: ByteArray)
+
+    /**
+     * Sumidero de trazas del motor (panel de Diagnóstico). Los hilos de medios corren fuera
+     * de las corrutinas y sus fallos se tragaban en silencio: sin esto, un decodificador que
+     * no arranca se ve igual que una llamada normal, solo que sin voz.
+     */
+    fun setDiagnostics(sink: (String) -> Unit) = Unit
 
     /** Para captura/reproducción y libera micro, códecs y modo de audio. Idempotente. */
     fun stop()

@@ -361,8 +361,8 @@ fun MessageStatusIcon(
     status: MessageStatus,
     modifier: Modifier = Modifier,
     // Tintes por defecto para la lista de conversaciones (sobre el fondo). Dentro de una
-    // burbuja propia (fondo `primary`) se pasan tintes derivados de `onBg`, porque el teal
-    // fijo de "leído" quedaría teal-sobre-teal (invisible).
+    // burbuja propia (fondo `primary`) se pasan tintes derivados de `onBg`, porque el
+    // `primary` fijo de "leído" quedaría primary-sobre-primary (invisible).
     mutedTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     readTint: Color = MaterialTheme.colorScheme.primary,
     failedTint: Color = MaterialTheme.colorScheme.error,

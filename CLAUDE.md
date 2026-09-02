@@ -378,6 +378,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **Both phones need the new build** — the re-announcement is emitted by the talker, not the
 > listener. Retest steps and what each diagnostics line means are in PRUEBAS-PENDIENTES §15.
 >
+> **Visual identity is Nyx's own since 2 Sep 2026 (plan phase 5).** The teal "secure messenger"
+> look is gone: primary **indigo** `#4E56AB`, secondary **plum**, tertiary **rose gold**
+> `#F2B9B7`, neutrals with a faint indigo cast. The palette was **not hand-picked value by
+> value**: it is Google's M3 baseline (seed `#6750A4`, HCT-generated, contrast-safe) with
+> **only the hue rotated in CIELAB LCh** (primary/neutral-variant −10°, secondary +25°,
+> tertiary +25°; neutrals pinned to the primary's hue at minimal chroma; error untouched),
+> which preserves every L* and chroma — i.e. the property that actually carries M3's contrast
+> guarantees. The generator lives in `tools/nyx-palette.py`; regenerate all roles with it
+> rather than retouching individual ones. First attempt used −20° and produced plain blue, not
+> indigo — the rotations were tuned by eye against candidates, then applied wholesale.
+> **Launcher glyph**: crescent moon in rose gold + pale-indigo sparkle on a night-indigo
+> gradient (Nyx, goddess of night); same silhouette in white replaces `ic_stat_nyx` (references
+> in `NyxNotifications` unchanged — the drawable was swapped in place). The pre-rendered
+> `mipmap-*/ic_launcher*.webp` files were **deleted, not regenerated**: with `minSdk 30` every
+> device resolves `@mipmap/ic_launcher` to the `mipmap-anydpi-v26` adaptive XML, so the webps
+> were dead bytes still showing the old teal art — verified after deleting that the icon
+> renders on the TECNO's launcher. `colors.xml` window backgrounds (the pre-Compose anti-flash)
+> were re-synced to the new `background` tones, the one pairing that must track `Color.kt` by
+> hand. `AvatarColors` keeps its 8 identity hues except the ex-brand teal slot, now deep
+> violet — pre-release, so re-coloring existing contacts' avatars is free now and not later.
+> **Help rewritten for the dating product (5.6b)**: new "Conocer gente" category (how discovery
+> works, why you can't message from the board — the double-opt-in rule, in the words users will
+> learn it —, exactly what a published card exposes and for how long, why the avatar is drawn
+> and not a photo), block/report/18+ answers under Privacidad, and the PeerID reframed as the
+> already-know-each-other path under Mensajes. `HelpContentTest` gained a guard that **requires**
+> the product topics (tablón, mutual interest, block, report, avatar, 18+) so the FAQ can't
+> silently regress to messenger-only. 5.2/5.6 were already covered by the Phase-1 sed
+> (`NyxTheme`, `app_name`) — verified, no visible "Krypta" literals remain in Compose. Verified
+> live on the TECNO: dark and light repaints (forced via `cmd uimode night`), status-bar icon
+> contrast in both, the new launcher icon side by side with Krypta's, and the new Help content
+> rendering. Still open in phase 5: only the optional 5.7 (empty-state/match-celebration art).
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fondo del icono adaptativo: degradado vertical del teal de marca. -->
+<!-- Fondo del icono adaptativo: degradado vertical de cielo de noche índigo
+     (tonos de la familia primaria de la paleta Nyx, ver ui/theme/Color.kt). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
@@ -14,8 +15,8 @@
                 android:endX="54"
                 android:endY="108"
                 android:type="linear">
-                <item android:color="#FF00897B" android:offset="0.0" />
-                <item android:color="#FF00564E" android:offset="1.0" />
+                <item android:color="#FF333E93" android:offset="0.0" />
+                <item android:color="#FF14163B" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>

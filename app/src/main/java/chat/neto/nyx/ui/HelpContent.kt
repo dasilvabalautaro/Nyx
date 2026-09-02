@@ -5,9 +5,10 @@ package chat.neto.nyx.ui
  * Es **texto plano, sin Compose**, para poder cubrirlo con tests JVM (ver `HelpContentTest`)
  * y para que la lista sea la única fuente de verdad del FAQ que pinta [HelpScreen].
  *
- * Criterio de contenido: pocas preguntas, las que de verdad generan dudas o soporte (recepción
- * en segundo plano, PeerID, verificación, privacidad); cada respuesta de 2–4 frases. El manual
- * completo ([docs/MANUAL.md]) queda como referencia extensa.
+ * Criterio de contenido: pocas preguntas, las que de verdad generan dudas o soporte (cómo se
+ * conoce gente, qué es público y qué no, bloquear/denunciar, recepción en segundo plano);
+ * cada respuesta de 2–4 frases. El manual completo ([docs/MANUAL.md]) queda como referencia
+ * extensa.
  */
 data class HelpItem(
     val category: String,
@@ -30,11 +31,47 @@ object HelpContent {
         ),
         HelpItem(
             category = "Primeros pasos",
-            question = "¿Qué es un PeerID y cómo lo comparto?",
-            answer = "Tu PeerID es tu única seña de contacto en Nyx: es tu clave pública, no " +
-                "un teléfono ni un correo. Compártelo desde Ajustes → Copiar o Compartir con " +
-                "quien quiera escribirte. Quien lo tenga puede añadirte, pero no revela ningún " +
-                "otro dato personal tuyo.",
+            question = "¿Por qué me pregunta si soy mayor de edad?",
+            answer = "Nyx es una app de citas solo para adultos: declararte mayor de 18 años " +
+                "es condición para usarla, y aceptar los Términos de uso es condición para " +
+                "publicar en el tablón. Es una declaración tuya — Nyx no tiene cuentas ni " +
+                "puede verificar identidades, y te lo dice así en vez de fingir lo contrario.",
+        ),
+        HelpItem(
+            category = "Conocer gente",
+            question = "¿Cómo conozco gente en Nyx?",
+            answer = "En el tablón (la brújula de la pantalla principal): publicas tu tarjeta " +
+                "si quieres que te encuentren, miras las tarjetas de otras personas y tocas " +
+                "“Me interesa” en las que te gusten. Nada se publica sin que pulses tú el " +
+                "botón de publicar, y puedes usar el tablón solo para mirar.",
+        ),
+        HelpItem(
+            category = "Conocer gente",
+            question = "¿Por qué no puedo escribirle a alguien directamente desde el tablón?",
+            answer = "Porque en Nyx nadie puede escribirte sin que tú también hayas mostrado " +
+                "interés: el chat se abre solo cuando el interés es mutuo (un match). Que " +
+                "alguien te dé “me interesa” no le abre tu bandeja — solo te lo enseña, y " +
+                "decides tú si corresponder. Es la regla anti-acoso central de la app.",
+        ),
+        HelpItem(
+            category = "Conocer gente",
+            question = "¿Qué es público cuando publico mi tarjeta?",
+            answer = "Todo lo que pone en ella: apodo, franja de edad, intereses, la " +
+                "presentación y el avatar, junto con tu PeerID. La tarjeta viaja sin cifrar — " +
+                "ser encontrable es su propósito — y el nodo y cualquier usuario pueden " +
+                "verla mientras esté publicada. Caduca sola a las 48 horas y puedes retirarla " +
+                "al instante desde tu perfil; lo que escribas en los chats sigue cifrado de " +
+                "extremo a extremo, eso no cambia.",
+        ),
+        HelpItem(
+            category = "Conocer gente",
+            question = "¿Por qué mi tarjeta lleva un avatar dibujado y no una foto?",
+            answer = "Porque una foto real es el dato más identificable que existe y el tablón " +
+                "es público. En Nyx la única imagen posible es un rostro dibujado por la app: " +
+                "por defecto se genera a partir de tu PeerID (nadie más tiene esa cara) y, si " +
+                "prefieres, puedes describir otro con “Elegir rasgos”. Un avatar nunca " +
+                "acredita a nadie: para saber con quién hablas está la verificación de " +
+                "identidad, no el dibujo.",
         ),
         HelpItem(
             category = "Privacidad y seguridad",
@@ -42,6 +79,24 @@ object HelpContent {
             answer = "Solo tú y tu contacto. Todo va cifrado de extremo a extremo con una clave " +
                 "que solo tenéis vosotros dos. Los nodos de Nyx y cualquier intermediario " +
                 "ven únicamente datos cifrados: nunca el texto, las fotos ni el audio.",
+        ),
+        HelpItem(
+            category = "Privacidad y seguridad",
+            question = "¿Cómo bloqueo a alguien?",
+            answer = "Desde el chat (⋮ → Bloquear), manteniendo pulsada la conversación en la " +
+                "lista, o desde su tarjeta del tablón (⋮). El bloqueo es inmediato y " +
+                "silencioso: esa persona no recibe ningún aviso, y sus mensajes, llamadas y " +
+                "“me interesa” dejan de llegarte. Puedes revisar y deshacer bloqueos en " +
+                "Ajustes → Privacidad.",
+        ),
+        HelpItem(
+            category = "Privacidad y seguridad",
+            question = "¿Cómo denuncio a alguien y quién lee la denuncia?",
+            answer = "Desde el chat (⋮ → Denunciar, o manteniendo pulsado un mensaje recibido) " +
+                "o desde su tarjeta del tablón. Denunciar bloquea a esa persona al momento, " +
+                "pase lo que pase con el envío. La denuncia viaja cifrada y solo puede leerla " +
+                "el operador de Nyx, que puede expulsar la tarjeta del tablón; tu conversación " +
+                "solo se adjunta si tú marcas la casilla y ves antes exactamente qué se envía.",
         ),
         HelpItem(
             category = "Privacidad y seguridad",
@@ -78,6 +133,15 @@ object HelpContent {
                 "ella, perder el móvil significa perder tu PeerID, y tus contactos tendrían que " +
                 "volver a añadirte y verificarte. Guarda la copia y su frase-clave en un lugar " +
                 "seguro.",
+        ),
+        HelpItem(
+            category = "Mensajes y llamadas",
+            question = "¿Qué es un PeerID y para qué sirve?",
+            answer = "Tu PeerID es tu única seña en Nyx: es tu clave pública, no un teléfono ni " +
+                "un correo. Normalmente no hace falta tocarlo — los chats se abren con un " +
+                "match —, pero si ya conoces a alguien fuera de la app podéis añadiros " +
+                "directamente compartiéndolo desde Ajustes. Quien lo tenga puede añadirte, " +
+                "pero no revela ningún otro dato personal tuyo.",
         ),
         HelpItem(
             category = "Mensajes y llamadas",

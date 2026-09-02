@@ -1519,19 +1519,40 @@ resuelve la decisión. Detalle completo en
       Auditadas las cuatro pantallas: sólo esas dos tienen campos de texto.
 
 ### 5. Identidad visual
-- [ ] 5.1 Nueva semilla + regenerar todos los roles M3 en `Color.kt`.
-- [ ] 5.2 Rename `KryptaTheme`→`NyxTheme` en `Theme.kt` (si no quedó ya cubierto en 1.3).
-- [ ] 5.3 Nuevo glifo de icono de launcher (`ic_launcher_background/foreground.xml`) +
-      regenerar `mipmap-*/`.
-- [ ] 5.4 Nuevo icono de notificación monocromo + referencias en `NyxNotifications.kt`.
-- [ ] 5.5 Repintar `themes.xml`/`values-night/themes.xml`/`colors.xml`.
-- [ ] 5.6 `strings.xml` `app_name` → "Nyx"; grep de comprobación de literales `"Krypta"`
-      visibles en Compose (el sed de 1.3 ya los cubre).
-- [ ] 5.6b Reescribir `ui/HelpContent.kt` para el producto nuevo (tablón y qué ve el
-      nodo, like mutuo, bloquear/denunciar, avatar, 18+) y ampliar `HelpContentTest` con
-      las categorías nuevas.
+- [x] 5.1 Nueva paleta — hecha el 2 sep 2026, y **no eligiendo 60 valores a ojo**: se parte
+      de la paleta base M3 de Google (semilla `#6750A4`, generada con HCT, contrastes ya
+      garantizados) y se rota **solo el matiz** en CIELAB LCh (primario −10° → índigo
+      `#4E56AB`; secundario +25° → ciruela; terciario +25° → dorado rosado `#F2B9B7`;
+      neutros al matiz del primario con croma mínimo; error intacto), conservando L* y croma,
+      que es lo que sostiene el contraste. Generador en `tools/nyx-palette.py`; si se cambia
+      la dirección, regenerar todo con él. El primer intento (−20°) dio azul plano, no índigo
+      — las rotaciones se afinaron comparando candidatos.
+- [x] 5.2 Ya lo cubrió el sed de 1.3 (`NyxTheme` en `Theme.kt`); verificado, solo se
+      actualizó su KDoc (decía "verde-teal").
+- [x] 5.3 Glifo nuevo: luna creciente dorada rosada + destello índigo pálido sobre degradado
+      de noche índigo. `mipmap-*/` **no se regeneró: se borró** — con `minSdk 30` todo
+      dispositivo resuelve el icono por el XML adaptativo de `mipmap-anydpi-v26`, así que los
+      webp eran bytes muertos con el arte teal viejo; verificado en el launcher del TECNO
+      tras borrarlos.
+- [x] 5.4 `ic_stat_nyx.xml` reemplazado in situ por la misma silueta (luna + destello) en
+      blanco; las referencias de `NyxNotifications.kt` no cambian.
+- [x] 5.5 `colors.xml` re-sincronizado con los `background` nuevos (claro `F9F8FF` / oscuro
+      `131218`) — es el único par que debe seguir a `Color.kt` a mano; `themes.xml` no
+      referencia colores propios más allá de ese.
+- [x] 5.6 Ya lo cubrió 1.3 (`app_name` = "Nyx"); grep verificado sin literales `"Krypta"`
+      visibles en Compose.
+- [x] 5.6b `HelpContent.kt` reescrito para el producto (categoría nueva «Conocer gente»:
+      cómo se conoce gente, por qué no se puede escribir sin match —la regla del doble
+      opt-in dicha donde el usuario la va a aprender—, qué es público al publicar la tarjeta
+      y por cuánto tiempo, por qué avatar dibujado y no foto; bloquear/denunciar/18+ en
+      Privacidad; el PeerID reencuadrado como vía para quien ya se conoce). `HelpContentTest`
+      gana un guard que **exige** los temas del producto (tablón, interés mutuo, bloquear,
+      denunciar, avatar, 18) para que el FAQ no pueda volver a ser solo-mensajero.
 - [ ] 5.7 (Opcional, no bloqueante) Assets de estado vacío/celebración de match.
-- [ ] 5.8 Cerrar con entrada en `CLAUDE.md`.
+- [x] 5.8 Cerrada con entrada en `CLAUDE.md` («Visual identity is Nyx's own», 2 sep 2026);
+      verificado en vivo en el TECNO: repintado claro y oscuro (forzado con `cmd uimode
+      night`), iconos de barra con contraste en ambos, icono de launcher junto al de Krypta,
+      y la Ayuda nueva renderizando.
 
 ### 6. Documentación
 - [ ] 6.0 Transcribir este checklist a un documento persistente del repo (p. ej.

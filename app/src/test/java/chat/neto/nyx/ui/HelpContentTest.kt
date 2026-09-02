@@ -39,6 +39,19 @@ class HelpContentTest {
     }
 
     @Test
+    fun `the dating product is covered, not just the messenger`() {
+        // La ayuda se heredó de un mensajero; estas señas obligan a que el FAQ hable del
+        // producto real (5.6b del plan): tablón y qué es público, doble opt-in, bloquear,
+        // denunciar, avatar generado y puerta 18+. Si alguien las recorta, esto falla.
+        assertTrue(HelpContent.categoriesInOrder.contains("Conocer gente"))
+        val all = HelpContent.items.joinToString(" ") { it.question + " " + it.answer }
+        listOf("tablón", "interés es mutuo", "bloque", "denunci", "avatar", "18")
+            .forEach { key ->
+                assertTrue("la ayuda no menciona: $key", all.contains(key, ignoreCase = true))
+            }
+    }
+
+    @Test
     fun `categoriesInOrder covers every item without duplicates and preserves order`() {
         val cats = HelpContent.categoriesInOrder
         assertEquals(cats.size, cats.distinct().size)

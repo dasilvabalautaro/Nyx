@@ -86,9 +86,10 @@ private val LightColorScheme = lightColorScheme(
 )
 
 /**
- * Tema Nyx: identidad propia verde-teal (marca reconocible, misma cara en todos los
- * móviles) por defecto. [dynamicColor] permite optar por Material You (colores del fondo
- * de pantalla, Android 12+) si algún día se expone como ajuste de usuario.
+ * Tema Nyx: identidad propia noche/índigo (primario índigo, secundario ciruela, terciario
+ * dorado rosado — ver Color.kt; marca reconocible, misma cara en todos los móviles) por
+ * defecto. [dynamicColor] permite optar por Material You (colores del fondo de pantalla,
+ * Android 12+) si algún día se expone como ajuste de usuario.
  */
 @Composable
 fun NyxTheme(

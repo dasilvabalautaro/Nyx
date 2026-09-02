@@ -1441,10 +1441,16 @@ resuelve la decisión. Detalle completo en
       por PeerID —que era exacta mientras no hubo tablón— sino que explica que en Nyx las
       conversaciones se abren con un match, y deja el alta directa como segunda opción para
       quien ya conozca a alguien.
-- [ ] 4.10 Iconos nuevos en `NyxIcons.kt` (like/corazón, bloquear, reportar/bandera).
+- [x] 4.10 Iconos nuevos en `NyxIcons.kt` — cerrado el 2 sep 2026. Bloquear y bandera ya
+      existían desde 4.8 (`NyxBlockIcon`/`NyxFlagIcon`, en el menú ⋮ de la tarjeta); faltaba el
+      corazón: `NyxHeartIcon` (el `Favorite` de Material), ahora en los tres estados de like del
+      botón principal de la tarjeta ("Me interesa", "Le has dicho que te interesa",
+      "Le interesas · corresponder"); el estado de match lleva `NyxChatBubbleIcon`, porque su
+      acción es abrir la conversación, no dar like.
 - [ ] 4.11 Prueba en vivo end-to-end: publicar tarjeta con avatar, descubrir, like
       unidireccional (sin chat), like mutuo (match + chat), bloquear, gate de edad.
-- [ ] 4.12 Cerrar con entrada en `CLAUDE.md`.
+- [x] 4.12 Cerrar con entrada en `CLAUDE.md` — hecha el 2 sep 2026 (recuadro «The board UI
+      closed the product loop», que documenta 4.6–4.9, 4.8b y 4.13–4.16).
 
 - [x] 4.13 **Ayuda para construir el avatar, y apodos repetidos** (24 ago 2026).
       **`AvatarVocabulary`** (`:core`): el usuario toca rasgos **en español** y el campo se

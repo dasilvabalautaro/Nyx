@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -276,17 +277,31 @@ private fun DiscoveryCardView(
                 // que es lo que el match acaba de desbloquear.
                 like?.isMatch == true -> Button(
                     onClick = onOpenChat, modifier = Modifier.fillMaxWidth(),
-                ) { Text("Match · abrir conversación") }
+                ) {
+                    Icon(NyxChatBubbleIcon, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Match · abrir conversación")
+                }
 
                 like?.sentAt != null -> FilledTonalButton(
                     onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(),
-                ) { Text("Le has dicho que te interesa") }
+                ) {
+                    Icon(NyxHeartIcon, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Le has dicho que te interesa")
+                }
 
                 like?.receivedAt != null -> Button(
                     onClick = onLike, modifier = Modifier.fillMaxWidth(),
-                ) { Text("Le interesas · corresponder") }
+                ) {
+                    Icon(NyxHeartIcon, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Le interesas · corresponder")
+                }
 
                 else -> Button(onClick = onLike, modifier = Modifier.fillMaxWidth()) {
+                    Icon(NyxHeartIcon, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text("Me interesa")
                 }
             }

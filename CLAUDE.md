@@ -295,6 +295,62 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Verified on the TECNO: gate shows on first launch, **back exits the app rather than skipping
 > it**, reopening shows it again, confirming enters, and a cold restart no longer asks.
 >
+> **The board UI closed the product loop on 24 Aug 2026 (plan 4.6–4.9 + 4.13–4.16): publish →
+> discover → like → match → chat all work end to end against the production node.**
+> **Discovery** (`BoardService` in `:p2p-signaling`, `DiscoveryViewModel`/`DiscoveryScreen` in
+> `:app`): `BoardCard` lives in `:core` with **its own binary format, not JSON** — the ≤58 KiB
+> avatar would grow ~35% in base64 and a 50-card query would move ~1 MiB of padding against the
+> node's 96 KiB cap; and `org.json` is a stub in JVM tests, so JSON couldn't be tested where the
+> format lives. Nickname is sanitized **on serialize** (the emitter may not be our client).
+> **Filtering happens client-side on purpose** — the node doesn't know who is asking, and
+> telling it would hand over the social graph the whole design avoids; the client drops your own
+> card and blocked peers' (without the latter, a blocked person stops writing to you but you
+> keep seeing their face). A card with no avatar renders the `AvatarIdentity` face, so the board
+> had faces before the profile editor existed and no card ever shows a gray hole. `Vacío` and
+> `Error` are separate states because they look alike and mean opposites — one is answered by
+> waiting, the other by retrying. **Profile editor** (`ProfileEditorScreen`, 4.7) closed three
+> waiting items: `TermsScreen` now gates the **first publish** (4.5b), `ImageCodec.compress(Bitmap)`
+> (3b.5), and "remove my card" (3.12). Edits save locally on the fly; publishing is a separate
+> button and the screen says so — what leaves is a snapshot, later edits don't update the board.
+> Avatar starts PeerID-derived; describing one always passes `AvatarPrompt` (RF-09) before
+> drawing — verified on the TECNO that "adolescente" is rejected and keeps the previous avatar
+> intact. **Card actions** (4.8): the main button has **four deliberately distinct states** —
+> "Me interesa", "Le has dicho que te interesa", "Le interesas · corresponder", "Match · abrir
+> conversación". The third is the load-bearing one: a like *received* never opens messaging
+> (`Like.canMessage`), and a card saying "you can talk" early would contradict the anti-harassment
+> rule on the one screen where users learn it. State comes from the **repository**, not screen
+> state, so a like landing while you browse flips the card to match without a reload. Reporting
+> from the board offers **no conversation excerpt** (`allowExcerpt = false`) — you haven't talked,
+> and showing the checkbox would imply more is sent than shown. Block/report **refresh the list**
+> so the blocked card disappears in place. **Match flow** (4.9): the observer lives in
+> `IncomingNotifier`, not a ViewModel — the closing like can arrive with the app dead, in a
+> process revived only by the heartbeat alarm, and unlike a message there would be *no row to
+> find later*, because the contact didn't exist yet. Closing the match **creates the contact**
+> (`addContact` is idempotent on PeerID, so redelivery doesn't duplicate; a blocked peer throws —
+> block wins over match). **`BoardNames`** (own prefs) saves the card's nickname when you tap
+> like, because the `L` envelope deliberately carries no name and a contact called `12D3KooWAy…`
+> tells you nothing; saved **before** sending so an instant match names the contact correctly.
+> Its fallback name uses the **last** PeerID chars — every PeerID starts with `12D3KooW`, so
+> prefix-named matches would collide. Deliberately not a `likes` column: no v6 migration for
+> unverified foreign text that isn't like-domain data. **Polish from writing on the phone
+> (4.13–4.16)**: `AvatarVocabulary` (`:core`) offers Spanish trait chips that fill the field
+> with terms the English-only parser actually understands (a suggestion the parser ignores is
+> worse than none — `AvatarVocabularyTest` walks the whole table and caught 4 misclassified
+> entries); `DisplayNames` disambiguates repeated nicknames with a PeerID tail (visibility, not
+> anti-spoofing — that's the safety number's job); profile caps tightened (nickname 32→20, bio
+> 300→250, interests 10→5) **after looking at a full card on the phone** — the card is the hook,
+> not the biography — with reader-side clamping + `…` because a stranger's card need not respect
+> our caps (hostile card: ~850→~560 px), and editor counters that count what you *typed* (6/5 in
+> red beats silent truncation); three editor bugs found only by typing on the device — `init()`
+> nobody called meant editing one field after a restart **wiped the rest from disk** (`update`
+> now calls the idempotent `init`), and sanitize-on-every-keystroke made spaces untypable and
+> scrambled the interests field (fix for both: local state while typing, sanitize on persist);
+> `imePadding()` added to the profile editor and Settings so the keyboard stops covering the
+> focused field. **Icons closed 4.10 on 2 Sep 2026**: `NyxHeartIcon` joins the existing
+> `NyxBlockIcon`/`NyxFlagIcon` and the like buttons now carry it. Phase 4 still open: the live
+> two-phone end-to-end pass (4.11, PRUEBAS-PENDIENTES) — everything above was verified
+> single-phone against the production node with probe cards.
+>
 > **Call audio went mute in one direction (2 Sep 2026) — fixed blind, retest pending.** Live
 > two-phone call: the **TECNO heard nothing** while the other side heard it fine, so capture,
 > encryption and transport were all working and the failure was on the TECNO's **playback**

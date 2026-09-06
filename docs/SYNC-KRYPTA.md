@@ -65,6 +65,9 @@ después: el `.aar` no está en git.
 
 | Commit de Krypta | Fecha | Qué es | Aquí |
 | --- | --- | --- | --- |
+| `deb0bf8` | 6 sep 2026 | Acotar la lectura de los streams entrantes (mensaje, buzón y wake) | **Portado** en `f78e834`. El código con el script; los docs a mano: el hunk de `CLAUDE.md` y el del README del nodo no aplicaban ni sustituidos ni sin sustituir, y el cierre del bloque hablaba del VPS de Krypta — reescrito con lo de aquí. **El nodo de Nyx (`216.238.104.36`) sigue con el binario anterior**: necesita su propio `deploy-vps.sh`. AAR regenerado. Verde: `go vet`, tests del puente y del nodo. |
+| `936e9ae` | 6 sep 2026 | La silueta de la burbuja (esquina, borde y sombra) escala con su altura | **Portado** en `447c88a`, **a mano**: el parche da por hecho las respuestas citadas (`37f185d`, sin portar), así que sus seis hunks salieron rechazados. El arreglo es autocontenido y entra tal cual sobre la burbuja de aquí, que conserva su menú de "Denunciar este mensaje". Compila y pasa los tests JVM; falta prueba en móvil. |
+| `1ab4453` | 6 sep 2026 | Bloquear contacto (`Contact.blocked`, Room v5, UI en lista y chat) | **No aplica**: Nyx ya tiene bloqueo, y **más completo** — `BlockedPeer` en tabla propia (bloquea por PeerID, así que sobrevive a borrar el contacto y sirve para alguien del tablón con quien nunca hablaste), `BlockedPeersScreen` para desbloquear, y cuelga la llamada en curso al bloquear. Krypta lo resolvió después y con una columna en `contacts`; portarlo sería un retroceso. Además su Room v5 choca con la v5 de aquí (los esquemas divergen desde ahí, ya anotado arriba). |
 | `9a4a7fa` | 21 ago 2026 | `FLAG_SECURE` solo en la pantalla de chat (antes cubría toda la app) | **Portado** en `0f8bad8`. Código con el script; docs a mano con el parche sin sustituir. Compila y pasa los tests JVM; falta prueba en móvil. |
 | `feb96d0` | 21 ago 2026 | Correo de contacto de la política de privacidad de Krypta | **No aplica**: dato de la ficha/política de Krypta. Nyx pondrá el suyo en la 6.1. |
 | `25ee9e8` | 21 ago 2026 | Onboarding de la lista vacía + jerarquía tipográfica en Ajustes | **Portado** en `a0a9851`, entero y con el script. Revertida la decisión de dejarlo pendiente: la mitad de Ajustes es tipografía pura y no toca el tablón, así que aplazarla solo conservaba aquí un defecto de legibilidad ya arreglado en Krypta — el commit no es atómico desde el punto de vista de Nyx. Y los tres pasos describen el único flujo de alta que Nyx tiene hoy. El estado vacío se reescribe cuando aterrice el tablón: tarea **4.8b** del plan. Compila y pasa los tests JVM; falta prueba en móvil. |
@@ -73,6 +76,22 @@ después: el `.aar` no está en git.
 Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el historial común: el
 `git log upstream/main --not HEAD` sale vacío, así que no hay deuda acumulada de antes.
 
-**Último repaso: 21 ago 2026.** El tip de Krypta es `9a4a7fa` en `main` y en
-`feat/avisos-gif-capturas-1.5` (las dos ramas apuntan al mismo sitio), o sea que la tabla
-está al día y no queda nada suyo sin decidir: el bucle de "Cómo se usa" no imprime nada.
+**Último repaso: 6 sep 2026.** El tip de Krypta es `deb0bf8` en `main` y en
+`feat/avisos-gif-capturas-1.5` (las dos ramas apuntan al mismo sitio). Se triaron **solo los
+tres commits del 6 sep** (los dos primeros de la tabla y el de bloqueo). **Queda deuda: 11
+commits de Krypta entre el 21 ago y el 3 sep siguen sin decidir**, y el bucle de "Cómo se usa"
+los imprimirá:
+
+| Commit | Qué es |
+| --- | --- |
+| `37f185d` | Responder citando un mensaje anterior (sobre `Y` de envoltorio, deslizar para responder) |
+| `17aa61f`, `21fcdc5` | Docs de entrega: causa del fallo en 2.º plano en HiOS y decisión de dejarlo |
+| `72977de`, `56974f6`, `3629545` | Copiar un mensaje (pulsación larga, botón de icono) y enlaces tocables |
+| `81711f7` | El latido no se cancela al morir el servicio; rearranque al quitar de recientes |
+| `1d8caf3` | Docs: auditoría previa a producción y requisitos nuevos de Play |
+| `03bf430` | R8: acotar al puente el proguard que mete el AAR de gomobile |
+| `a7ea71e` | WAN: un nodo colgado ya no para la entrega |
+| `4a14131` | Vibración de llamada en Android 11 |
+
+De esos, `81711f7`, `a7ea71e`, `03bf430` y `4a14131` son de la capa común y **pintan bien
+aquí**; el resto es UI de chat y docs, que hay que mirar uno a uno.

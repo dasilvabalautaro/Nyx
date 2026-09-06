@@ -1023,6 +1023,37 @@ decode just draws once), and `notificationText` labels it **"🎞 GIF"** instead
 the bytes **identically**) and verified live on the TECNO: a Tenor GIF sent as "archivo enviado
 … (2 trozos)", the bubble **animates** (two screenshots a second apart show different frames),
 and the list preview reads "🎞 GIF".
+**Bounded read on the inbound message stream (6 Sep 2026, ported from Krypta `deb0bf8`)**:
+the Go handler for `/nyx/msg/1.0.0` did `io.ReadAll(s)` with no cap — and **any** peer that
+can dial the phone can open that stream, because who sent it is not checked in Go but later in
+Kotlin (`ChatService.onReceived` resolves the contact by PeerID and drops the unknown one). So a
+stranger could make the app allocate as much memory as they cared to write. Now it reads
+`io.LimitReader(s, maxIncomingMessage+1)` and resets the stream past `maxIncomingMessage`
+(**1 MiB**) — a safety cap, not a product limit: the mailbox refuses blobs over 64 KiB, a file
+chunk is 48 KiB and an inline photo ≤58 KiB, so no legitimate send comes near it. The `+1` is
+what separates "exactly at the cap" from "went over": with a plain `LimitReader` the two are
+indistinguishable and a truncated message would be handed up as if complete (AES-GCM would
+reject it, but as "unreadable message", not as what it is). Same one-line fix in
+[infra/nyx-node/main.go](infra/nyx-node/main.go), whose handler had the same unbounded read on a
+**public** box. **The two line-based readers were bounded in the same pass**: `MailboxFetch` and
+the wake session read the node's answer with `bufio.ReadBytes('\n')`, which grows without limit
+if the far end never sends the newline. A `LimitReader` is the wrong tool there — a legitimate
+fetch can carry 200 envelopes (several MB) and would be cut in half — so they now use a
+**fixed-size buffer + `ReadSlice`** (`bufio.ErrBufferFull` when a single line overflows it):
+`mbxMaxLine` 128 KiB, sized for the largest possible envelope (64 KiB blob → ~87 KiB of base64
+plus JSON and the sender's PeerID, and the same cap the node uses when reading a deposit) and
+`wakeMaxLine` 4 KiB for the tiny wake/keepalive lines. Note `ReadSlice`'s slice is only valid
+until the next read: it is consumed right there by `json.Unmarshal`, which copies the strings
+into the struct. An overflow resets the stream — the unread envelopes stay unacked at the node
+and come back on the next fetch, which is the same behaviour as any other interruption. Severity
+there is lower than the message handler (the counterparty is a node from your own bootstrap
+list, not any peer on the internet). Covered by Go `TestIncomingMessageIsBounded`, which pins
+both edges (exactly at the cap is delivered whole; one byte over delivers nothing) and was
+checked upstream to **fail** against the old handler. **Nyx-specific consequences**: the AAR was
+regenerated here (the `.aar` is not in git), and **this repo's own node box still runs the older
+binary** — `216.238.104.36` needs its own `deploy-vps.sh` run for the node half of the fix to be
+live. Upstream verified the same code against three live nodes and on device; here it is covered
+by the Go suites and the app build.
 **Screenshot/screen-recording block (13 Aug 2026; scoped to the chat screen 21 Aug 2026)**:
 **`FLAG_SECURE`** is now set **per screen**, not app-wide — `SecureScreenEffect` in
 `ui/ChatScreens.kt` calls `ScreenSecurity.setSecure(activity, true)` from a `DisposableEffect`

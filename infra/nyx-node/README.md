@@ -214,6 +214,13 @@ cat ~/nyx/node.log     # ver el PeerID
 > wake, ciclo completo y latencia **p50 ≈ 105 ms** desde La Paz — mejor que los 107/119 ms del
 > nodo equivalente de Krypta y que los 146–163 ms de los nodos domésticos vía Cloudflare.
 >
+> ⚠️ **Pendiente de redespliegue (6 sep 2026)**: el código del nodo lleva desde hoy un tope
+> de lectura en el handler de `/nyx/msg/1.0.0` (`maxInboundMessage`, 1 MiB). Antes leía con
+> `io.ReadAll` **sin tope**, así que cualquier peer de internet podía hacerle reservar memoria
+> sin fin — y esta caja es pública. La corrección viene portada de Krypta (`deb0bf8`), donde su
+> VPS ya se redesplegó; **aquí no**: hay que lanzar `bash infra/nyx-node/deploy-vps.sh
+> root@216.238.104.36`. El despliegue conserva `node.key`, así que el PeerID no cambia.
+>
 > Se eligió Vultr porque **DigitalOcean no tiene ningún datacenter en Sudamérica** (NYC, San
 > Francisco, Toronto, Atlanta, Richmond, Kansas City, Amsterdam, Londres, Fráncfort,
 > Singapur, Bangalore, Sídney): para un relay de voz/vídeo la región manda sobre la marca.

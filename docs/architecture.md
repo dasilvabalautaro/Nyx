@@ -212,6 +212,20 @@ desacoplados y testeables.
     cancelaría y la soltada nunca llegaría). Alta de contacto (solo **nombre + PeerID**).
     Los iconos siguen locales en `ui/KryptaIcons.kt` (`ImageVector`, ahora también vía
     `addPathNodes`) para no depender de `material-icons-*`.
+    **Lo que dibuja la silueta escala con ella** (6 sep 2026, portado de Krypta `936e9ae`):
+    `BubbleShape` (un `Shape` propio) + `bubbleBorderPx`/`bubbleShadowPx` interpolan esquina
+    **18→28 dp**, borde **1→1,75 dp** y sombra **1,5→3 dp** desde la altura de una burbuja de
+    una línea (`BUBBLE_SHORT_HEIGHT`, 48 dp; por debajo **nada cambia**) hasta un tope. Escala
+    con la **altura** —un mensaje largo de una sola línea sigue siendo bajo y sus 18 dp se leen
+    bien— y se calcula **al dibujar, desde el tamaño ya medido**: por eso es un `Shape`
+    (`createOutline` recibe el `size`, así que el radio correcto sale en el **primer**
+    fotograma), la sombra pasó de `Modifier.shadow` a `graphicsLayer { shadowElevation = … }` y
+    el borde de `Modifier.border` a un `drawWithCache`. Con `onSizeChanged` haría falta
+    recomponer y cada burbuja se pintaría un fotograma con los valores de burbuja corta: un
+    salto de esquina visible al desplazar la lista. El trazo del borde va al **doble** de
+    grosor porque está centrado en el contorno y el `clip(shape)` se come la mitad de fuera.
+    La esquina-cola sigue fija en 4 dp: es la identidad de quién escribe, no algo que escalar.
+    Motivo: con un mensaje largo la burbuja **perdía el contorno**.
   El `ChatViewModel` arranca el nodo (`ChatService.start()`) al iniciarse.
 - El texto plano solo existe en memoria al pintar (`ChatService.decrypt`); en disco y en
   tránsito todo es ciphertext.

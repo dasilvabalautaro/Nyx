@@ -1023,6 +1023,29 @@ decode just draws once), and `notificationText` labels it **"🎞 GIF"** instead
 the bytes **identically**) and verified live on the TECNO: a Tenor GIF sent as "archivo enviado
 … (2 trozos)", the bubble **animates** (two screenshots a second apart show different frames),
 and the list preview reads "🎞 GIF".
+**The bubble's silhouette now scales with it (6 Sep 2026, ported from Krypta `936e9ae`)**:
+with a long message the bubble **lost its shape**. The 18dp corners, the 1dp `outlineVariant`
+border and the 1.5dp shadow read fine on a short bubble, but on a tall multi-line one the same
+radius is a tiny fraction of the silhouette and the shadow vanishes at that size, so the message
+stopped reading as a bubble and became a block of text with a hairline around it. Fix: **what
+draws the silhouette now grows with it** — a private `BubbleShape` (`Shape`) plus
+`bubbleBorderPx`/`bubbleShadowPx`, all three interpolating from the current values at a one-line
+bubble (`BUBBLE_SHORT_HEIGHT` = 48dp, below which **nothing changes** — short bubbles look
+exactly as before) up to a cap: corner 18→28dp, border 1→1.75dp, shadow 1.5→3dp. It scales with
+**height**, not area or width: a long single-line message is still short and its 18dp corners
+read fine; the contour is only lost growing downwards. Everything is computed **at draw time
+from the measured size**, which is the point of doing it as a `Shape` (`createOutline` receives
+the size, so the right radius lands on the **first frame**), of moving the shadow from
+`Modifier.shadow` to `graphicsLayer { shadowElevation = … }` (its block reads `size`), and of
+painting the received bubble's border in a `drawWithCache` instead of `Modifier.border` —
+measuring with `onSizeChanged` would need a recomposition and each bubble would paint one frame
+with the short-bubble values, a visible corner pop while scrolling. The border stroke is drawn at
+**double** width because it is centred on the outline and the `clip(shape)` above eats the outer
+half, leaving exactly the intended width inside. The tail corner stays a fixed 4dp — it is the
+identity of who wrote the message, not something to scale. Ported by hand: upstream's patch
+assumes the reply/quote work (Krypta `37f185d`, not ported here), so its six hunks all rejected;
+the fix itself is self-contained and went onto this repo's older bubble unchanged. Verified
+upstream on device; here it compiles and passes the JVM suite — **not yet looked at on a phone**.
 **Bounded read on the inbound message stream (6 Sep 2026, ported from Krypta `deb0bf8`)**:
 the Go handler for `/nyx/msg/1.0.0` did `io.ReadAll(s)` with no cap — and **any** peer that
 can dial the phone can open that stream, because who sent it is not checked in Go but later in

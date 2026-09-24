@@ -233,10 +233,15 @@ cat ~/nyx/node.log     # ver el PeerID
 > ella, se genera una identidad nueva y el PeerID cambia.
 >
 > `net.core.rmem_max`/`wmem_max` se subieron a 7,5 MB en el aprovisionamiento
-> (`/etc/sysctl.d/99-nyx-quic.conf`), así que quic-go ya no avisa al arrancar. Sigue
-> pendiente: **topes finitos al relay** antes de abrirlo al público (ver el aviso de tráfico
-> arriba) y un **segundo nodo** — hoy este es punto único de fallo del buzón, el wake y el
-> relay.
+> (`/etc/sysctl.d/99-nyx-quic.conf`), así que quic-go ya no avisa al arrancar. Los **topes
+> finitos al relay** se desplegaron el 21 ago 2026.
+>
+> **Ya no es punto único de fallo**: el 2 sep 2026 se desplegó el **segundo nodo**,
+> `nyx-node-secaucus` (InterServer, Secaucus NJ, `162.35.191.18`, `nyx2.neto.chat`, PeerID
+> `12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk`), con el mismo `deploy-vps.sh` y sin
+> tocar código. Las dos cajas y su reparto están en [OPERACION.md](OPERACION.md). Ojo: el
+> primario **sigue con el binario del 21 ago, sin `report.go`**, así que hasta que se
+> redespliegue las denuncias las atiende solo el segundo.
 
 ### Por qué un VPS cambia las cosas (no es solo uptime)
 

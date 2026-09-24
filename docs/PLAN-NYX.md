@@ -1022,7 +1022,7 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
 - [x] 1.17 Entrada en `CLAUDE.md`: recuadro de cabecera con qué cambió el rebrand, que
       Krypta sigue viva, por qué `DEFAULT_BOOTSTRAP` está vacío, el estado de los remotos
       y el aviso de que el resto del archivo aún describe Krypta (pase completo en 6.1).
-- [ ] 1.18 **Segundo nodo de infra.** Bloqueante para abrir a público (no para desarrollar):
+- [x] 1.18 **Segundo nodo de infra — DESPLEGADO el 2 sep 2026.** Bloqueante para abrir a público (no para desarrollar):
       con una sola caja, su caída deja sin buzón, sin wake y sin relay a todo el parque.
       *Estado 16 ago 2026*: **no cuesta código** — el cliente ya hace failover en
       `MailboxPut`, drena todos los nodos en `MailboxFetch`, mantiene un wake por nodo y da
@@ -1034,7 +1034,37 @@ Resultado completo en [docs/NYX-POLITICA-CONTENIDO.md](NYX-POLITICA-CONTENIDO.md
       dejó a Krypta con puntos únicos de fallo), su registro DNS propio en **nube gris**,
       validarlo con las cuatro sondas por IP y por nombre, añadir la segunda línea a
       `DEFAULT_BOOTSTRAP` y cerrar con la prueba de failover en vivo. Runbook paso a paso en
-      [infra/nyx-node/OPERACION.md](../infra/nyx-node/OPERACION.md), apartado "Segundo nodo".
+      [infra/nyx-node/OPERACION.md](../infra/nyx-node/OPERACION.md), apartado "Segundo nodo",
+      **precisado el 2 sep 2026** con lo que hay que contratar (plan, arquitectura, IPv4
+      dedicada, criterio de región medido *antes* de pagar porque el nodo hace de relay de
+      voz), los campos exactos del registro de Cloudflare y su comprobación (`dig` tiene que
+      devolver la IP del VPS y no una `104.21.x.x`), y tres cosas que dejan de ser ciertas al
+      haber dos cajas. *Corrección importante al "no cuesta código"*: sí cuesta **operación**, y
+      una de ellas es un agujero real — `banned.txt` es **por máquina**, y cuando un nodo
+      rechaza a un expulsado el cliente **pasa al siguiente nodo de la lista** (`PublishCard`
+      recorre hasta que uno acepta), así que **una expulsión aplicada en una sola caja se
+      esquiva con el cliente de serie, sin hacer nada especial**; y como `QueryBoard` fusiona
+      todos los nodos, la tarjeta la ve todo el mundo. Lo mismo con las denuncias:
+      `SendReport` entrega al primero que acepte, así que la rutina de `MODERACION.md` tendrá
+      que mirar las dos cajas. Candidato claro a un `nyx-ban <PeerID>` que escriba en ambas.
+      *Hecho el mismo día*: `nyx-node-secaucus` (InterServer, Secaucus NJ), `162.35.191.18`,
+      Ubuntu 24.04.4, 1 vCPU / 1,9 GB, PeerID
+      `12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk`, DNS `nyx2.neto.chat` en nube gris
+      (comprobado contra el nameserver autoritativo, no contra la caché). **La región resultó
+      mejor de lo temido**: `p50 = 135 ms / p95 = 142 ms` desde La Paz con 0 pérdidas, solo
+      ~30 ms peor que São Paulo, así que una llamada que caiga en ese relay se nota poco — el
+      miedo era que Nueva Jersey lo hiciera inservible para voz y no es el caso. Las cuatro
+      sondas pasaron **por IP y por nombre** antes de tocar `DEFAULT_BOOTSTRAP`; el `node.key`
+      está respaldado y **verificado derivando su PeerID**, no solo copiado (para eso se añadió
+      `infra/nyx-node/cmd/peerid-check`, que antes no existía: había respaldo pero ninguna
+      forma de comprobar que servía). Antes de desplegar se cerró el SSH: clave pública
+      instalada, **verificada con `BatchMode=yes`** y solo entonces `PasswordAuthentication no`
+      — en ese orden, para que no hubiera manera de quedarse fuera. Verificado en el TECNO que
+      el móvil mantiene conexión **con las dos cajas a la vez** (`ss` en ambas muestra la
+      misma IP de origen) y que el diagnóstico dice `DHT: conectado` · `relay: OK` · `wake
+      activo`. **Falta** la prueba de failover en vivo (matar el primario y comprobar entrega
+      por el buzón del segundo) y, aparte, redesplegar el primario: arrancó el 21 ago y **no
+      lleva `report.go`**, así que hoy las denuncias las recoge siempre Secaucus.
 - [ ] 1.19 **Alerta de egress en el panel de Vultr.** Es el único freno real al gasto: los
       topes de 1.12c acotan un circuito suelto y la concurrencia, pero relayv2 no tiene
       límite agregado y quien abuse puede reconectar. Sin la alerta, un abuso se descubre

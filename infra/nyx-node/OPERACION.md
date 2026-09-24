@@ -8,6 +8,8 @@ Guía del día a día del nodo: dónde vive cada cosa, cómo entrar y qué mirar
 El **despliegue** (compilar, instalar, systemd, puertos) está en la sección "Nodo primario en
 un VPS Linux" de [README.md](README.md); aquí se da por hecho que ya está montado.
 
+### Nodo 1 — primario
+
 | | |
 |---|---|
 | Proveedor / región | Vultr, São Paulo |
@@ -17,11 +19,42 @@ un VPS Linux" de [README.md](README.md); aquí se da por hecho que ya está mont
 | SO | Ubuntu 24.04.4 LTS (1 vCPU, 2 GB, 47 GB disco) |
 | PeerID | `12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` |
 | Multiaddr | `/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3` |
+| Latencia desde La Paz | p50 ≈ 105 ms |
+| Respaldo de `node.key` | `~/keys/nyx-node/node.key` |
 
-Es la **única línea** de `Libp2pNode.DEFAULT_BOOTSTRAP`. A diferencia de Krypta, que acabó con
-tres nodos, Nyx arranca con uno solo: eso significa que **es punto único de fallo** del buzón,
-del wake y del relay. El cliente ya soporta lista de nodos con failover, así que añadir el
-segundo no cuesta código — cuesta una caja, y hace falta antes de abrir a público.
+### Nodo 2 — secundario (desde el 2 sep 2026)
+
+| | |
+|---|---|
+| Proveedor / región | InterServer, Secaucus (Nueva Jersey, EE. UU.) |
+| IP | `162.35.191.18` |
+| DNS | `nyx2.neto.chat` (registro A, **proxy desactivado**: nube gris) |
+| Hostname | `nyx-node-secaucus` |
+| SO | Ubuntu 24.04.4 LTS (1 vCPU, 1,9 GB, 38 GB disco) |
+| PeerID | `12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk` |
+| Multiaddr | `/dns4/nyx2.neto.chat/tcp/4001/p2p/12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk` |
+| Latencia desde La Paz | p50 = 135 ms, p95 = 142 ms, 0 pérdidas (n=50) |
+| Respaldo de `node.key` | `~/keys/nyx-node/nyx2-secaucus-node.key` |
+| SSH | **solo clave pública**; contraseña desactivada el 2 sep 2026 |
+
+Las dos líneas de `Libp2pNode.DEFAULT_BOOTSTRAP`, **en ese orden**. El orden es la política de
+reparto, no una preferencia: `MailboxPut`, `LikePut`, `PublishCard` y `SendReport` depositan en
+el **primero que acepte**, mientras que `MailboxFetch` drena todos y `StartWake` mantiene un
+stream por nodo. São Paulo va primero por estar 30 ms más cerca; Secaucus recoge cuando el otro
+no está.
+
+> **Las dos cajas corren el mismo binario desde el 2 sep 2026.** Durante unas horas no fue así
+> —el primario venía del 21 ago, sin `report.go`— y eso destapó el fallo que trae de verdad el
+> segundo nodo: las denuncias caían en Secaucus mientras `nyx-report` y el aviso de las 6 h
+> preguntaban solo a São Paulo, así que habrían dicho **cero sin dar ningún error**. Con una
+> caja, el sitio donde se guarda y el sitio donde miras eran el mismo; con dos, se separaron.
+> Se cerró redesplegando el primario (mismo `node.key`, mismo PeerID, ~1 s de corte) y haciendo
+> que las herramientas trabajen sobre **todas** las cajas.
+
+Los dos respaldos de `node.key` están **verificados de verdad**, no solo copiados: mismo
+SHA-256 que el fichero del VPS **y** cada uno deriva el PeerID real de su nodo
+(`go run ./cmd/peerid-check <fichero>`). Ojo con no confundirlos al restaurar: darle a una caja
+la identidad de la otra deja dos nodos con el mismo PeerID.
 
 ## Qué hay en la máquina
 
@@ -93,6 +126,8 @@ primario (rutas **desde la raíz del repo**, no desde este directorio):
 ```bash
 export PATH="/usr/local/bin:$HOME/go/bin:$PATH"
 cd native-bridge/libp2p
+# Nodo 1 (São Paulo). Para el nodo 2, cambia esta línea por:
+#   ADDR=/dns4/nyx2.neto.chat/tcp/4001/p2p/12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk
 ADDR=/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3
 
 MBX_ADDR=$ADDR  go test -run TestMailboxFetchAgainstLiveNode -v ./...      # ¿responde el buzón?
@@ -100,6 +135,10 @@ WAKE_ADDR=$ADDR go test -run TestWakeAgainstLiveNode -v ./...              # ¿r
 MBX_ADDR=$ADDR  go test -run TestMailboxRoundTripAgainstLiveNode -v ./...  # ciclo completo real
 PING_ADDR=$ADDR go test -run TestPingAgainstLiveNode -v ./...              # latencia
 ```
+
+El **nodo 2** pasó las cuatro el 2 sep 2026, por IP y por nombre, antes de entrar en
+`DEFAULT_BOOTSTRAP`: buzón y wake responden, el ciclo completo verifica carga y remitente, y la
+latencia dio `p50 = 135 ms / p95 = 142 ms` (n=50, 0 pérdidas) por IP y `136/140 ms` por nombre.
 
 Las cuatro pasaron el 14 ago 2026 antes de fijar el nodo en `DEFAULT_BOOTSTRAP`, **dos veces**:
 primero con `/ip4/216.238.104.36/…` y después con `/dns4/nyx.neto.chat/…`, que es la forma que
@@ -192,35 +231,147 @@ reconecta y sigue. Lo que se acota es el coste de un circuito suelto y cuántos 
 la vez. El respaldo real de la factura es una **alerta de egress en el panel de Vultr** — eso
 sigue pendiente de configurar.
 
-## Segundo nodo (pendiente: falta la caja)
+## Segundo nodo — HECHO el 2 sep 2026
 
-Un solo nodo es punto único de fallo del **buzón**, del **wake** y del **relay**: si se cae,
-no hay entrega offline, no hay avisos y no hay travesía de NAT. Es bloqueante para abrir a
-público (no para desarrollar). El cliente ya está preparado y **no hace falta tocar código**:
-`MailboxPut` hace failover al primer nodo vivo, `MailboxFetch` drena todos, `StartWake`
-mantiene un stream por nodo y `StartDHT` da por buena la conexión con ≥1 bootstrap vivo.
+> Queda como receta para el tercero, o para rehacer el segundo. Lo que se hizo el 2 sep está
+> arriba, en la tabla del nodo 2; lo único que falta de la tarea es la **prueba de failover en
+> vivo** (paso 6).
 
-Lo que falta es la caja, y estos pasos:
+Un solo nodo era punto único de fallo del **buzón**, del **wake** y del **relay**: si se caía,
+no había entrega offline, ni avisos, ni travesía de NAT. El cliente ya estaba preparado y **no
+hizo falta tocar código**: `MailboxPut` hace failover al primer nodo vivo, `MailboxFetch` drena
+todos, `StartWake` mantiene un stream por nodo y `StartDHT` da por buena la conexión con ≥1
+bootstrap vivo.
 
-1. **Contratar un segundo VPS en otra región/proveedor** (no una máquina doméstica: las de
-   Krypta están documentadas como puntos únicos de fallo, y además son de Krypta). Otra
-   región es lo que hace que el segundo nodo cubra una caída del centro de datos, no solo
-   del proceso.
-2. `bash infra/nyx-node/deploy-vps.sh usuario@<ip-nueva>`. Genera **`node.key` propio** en el
-   primer arranque, así que el PeerID es nuevo por construcción — no hay riesgo de clonar la
-   identidad del primario. El script pone también el sysctl de QUIC y recuerda al final el
-   comando exacto para respaldar el `node.key`.
-3. **Registro DNS propio** (p. ej. `nyx2.neto.chat` → A a la IP nueva), **nube gris**, por el
-   mismo motivo que el primario: el proxy de Cloudflare solo entiende HTTP y rompería
-   TCP+Noise en el 4001.
-4. **Validar antes de fijarlo**, con las mismas cuatro sondas del apartado anterior
-   (`TestMailboxFetchAgainstLiveNode`, `TestMailboxRoundTripAgainstLiveNode`,
-   `TestWakeAgainstLiveNode`, `TestPingAgainstLiveNode`), por IP **y** por nombre.
-5. Añadir la **segunda línea** a `Libp2pNode.DEFAULT_BOOTSTRAP` (el campo ya es una lista
-   separada por saltos de línea; el orden importa: `MailboxPut` deposita en el primero vivo).
-6. Cerrar con la prueba de failover en vivo: matar el primario y comprobar que un mensaje
-   sigue llegando por el buzón del segundo (está anotada en
-   [docs/PRUEBAS-PENDIENTES.md](../../docs/PRUEBAS-PENDIENTES.md)).
+Sí cuesta **operación**, y conviene saberlo antes de contratar y no después: al haber dos
+cajas, la expulsión del tablón y la revisión de denuncias dejan de ser correctas tal como
+están escritas hoy. Está detallado al final de este apartado, en "Lo que cambia el día que
+haya dos nodos" — el punto 1 es un agujero, no una molestia.
+
+Lo que falta es la caja, y estos pasos.
+
+### Paso 1 — Contratar la caja
+
+**Qué pedir**, para que sea gemela del primario y el runbook siga valiendo igual:
+
+| | |
+|---|---|
+| Plan | 1 vCPU / 2 GB RAM / ~50 GB disco (el mismo del primario; sobra de largo) |
+| SO | Ubuntu 24.04 LTS |
+| Arquitectura | **amd64**, salvo que salga mucho más barata la ARM — entonces compila `dist/nyx-node-linux-arm64` y pasa `arm64` como segundo argumento al script de despliegue |
+| IPv4 | pública y **dedicada** (el multiaddr es una IP, no un `Host:` HTTP: nada de IP compartida) |
+| Puertos | 4001/tcp, 4001/udp y 443/tcp abiertos en el firewall del proveedor |
+| Hostname | `nyx-node-<ciudad>`, como `nyx-node-saopaulo` |
+
+**Dónde**: en un **centro de datos distinto** al de São Paulo. Ese es el punto entero del
+segundo nodo — si comparte sala con el primario, cubre la caída del proceso pero no la del
+centro de datos, que es el fallo que deja sin buzón, sin wake y sin relay a todo el parque.
+
+Ahora bien, "otra región" no significa "donde sea". El nodo hace de **relay de voz y vídeo**,
+y ahí la latencia es la que se nota: los 105 ms p50 desde La Paz del primario salen de estar
+en Sudamérica. Un nodo en Fráncfort da redundancia de verdad, pero una llamada que caiga en él
+irá peor. Criterio: **mide antes de contratar**, con la página de test de latencia por región
+que publican los proveedores (Vultr y los demás tienen una), desde la conexión del autor en La
+Paz. Si hay una región sudamericana que no sea São Paulo, es la candidata obvia; si no, se
+elige la menos mala y se **asume conscientemente** que el failover degrada las llamadas —
+degradado sigue siendo mejor que caído.
+
+**Lo que no se debe hacer:**
+
+- **Máquina doméstica.** Es exactamente lo que dejó a Krypta con puntos únicos de fallo, y
+  además esas cajas son de Krypta: un nodo de Nyx alojado ahí ata los dos productos.
+- **Reaprovechar el `node.key` del primario.** Dos nodos con el mismo PeerID no son dos nodos.
+  El script genera uno nuevo por construcción; no lo copies "para que el multiaddr sea igual".
+- **Olvidar que el gasto se duplica.** La alerta de egress de la tarea 1.19 hay que ponerla en
+  **las dos** cajas, no solo en la primera.
+
+### Paso 2 — Desplegar
+
+```bash
+cd infra/nyx-node
+GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go1.22.12 build -o dist/nyx-node-linux-amd64 .
+bash deploy-vps.sh root@<ip-nueva>
+```
+
+Genera **`node.key` propio** en el primer arranque, así que el PeerID es nuevo por
+construcción. El script pone también el sysctl de QUIC, abre los puertos si hay `ufw`, imprime
+los topes del relay y recuerda al final el comando exacto para respaldar la clave. **Haz ese
+respaldo antes de seguir**: el `node.key` *es* el PeerID, y el PeerID viaja compilado en cada
+APK instalado.
+
+### Paso 3 — El registro DNS en Cloudflare
+
+En el panel de Cloudflare, zona **`neto.chat`** → *DNS* → *Records* → *Add record*:
+
+| Campo | Valor |
+|---|---|
+| Type | `A` |
+| Name | `nyx2` (queda `nyx2.neto.chat`) |
+| IPv4 address | la IP del VPS nuevo |
+| Proxy status | **DNS only — nube GRIS** |
+| TTL | Auto |
+
+Si el VPS trae IPv6 y lo vas a anunciar, el `AAAA` va **igual de gris**.
+
+La nube gris no es una preferencia: el proxy de Cloudflare **solo entiende HTTP**. Si se queda
+naranja, `nyx2.neto.chat` resuelve a las IP de Cloudflare y el 4001 deja de hablar TCP+Noise —
+el nodo queda inalcanzable por nombre aunque la caja esté perfecta.
+
+**Comprobación de que quedó bien**, antes de tocar nada más:
+
+```bash
+dig +short nyx2.neto.chat
+```
+
+Tiene que devolver **la IP del VPS**. Si devuelve algo tipo `104.21.x.x` o `172.67.x.x`, eso es
+Cloudflare: el registro quedó en naranja. Es el mismo síntoma que describe el apartado de
+sondas — funciona por IP y falla por nombre.
+
+### Paso 4 — Validar antes de fijarlo
+
+Las mismas cuatro sondas del apartado anterior (`TestMailboxFetchAgainstLiveNode`,
+`TestMailboxRoundTripAgainstLiveNode`, `TestWakeAgainstLiveNode`, `TestPingAgainstLiveNode`),
+por IP **y** por nombre, igual que se hizo con el primario. Anota la latencia: es el número que
+dice cuánto degrada una llamada que caiga en este nodo.
+
+### Paso 5 — Fijarlo en la app
+
+Añadir la **segunda línea** a `Libp2pNode.DEFAULT_BOOTSTRAP` (el campo ya es una lista separada
+por saltos de línea). **El orden importa**: `MailboxPut`, `LikePut`, `PublishCard` y
+`SendReport` depositan en el **primero que acepte**, así que la línea 1 es el nodo que recibe
+en condiciones normales y la 2 el que recoge cuando el otro no está.
+
+### Paso 6 — Cerrar con el failover en vivo
+
+Matar el primario y comprobar que un mensaje sigue llegando por el buzón del segundo (pasos en
+[docs/PRUEBAS-PENDIENTES.md](../../docs/PRUEBAS-PENDIENTES.md)).
+
+### Lo que cambia el día que haya dos nodos
+
+Esto **no** es "una caja y ya": tres rutinas de operación dejan de ser correctas tal como están
+escritas, y las tres fallan en silencio.
+
+1. **La expulsión del tablón hay que aplicarla en las DOS cajas, o no sirve de nada.**
+   `banned.txt` es un fichero **por máquina** (`/var/lib/nyx/banned.txt`). Y cuando el nodo
+   rechaza a un expulsado responde con un error, que el cliente trata como "ese nodo no me
+   acepta" y **pasa al siguiente de la lista** (`PublishCard` recorre los nodos hasta que uno
+   acepta). O sea: con la expulsión solo en el nodo A, el expulsado publica en el B **con el
+   cliente de serie, sin hacer nada especial**. Y como `QueryBoard` drena todos los nodos y
+   fusiona, esa tarjeta la ve todo el mundo. El filtro *al leer* tampoco salva: cada caja
+   filtra con su propia lista.
+2. **Las denuncias caen en cualquiera de las dos.** `SendReport` también entrega al primero que
+   acepte, así que la rutina de [MODERACION.md](MODERACION.md) tiene que mirar **las dos**
+   cajas; con mirar solo la primaria, una denuncia puede quedarse sin leer para siempre.
+3. **Un cambio de comportamiento se despliega en las dos a la vez.** Ya está dicho arriba a
+   propósito de los topes del relay: con topes distintos, la llamada se comporta distinto según
+   por qué relay pase, y no se controla cuál escoge el cliente. Fallo intermitente, difícil de
+   diagnosticar.
+
+Los puntos 1 y 2 son deuda de **operación**, no de código: hoy se resuelven repitiendo el
+mismo `ssh` en las dos cajas. Merece la pena, cuando llegue el segundo nodo, dejar un
+`nyx-ban <PeerID>` que escriba en ambas de una vez — el fallo que hay que evitar es el humano,
+no el técnico.
 
 Ojo con un detalle que ya mordió en Krypta: un teléfono que **alguna vez** guardó una
 preferencia de bootstrap se queda con ella y **no** hereda el nuevo default. Para probar el

@@ -505,6 +505,37 @@ no el que escucha.
 
 ---
 
+## 16. Failover entre los dos nodos de Nyx (plan 1.18) — **PENDIENTE (basta 1 móvil + la Mac)**
+
+El segundo nodo está desplegado y validado desde el 2 sep 2026 (`nyx-node-secaucus`,
+InterServer NJ, `nyx2.neto.chat`, PeerID `12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk`),
+es la segunda línea de `DEFAULT_BOOTSTRAP` y el TECNO mantiene conexión **con las dos cajas a
+la vez** — comprobado con `ss` en ambas. Lo que **no** está probado es lo único que justifica el
+gasto: que apagar una caja no corte la entrega.
+
+Esta prueba **no necesita la colaboradora**: vale un contacto de prueba y apagar un nodo.
+
+1. - [ ] Con el primario **vivo**, enviar un mensaje a un contacto con su app cerrada. Debe
+     quedar `SENT` (depósito en el buzón de São Paulo, que es el primero de la lista).
+2. - [ ] Parar el primario: `ssh root@nyx.neto.chat 'systemctl stop nyx-node'`.
+3. - [ ] Enviar otro mensaje. Debe quedar **igualmente `SENT`**: `MailboxPut` recorre la lista y
+     lo deposita en Secaucus. En el diagnóstico de la app, `DHT: conectado` debe **seguir**
+     apareciendo — `StartDHT` da por buena la conexión con ≥1 bootstrap vivo, y este es
+     justamente el fallo que en Krypta ponía "sin conexión" con la entrega funcionando.
+4. - [ ] Abrir la app receptora: los **dos** mensajes deben llegar. `MailboxFetch` drena todos
+     los nodos, así que uno viene de São Paulo y el otro de Secaucus.
+5. - [ ] Comprobar dónde cayó cada uno, antes de que se retiren:
+     `ssh root@nyx2.neto.chat 'find /var/lib/nyx/mailbox -type f | wc -l'`.
+6. - [ ] Rearrancar el primario: `ssh root@nyx.neto.chat 'systemctl start nyx-node'` y confirmar
+     con `systemctl is-active nyx-node`. **No dejarlo parado**: es el nodo más cercano y el que
+     atiende en marcha normal.
+
+Comprobación aparte, y esta sí es de dos móviles: una **llamada forzada por el relay de
+Secaucus** (con el primario parado), para ver cuánto se nota de verdad esos ~30 ms extra. La
+latencia medida dice que poco, pero medir el RTT no es lo mismo que oírlo.
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.

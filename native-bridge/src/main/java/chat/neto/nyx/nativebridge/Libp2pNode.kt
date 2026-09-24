@@ -425,9 +425,22 @@ class Libp2pNode @Inject constructor(
          * caja tiene IP pública, así que no hay túnel que recicle WebSockets ni latencia de
          * intermediario (sonda `TestPingAgainstLiveNode` desde La Paz: p50 ~105 ms). El nodo
          * también escucha QUIC en `udp/4001` y `ws` en `8081`; no hacen falta aquí porque
-         * libp2p aprende esas direcciones por identify tras el primer dial. Se mantiene el
-         * formato de lista para el segundo nodo (aún pendiente: hoy este es punto único de
-         * fallo del buzón, el wake y el relay).
+         * libp2p aprende esas direcciones por identify tras el primer dial.
+         *
+         * **Segundo nodo desde el 2 sep 2026** (`nyx-node-secaucus`, InterServer, Secaucus
+         * NJ, tarea 1.18): con una sola caja, su caída dejaba sin buzón, sin wake y sin relay
+         * a todo el parque. Va en **otro proveedor y otro continente** a propósito — compartir
+         * sala con el primario cubre la caída del proceso, no la del centro de datos, que es
+         * el fallo que importa.
+         *
+         * **El orden de las líneas es la política de reparto, no una preferencia estética**:
+         * `MailboxPut`, `LikePut`, `PublishCard` y `SendReport` depositan en el **primero que
+         * acepte**, mientras que `MailboxFetch` drena **todos** y `StartWake` mantiene un
+         * stream por nodo. Por eso São Paulo va primero: está a ~105 ms de La Paz frente a los
+         * ~135 ms de Secaucus, así que en marcha normal el tráfico se queda en el más cercano
+         * y el segundo entra cuando el primero no está. Medido, no supuesto: `p50 135 ms /
+         * p95 142 ms` con 0 pérdidas — mejor de lo que cabía esperar de Nueva Jersey, hasta el
+         * punto de que una llamada que caiga en ese relay se nota poco.
          *
          * **Por nombre (`/dns4/`), no por IP literal, a propósito**: el multiaddr va
          * compilado en cada APK instalado, así que con una IP literal un cambio de caja o de
@@ -441,7 +454,15 @@ class Libp2pNode @Inject constructor(
          *
          * Validado antes de fijarlo, por IP y por nombre, con
          * `TestMailboxFetchAgainstLiveNode`, `TestMailboxRoundTripAgainstLiveNode` y
-         * `TestWakeAgainstLiveNode`.
+         * `TestWakeAgainstLiveNode`. El segundo nodo pasó las cuatro sondas (esas tres más
+         * `TestPingAgainstLiveNode`) **por IP y por nombre** el 2 sep 2026, antes de aparecer
+         * en esta constante.
+         *
+         * Aviso mientras dure: las dos cajas **no corren el mismo binario**. El primario
+         * arrancó el 21 ago y no lleva `report.go`, así que hoy las denuncias las recoge
+         * siempre Secaucus (el cliente prueba São Paulo, le rechaza el protocolo y pasa al
+         * siguiente). Funciona, pero es asimetría: en cuanto se redespliegue el primario,
+         * ambas atienden lo mismo.
          *
          * Aquí estaban los tres nodos de **Krypta**. Se quitaron, no se renombraron: el
          * primario era `/ip4/216.128.169.83/...`, una IP literal que la sustitución de marca
@@ -453,7 +474,8 @@ class Libp2pNode @Inject constructor(
          * default.
          */
         const val DEFAULT_BOOTSTRAP =
-            "/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3"
+            "/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3\n" +
+                "/dns4/nyx2.neto.chat/tcp/4001/p2p/12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk"
     }
 }
 

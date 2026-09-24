@@ -410,6 +410,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > contrast in both, the new launcher icon side by side with Krypta's, and the new Help content
 > rendering. Still open in phase 5: only the optional 5.7 (empty-state/match-celebration art).
 >
+> **Nyx has a second infra node since 2 Sep 2026 (plan 1.18) — the single point of failure is
+> gone.** `nyx-node-secaucus`, **InterServer, Secaucus NJ**, `162.35.191.18`, Ubuntu 24.04.4,
+> 1 vCPU / 1.9 GB, PeerID `12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk`, reached as
+> `/dns4/nyx2.neto.chat/tcp/4001/...` — **second line** of `DEFAULT_BOOTSTRAP`, and the order is
+> the routing policy, not a preference: `MailboxPut`, `LikePut`, `PublishCard` and `SendReport`
+> deposit **in the first node that accepts**, while `MailboxFetch` drains all and `StartWake`
+> keeps one stream per node. A different provider **and** continent on purpose — sharing a hall
+> with São Paulo would cover a process crash, not a datacenter outage, which is the failure that
+> matters. **The region turned out far better than feared**: p50 = 135 ms / p95 = 142 ms from La
+> Paz, 0 loss — only ~30 ms worse than São Paulo, so a call landing on that relay barely
+> degrades; the worry was that New Jersey would make it useless for voice. All four probes
+> passed **by IP and by name** before it was pinned. Order of operations on the box was the
+> load-bearing part: public key installed → **proven with `BatchMode=yes`** (which forbids the
+> password prompt, so it cannot pass by accident) → only then `PasswordAuthentication no` +
+> `PermitRootLogin prohibit-password`, in a `00-`prefixed drop-in because **sshd takes the
+> first value obtained** and the `Include` sits above the main file's `PasswordAuthentication
+> yes`. The `node.key` backup is **verified, not just copied** — same SHA-256 as the box *and*
+> it derives that node's real PeerID, which is what `infra/nyx-node/cmd/peerid-check` was added
+> for: there had been a backup since August with no way to check it was the right one. Two
+> things a reader must know. The first was found the same day and closed: the primary had
+> booted 21 Aug **without `report.go`**, so reports were landing only on Secaucus (the client
+> tried São Paulo, got the protocol refused, fell through) — **and the moderation tooling asked
+> only São Paulo**, so `status` would have said zero and the 6-hourly notifier would never have
+> fired. A report stored, and nobody ever told. That is the failure mode the second node
+> introduced: with one box, where a report was kept and where you looked were the same place.
+> Fixed by redeploying the primary (`node.key` untouched, same PeerID, ~1 s of downtime) **and**
+> by making `nyx-report` and `aviso/comprobar-denuncias.sh` work over **every** box — `status`
+> now shows the per-node breakdown, an unreachable box prints `?` rather than counting as zero,
+> and `ban`/`unban` write everywhere and shout when a box is missed. The second is **`banned.txt`
+> is per box**: a node that refuses a banned publisher
+> answers with an error, which the client reads as "that node won't take it" and **moves to the
+> next in the list** — so a ban applied on one box only is bypassed by the stock client with no
+> effort, and since `QueryBoard` merges every node, the card stays visible to everyone. That is
+> why `ban` writing to every box is a correctness fix and not a convenience. The day-to-day is in
+> [infra/nyx-node/OPERACION.md](infra/nyx-node/OPERACION.md). Still open: the live failover test
+> (kill the primary, check delivery via the second's mailbox).
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

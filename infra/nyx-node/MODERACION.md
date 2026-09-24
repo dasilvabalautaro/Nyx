@@ -37,13 +37,22 @@ no avisa — aceptable, porque es también cuando no podrías revisar.
 ```sh
 cd infra/nyx-node
 
-# ¿Hay algo? (no descarga nada)
+# ¿Hay algo? (no descarga nada). Pregunta a las DOS cajas y dice en cuál está.
 go run ./cmd/nyx-report status
 
-# Traerlas y leer SOLO las nuevas
-scp -r root@nyx.neto.chat:/var/lib/nyx/reports ./reports-$(date +%F)
-go run ./cmd/nyx-report decrypt ./reports-$(date +%F)
+# Traerlas y leer SOLO las nuevas. Un directorio por nodo: los nombres de fichero
+# pueden coincidir entre cajas y se pisarían al descargar en el mismo sitio.
+scp -r root@nyx.neto.chat:/var/lib/nyx/reports  ./reports-$(date +%F)-n1
+scp -r root@nyx2.neto.chat:/var/lib/nyx/reports ./reports-$(date +%F)-n2
+go run ./cmd/nyx-report decrypt ./reports-$(date +%F)-n1
+go run ./cmd/nyx-report decrypt ./reports-$(date +%F)-n2
 ```
+
+> **Por qué dos cajas.** Desde el 2 sep 2026 hay dos nodos, y el cliente entrega la denuncia
+> **a la primera que acepte**: puede caer en cualquiera. Mirar solo una contestaba "cero" sin
+> dar ningún error — la denuncia se guardaba bien y nadie se enteraba. El `id` de cada denuncia
+> se calcula de su contenido cifrado, así que descifrar los dos directorios no duplica nada: si
+> la misma llegara dos veces, sale con el mismo id y `decrypt` la da por vista.
 
 `decrypt` oculta por defecto lo ya revisado. Es lo que hace la rutina sostenible: las denuncias
 viven **180 días**, y sin ese filtro cada revisión sería releer decenas de cosas ya vistas
@@ -55,7 +64,7 @@ es el mismo aunque copies el árbol otra vez o el nodo barra el original.
 Para cada una, decide **y deja constancia**:
 
 ```sh
-# Expulsar del tablón y registrar por qué
+# Expulsar del tablón y registrar por qué. Escribe en TODAS las cajas.
 go run ./cmd/nyx-report ban 12D3KooW… "acoso reiterado" 137106315e080efd
 
 # O archivarla sin acción, que también es una decisión
@@ -65,6 +74,14 @@ go run ./cmd/nyx-report dismiss 137106315e080efd "sin indicios, parece un roce p
 Lo que no registras no existe: si decides no actuar y no lo anotas, dentro de seis meses no hay
 forma de saber si la miraste. Y "el desarrollador puede actuar sobre lo denunciado" es algo que
 Play espera que puedas **demostrar**, no solo afirmar.
+
+> **La expulsión va en las dos cajas o no sirve de nada**, y `ban` lo hace por ti. El motivo es
+> más feo de lo que parece: cuando un nodo rechaza a un expulsado responde con un error, que el
+> cliente lee como "ese nodo no me acepta" y **pasa al siguiente de la lista**. Con la expulsión
+> en una sola caja, el expulsado publica por la otra **con el cliente de serie, sin hacer nada
+> especial**; y como la consulta del tablón fusiona todos los nodos, su tarjeta la sigue viendo
+> todo el mundo. Si `ban` avisa de que una caja falló, **repítelo cuando vuelva**: hasta
+> entonces la expulsión está a medias, que es peor que no haberla hecho porque parece hecha.
 
 ---
 

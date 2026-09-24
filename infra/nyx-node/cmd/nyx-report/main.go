@@ -122,8 +122,13 @@ func usage() {
 
 Clave privada: %s
 Registro:      %s
-Nodo:          %s  (cambiable con NYX_NODE=usuario@host)
-`, defaultKeyPath(), statePath(), sshHost())
+Nodos:         %s
+               (cambiable con NYX_NODE=usuario@host, varios separados por comas)
+
+Se opera sobre TODAS las cajas: una denuncia cae en cualquiera de ellas —el cliente entrega
+a la primera que acepte— y una expulsión aplicada en una sola se esquiva publicando por la
+otra, porque el cliente pasa al siguiente nodo cuando uno le rechaza.
+`, defaultKeyPath(), statePath(), strings.Join(sshHosts(), ", "))
 }
 
 func keygen(path string) error {

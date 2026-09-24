@@ -19,7 +19,7 @@ import java.io.File
  *
  * **Si se queda parado en el TECNO, no es SQLCipher.** Al correr la suite entera de `:data`,
  * HiOS congela el proceso de test a mitad (todos sus hilos en `do_freezer_trap`, 0 % de CPU),
- * y parece que `encryptInPlace` se ha colgado. Se comprueba mirando `/proc/<pid>/task/*/wchan`
+ * y parece que `encryptInPlace` se ha colgado. Se comprueba mirando `/proc/<pid>/task/<tid>/wchan`
  * con `run-as`; cualquier llamada binder al proceso (`adb shell dumpsys meminfo <pid>`) lo
  * descongela y los tests terminan en verde. Visto el 24 sep 2026 al portar esto de Krypta.
  */
@@ -65,7 +65,7 @@ class DatabaseEncryptionTest {
             db.readBytes().toString(Charsets.ISO_8859_1).contains("Ana"),
         )
 
-        System.loadLibrary("sqlcipher")
+        SqlCipher.load()
         val cifrada = net.zetetic.database.sqlcipher.SQLiteDatabase
             .openOrCreateDatabase(db, passphrase, null, null)
         try {

@@ -15,7 +15,7 @@ import chat.neto.nyx.data.crypto.DatabaseEncryption
 import chat.neto.nyx.data.crypto.DatabaseKey
 import chat.neto.nyx.data.crypto.KeyPrefs
 import chat.neto.nyx.data.crypto.KeystoreVault
-import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import chat.neto.nyx.data.crypto.SqlCipher
 import chat.neto.nyx.data.dao.BlockedPeerDao
 import chat.neto.nyx.data.dao.ContactDao
 import chat.neto.nyx.data.dao.LikeDao
@@ -53,7 +53,7 @@ object DatabaseModule {
         DatabaseEncryption.encryptInPlace(context.getDatabasePath("nyx.db"), passphrase)
 
         return Room.databaseBuilder(context, NyxDatabase::class.java, "nyx.db")
-            .openHelperFactory(SupportOpenHelperFactory(passphrase))
+            .openHelperFactory(SqlCipher.openHelperFactory(passphrase))
             // Migraciones reales: preservan contactos + mensajes al subir de versión.
             .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             // Red de seguridad solo para la v1 antigua (sin migración definida); v2+ migra.

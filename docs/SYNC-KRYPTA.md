@@ -65,6 +65,8 @@ después: el `.aar` no está en git.
 
 | Commit de Krypta | Fecha | Qué es | Aquí |
 | --- | --- | --- | --- |
+| `a310ced` | 22 sep 2026 | Docs: confirmado el borrado de datos de los nodos domésticos de Krypta | **No aplica**: solo toca `CLAUDE.md` e `infra/node/README.md` de Krypta. Nyx nunca usó esos nodos (su `DEFAULT_BOOTSTRAP` son sus dos VPS propios). |
+| `97f0fda` | 22 sep 2026 | Docs: los nodos domésticos de Krypta (Mac y Windows) se retiraron hacia el 8 sep | **No aplica**: mismo motivo; toca `CLAUDE.md`, `MANUAL.md`, `PLAY-STORE.md`, `architecture.md` e `infra/node/README.md` de Krypta. |
 | `deb0bf8` | 6 sep 2026 | Acotar la lectura de los streams entrantes (mensaje, buzón y wake) | **Portado** en `f78e834`. El código con el script; los docs a mano: el hunk de `CLAUDE.md` y el del README del nodo no aplicaban ni sustituidos ni sin sustituir, y el cierre del bloque hablaba del VPS de Krypta — reescrito con lo de aquí. **El nodo de Nyx (`216.238.104.36`) sigue con el binario anterior**: necesita su propio `deploy-vps.sh`. AAR regenerado. Verde: `go vet`, tests del puente y del nodo. |
 | `936e9ae` | 6 sep 2026 | La silueta de la burbuja (esquina, borde y sombra) escala con su altura | **Portado** en `447c88a`, **a mano**: el parche da por hecho las respuestas citadas (`37f185d`, sin portar), así que sus seis hunks salieron rechazados. El arreglo es autocontenido y entra tal cual sobre la burbuja de aquí, que conserva su menú de "Denunciar este mensaje". Compila y pasa los tests JVM; falta prueba en móvil. |
 | `1ab4453` | 6 sep 2026 | Bloquear contacto (`Contact.blocked`, Room v5, UI en lista y chat) | **No aplica**: Nyx ya tiene bloqueo, y **más completo** — `BlockedPeer` en tabla propia (bloquea por PeerID, así que sobrevive a borrar el contacto y sirve para alguien del tablón con quien nunca hablaste), `BlockedPeersScreen` para desbloquear, y cuelga la llamada en curso al bloquear. Krypta lo resolvió después y con una columna en `contacts`; portarlo sería un retroceso. Además su Room v5 choca con la v5 de aquí (los esquemas divergen desde ahí, ya anotado arriba). |
@@ -76,9 +78,9 @@ después: el `.aar` no está en git.
 Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el historial común: el
 `git log upstream/main --not HEAD` sale vacío, así que no hay deuda acumulada de antes.
 
-**Último repaso: 6 sep 2026.** El tip de Krypta es `deb0bf8` en `main` y en
-`feat/avisos-gif-capturas-1.5` (las dos ramas apuntan al mismo sitio). Se triaron **solo los
-tres commits del 6 sep** (los dos primeros de la tabla y el de bloqueo). **Queda deuda: 11
+**Último repaso: 24 sep 2026.** El tip de Krypta en `main` es `a310ced`; los dos commits del
+22 sep (solo docs de sus nodos domésticos) no aplican. El repaso anterior, del 6 sep, triaba
+**solo los tres commits de ese día** (`deb0bf8`, `936e9ae` y el de bloqueo). **Queda deuda: 11
 commits de Krypta entre el 21 ago y el 3 sep siguen sin decidir**, y el bucle de "Cómo se usa"
 los imprimirá:
 

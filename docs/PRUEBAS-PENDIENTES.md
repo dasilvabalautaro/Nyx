@@ -544,6 +544,29 @@ latencia medida dice que poco, pero medir el RTT no es lo mismo que oírlo.
 
 ---
 
+## 17. Build del 24 sep: sincronización con Krypta — **PENDIENTE (1 móvil primero, luego 2)**
+
+El build que sale de la sincronización con Krypta del 24 sep 2026 (ver `docs/SYNC-KRYPTA.md`)
+hace **tres migraciones locales en el primer arranque**: la identidad pasa a ir envuelta en el
+Keystore, la base sube a v6 (sin `sharedSecret`) y se cifra con SQLCipher. Todas están probadas
+en el TECNO con los tests de `:data`, pero **ninguna sobre la base real** de la app.
+
+1. - [ ] **Antes de instalar**, exportar un `.nybk` (Ajustes → Copia de seguridad). Es la
+     única vuelta atrás si algo fuera mal: no lleva mensajes, pero sí identidad y contactos.
+2. - [ ] Instalar y abrir. Debe arrancar con el **mismo PeerID**, los contactos y los matches
+     intactos y las vistas previas de la lista **descifrando** (eso prueba que el secreto
+     compartido se deriva bien ahora que no está en la base).
+3. - [ ] Comprobar que la base ya no es legible: `run-as chat.neto.nyx head -c 16
+     databases/nyx.db` no debe empezar por `SQLite format 3`.
+4. - [ ] **Responder citando** (nuevo): deslizar a la derecha un mensaje, y pulsación larga →
+     Responder en uno recibido (el menú debe traer Responder · Copiar · Denunciar) y en uno
+     propio (píldora con responder y copiar). Enviar texto, foto y nota de voz como respuesta;
+     tocar la cita debe saltar al original y resaltarlo.
+5. - [ ] Con los dos móviles en este build: la cita debe llegar al otro lado resuelta contra
+     su propia base, y «Mensaje no disponible» si el otro vació el chat.
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.

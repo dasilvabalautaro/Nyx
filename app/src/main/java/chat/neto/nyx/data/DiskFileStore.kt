@@ -126,7 +126,7 @@ class DiskFileStore(private val baseDir: File) : FileStore {
         }
         check(tmp.renameTo(out) || (out.delete() && tmp.renameTo(out))) { "no se pudo escribir ${out.name}" }
         dir.deleteRecursively()
-        return AssembledFile(meta.name, meta.mime, meta.size, out.absolutePath)
+        return AssembledFile(meta.name, meta.mime, meta.size, out.absolutePath, meta.replyTo)
     }
 
     /** Ruta del staging de un archivo, **sin** crearla. */
@@ -150,6 +150,7 @@ class DiskFileStore(private val baseDir: File) : FileStore {
         appendLine(java.util.Base64.getEncoder().encodeToString(meta.mime.toByteArray()))
         appendLine(meta.size)
         appendLine(meta.totalChunks)
+        appendLine(meta.replyTo.orEmpty())
     }.toByteArray()
 
     private fun decodeMeta(bytes: ByteArray): IncomingFileMeta {
@@ -159,6 +160,9 @@ class DiskFileStore(private val baseDir: File) : FileStore {
             mime = String(java.util.Base64.getDecoder().decode(lines[1])),
             size = lines[2].toLong(),
             totalChunks = lines[3].toInt(),
+            // 5ª línea (cita) añadida después: una meta ya en staging de una versión anterior
+            // no la trae, y una transferencia a medias debe seguir completándose.
+            replyTo = lines.getOrNull(4)?.ifBlank { null },
         )
     }
 

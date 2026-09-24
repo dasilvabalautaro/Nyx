@@ -10,6 +10,7 @@ import chat.neto.nyx.data.NyxDatabase
 import chat.neto.nyx.data.MIGRATION_2_3
 import chat.neto.nyx.data.MIGRATION_3_4
 import chat.neto.nyx.data.MIGRATION_4_5
+import chat.neto.nyx.data.MIGRATION_5_6
 import chat.neto.nyx.data.dao.BlockedPeerDao
 import chat.neto.nyx.data.dao.ContactDao
 import chat.neto.nyx.data.dao.LikeDao
@@ -35,7 +36,7 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): NyxDatabase =
         Room.databaseBuilder(context, NyxDatabase::class.java, "nyx.db")
             // Migraciones reales: preservan contactos + mensajes al subir de versión.
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             // Red de seguridad solo para la v1 antigua (sin migración definida); v2+ migra.
             .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
             .build()

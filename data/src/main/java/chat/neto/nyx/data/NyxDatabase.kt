@@ -19,7 +19,7 @@ import chat.neto.nyx.data.entity.MessageEntity
         LikeEntity::class,
         BlockedPeerEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

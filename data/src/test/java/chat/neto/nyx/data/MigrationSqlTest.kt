@@ -65,13 +65,54 @@ class MigrationSqlTest {
         assertTrue("MIGRATION_4_5 toca tablas preexistentes: $touched", touched.isEmpty())
     }
 
+    /**
+     * v5→v6 recrea `contacts` sin `sharedSecret` (porte del 9322a82 de Krypta). Aquí la
+     * migración no es aditiva: construye `contacts_new`, copia y renombra, así que lo que tiene
+     * que coincidir con `6.json` es esa tabla nueva —con el nombre final— y el índice que se
+     * recrea al final. Una columna de más o un `NOT NULL` de menos haría que Room rechazara la
+     * base en el primer arranque del móvil, con todo el historial dentro.
+     */
+    @Test
+    fun `la migracion 5-6 recrea contacts con el esquema exacto de la v6`() {
+        val executed = recordSql(MIGRATION_5_6::migrate)
+        val creates = executed
+            .filter { it.startsWith("CREATE") }
+            .map { normalize(it.replace("contacts_new", "contacts")) }
+            .toSet()
+        val expected = expectedSqlFor("contacts", version = 6).map(::normalize).toSet()
+
+        assertEquals("el SQL de MIGRATION_5_6 no coincide con schemas/6.json", expected, creates)
+    }
+
+    /** Lo que justifica la migración: el secreto no puede sobrevivir en la tabla nueva. */
+    @Test
+    fun `la migracion 5-6 no copia el secreto compartido`() {
+        val executed = recordSql(MIGRATION_5_6::migrate)
+        assertTrue(
+            "MIGRATION_5_6 sigue mencionando sharedSecret: $executed",
+            executed.none { it.contains("sharedSecret") },
+        )
+        assertTrue(
+            "la tabla vieja tiene que borrarse, no quedarse al lado",
+            executed.any { normalize(it) == "DROP TABLE contacts" },
+        )
+    }
+
+    @Test
+    fun `el esquema v6 esta exportado y sin secreto en contacts`() {
+        assertTrue(schemaDir.resolve("6.json").isFile)
+        assertEquals(6, schemaJson(6).getJSONObject("database").getInt("version"))
+        val contacts = expectedSqlFor("contacts", version = 6).first()
+        assertTrue("6.json aún tiene sharedSecret: $contacts", "sharedSecret" !in contacts)
+    }
+
     // --- utilidades ---
 
-    private fun schemaJson() = JSONObject(schemaDir.resolve("5.json").readText())
+    private fun schemaJson(version: Int = 5) = JSONObject(schemaDir.resolve("$version.json").readText())
 
     /** `createSql` de las tablas pedidas + el de sus índices, tal y como los generó Room. */
-    private fun expectedSqlFor(vararg tables: String): List<String> {
-        val entities = schemaJson().getJSONObject("database").getJSONArray("entities")
+    private fun expectedSqlFor(vararg tables: String, version: Int = 5): List<String> {
+        val entities = schemaJson(version).getJSONObject("database").getJSONArray("entities")
         val wanted = tables.toSet()
         val out = mutableListOf<String>()
         for (i in 0 until entities.length()) {
@@ -86,7 +127,7 @@ class MigrationSqlTest {
                     .replace("\${TABLE_NAME}", "`$name`").replace("``", "`")
             }
         }
-        check(out.isNotEmpty()) { "no se encontró ninguna de las tablas $wanted en 5.json" }
+        check(out.isNotEmpty()) { "no se encontró ninguna de las tablas $wanted en $version.json" }
         return out
     }
 

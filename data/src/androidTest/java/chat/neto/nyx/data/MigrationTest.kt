@@ -90,6 +90,55 @@ class MigrationTest {
         }
     }
 
+    /**
+     * v5→v6 recrea `contacts` sin `sharedSecret`: los contactos (con su verificación) y los
+     * mensajes tienen que sobrevivir, la columna tiene que desaparecer, y las tablas propias de
+     * Nyx (`likes`, `blocked_peers`) no se tocan. Esto último es lo que Krypta no podía probar
+     * por nosotros: su v5→v6 no las tiene.
+     */
+    @Test
+    fun migrate5To6_quitaElSecretoYConservaLoDemas() {
+        helper.createDatabase(TEST_DB, 5).use { db ->
+            db.execSQL(
+                "INSERT INTO contacts (id, displayName, peerId, publicKey, sharedSecret, verified) " +
+                    "VALUES ('12D3KooWpeer', 'Jimena', '12D3KooWpeer', X'01', X'02', 1)",
+            )
+            db.execSQL(
+                "INSERT INTO messages (id, conversationId, senderId, ciphertext, timestamp, status) " +
+                    "VALUES ('m1', '12D3KooWpeer', 'yo', X'deadbeef', 1000, 'SENT')",
+            )
+            db.execSQL(
+                "INSERT INTO likes (peerId, sentAt, receivedAt, matchedAt, source) " +
+                    "VALUES ('12D3KooWpeer', 10, 20, 20, 'BOARD')",
+            )
+            db.execSQL("INSERT INTO blocked_peers (peerId, blockedAt, reason) VALUES ('p2', 30, NULL)")
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6)
+
+        db.query("SELECT displayName, verified FROM contacts WHERE id = '12D3KooWpeer'").use { c ->
+            assertTrue("se perdió el contacto al migrar", c.moveToFirst())
+            assertEquals("Jimena", c.getString(0))
+            assertEquals(1, c.getInt(1))
+        }
+        db.query("PRAGMA table_info(contacts)").use { c ->
+            val cols = buildList { while (c.moveToNext()) add(c.getString(1)) }
+            assertTrue("sharedSecret sigue en contacts: $cols", "sharedSecret" !in cols)
+        }
+        db.query("SELECT hex(ciphertext) FROM messages WHERE id = 'm1'").use { c ->
+            assertTrue("se perdió el mensaje al migrar", c.moveToFirst())
+            assertEquals("DEADBEEF", c.getString(0))
+        }
+        db.query("SELECT matchedAt FROM likes WHERE peerId = '12D3KooWpeer'").use { c ->
+            assertTrue("se perdió el match al migrar", c.moveToFirst())
+            assertEquals(20, c.getLong(0))
+        }
+        db.query("SELECT COUNT(*) FROM blocked_peers WHERE peerId = 'p2'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("se perdió el bloqueo al migrar", 1, c.getInt(0))
+        }
+    }
+
     // Nota sobre lo que NO se puede probar aquí: no hay test de la cadena v2→v5. `createDatabase`
     // necesita el esquema exportado de la versión de partida, y `exportSchema` se activó en su
     // día ya en la v4, así que el histórico commiteado empieza en `4.json` — no existen 2.json ni

@@ -161,6 +161,10 @@ type Node struct {
 	cancel      context.CancelFunc
 	peerHandler PeerHandler
 
+	// Filtro de quién puede ABRIRNOS conexión (ver gater.go). Se rellena desde la app con los
+	// contactos y los nodos; vacío = abierto.
+	gater *peerGater
+
 	mailboxHandler MailboxHandler
 	likeHandler    LikeHandler
 
@@ -197,6 +201,7 @@ func NewNodeWithIdentity(identity []byte, relayAddrs string) (*Node, error) {
 }
 
 func newNode(priv crypto.PrivKey, relayAddrs string) (*Node, error) {
+	gater := newPeerGater()
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(
 			"/ip4/0.0.0.0/tcp/0",
@@ -205,6 +210,10 @@ func newNode(priv crypto.PrivKey, relayAddrs string) (*Node, error) {
 		libp2p.EnableRelay(),        // usa relays para dialar/ser dialado (cliente Relay v2)
 		libp2p.EnableHolePunching(), // DCUtR: tras conectar por relay, intenta upgrade a directo
 		libp2p.NATPortMap(),         // mapea puerto vía UPnP/NAT-PMP si el router lo permite
+		// Solo los contactos y los nodos pueden abrirnos conexión (ver gater.go). Sin esto,
+		// un extraño con tu PeerID te marcaba por el relay y el hole punching le entregaba
+		// tu IP pública antes de que la app pudiera descartarlo.
+		libp2p.ConnectionGater(gater),
 	}
 	if priv != nil {
 		opts = append(opts, libp2p.Identity(priv))
@@ -222,7 +231,7 @@ func newNode(priv crypto.PrivKey, relayAddrs string) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Node{h: h, ctx: ctx, cancel: cancel}, nil
+	return &Node{h: h, ctx: ctx, cancel: cancel, gater: gater}, nil
 }
 
 // circuitAddrsFactory devuelve un AddrsFactory que AÑADE, a las direcciones anunciadas del

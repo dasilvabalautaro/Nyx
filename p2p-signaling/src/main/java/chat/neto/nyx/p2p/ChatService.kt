@@ -212,6 +212,8 @@ class ChatService @Inject constructor(
         // Nyx. El bucle WAN es auto-reparable, así que reintentará `connectDht` si hiciera
         // falta. Por eso el WAN se arranca aunque `signaling.start()` haya lanzado.
         runCatching { signaling.start() }.onFailure { logLine("host/mDNS: ${it.message ?: it}") }
+        // Cuanto antes, para acortar la ventana en la que el filtro está abierto.
+        runCatching { refreshAllowedPeers() }
         runCatching { signaling.bootstrap() }.getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let(::startWan)
@@ -440,6 +442,10 @@ class ChatService @Inject constructor(
             // diría que sigues ahí. El bloqueo conserva el contacto (la denuncia lo necesita),
             // así que el filtro tiene que estar aquí y no en el borrado.
             .filterNot { runCatching { blocked.isBlocked(it.peerId) }.getOrDefault(false) }
+        // Los mismos contactos que entran en el rendezvous son los que pueden abrirnos
+        // conexión. Refrescarlo aquí (cada ciclo WAN) recoge altas, bajas y bloqueos sin
+        // depender de que nadie más se acuerde de llamar.
+        pushAllowedPeers(targets.map { it.peerId })
         if (targets.isNotEmpty()) logLine("rendezvous: anunciando a ${targets.size} contacto(s)")
         for (contact in targets) {
             // Ventana de solape al cambiar de día (ver RendezvousService.rendezvousWindow):
@@ -458,6 +464,59 @@ class ChatService @Inject constructor(
                 }
             }.onFailure { logLine("rendezvous ${short(contact.peerId)}: ${it.message}") }
         }
+    }
+
+    /**
+     * PeerID de cada nodo de una lista de bootstrap (uno por línea). Tolera la forma con
+     * `/p2p-circuit` detrás, que aparece en las direcciones de relay.
+     */
+    internal fun bootstrapPeerIds(raw: String): List<String> =
+        raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { line ->
+                line.substringAfterLast("/p2p/", "").substringBefore("/").ifBlank { null }
+            }
+            .distinct()
+            .toList()
+
+    /**
+     * Fija en el transporte quién puede **abrirnos** conexión: estos contactos y los nodos.
+     *
+     * Los **bloqueados quedan fuera** a propósito: además de no recibir nada, dejan de poder
+     * sacar nuestra IP. Y los nodos entran siempre, porque el relay y AutoNAT necesitan poder
+     * hablarnos de vuelta.
+     *
+     * En Nyx no hace falta nadie más: un like llega por el nodo (`LikePut`), el tablón se
+     * consulta en el nodo, y quien puede escribirte o llamarte ya es un contacto porque el
+     * match lo creó. Quien acaba de hacer match y te marca antes de que se refresque la lista
+     * no pierde nada: el envío cae al buzón.
+     */
+    private suspend fun pushAllowedPeers(contactIds: List<String>) {
+        val nodes = bootstrapPeerIds(
+            bootstrapAddr ?: runCatching { signaling.bootstrap() }.getOrNull().orEmpty(),
+        )
+        val lista = (contactIds + nodes).distinct()
+        runCatching { signaling.setAllowedPeers(lista.joinToString("\n")) }
+            .onFailure { logLine("filtro de conexiones: ${it.message}") }
+        // Se registra solo cuando cambia, para no llenar el panel: el ciclo WAN pasa por aquí
+        // cada 30-180 s. Con 0 el filtro está ABIERTO, y eso hay que verlo, no deducirlo.
+        if (lista.size != lastAllowedCount) {
+            lastAllowedCount = lista.size
+            val estado = runCatching { signaling.allowedPeersStatus() }.getOrDefault("")
+            logLine("filtro de conexiones: ${lista.size} permitido(s)${if (estado.isNotBlank()) " · $estado" else ""}")
+        }
+    }
+
+    private var lastAllowedCount = -1
+
+    /** Recalcula la lista leyendo los contactos (para cuando cambian fuera del ciclo WAN). */
+    internal suspend fun refreshAllowedPeers() {
+        val ids = runCatching { contacts.observeAll().first() }
+            .getOrDefault(emptyList())
+            .filterNot { runCatching { blocked.isBlocked(it.peerId) }.getOrDefault(false) }
+            .map { it.peerId }
+        pushAllowedPeers(ids)
     }
 
     private val lastFound = mutableMapOf<String, Boolean>()
@@ -900,6 +959,8 @@ class ChatService @Inject constructor(
             verified = existing?.verified ?: false,
         )
         contacts.upsert(contact)
+        // Para que pueda marcarnos ya, sin esperar al próximo ciclo WAN.
+        refreshAllowedPeers()
         return contact
     }
 
@@ -943,6 +1004,7 @@ class ChatService @Inject constructor(
     suspend fun deleteContact(contact: Contact) {
         clearConversation(contact)
         contacts.delete(contact.id)
+        refreshAllowedPeers()
         // También el estado de like: si quedara la fila, volver a cruzarse con ese peer lo daría
         // por "match" ya cerrado y le abriría la mensajería sin que nadie haya vuelto a decir
         // que sí. Eliminar un contacto tiene que devolver la relación a cero.
@@ -968,6 +1030,9 @@ class ChatService @Inject constructor(
      */
     suspend fun block(peerId: String, reason: String? = null) {
         blocked.block(peerId, reason)
+        // Un bloqueado sale de la lista en el acto: deja de poder abrirnos conexión (y con
+        // ello de sacar nuestra IP por el hole punching).
+        refreshAllowedPeers()
         lastFound.remove(peerId)
         _onlinePeers.update { it - peerId }
         logLine("🚫 bloqueado: ${short(peerId)}")
@@ -976,6 +1041,7 @@ class ChatService @Inject constructor(
     /** Levanta el bloqueo. Acto explícito por diseño: ver el guard de [addContact]. */
     suspend fun unblock(peerId: String) {
         blocked.unblock(peerId)
+        refreshAllowedPeers()
         logLine("bloqueo retirado: ${short(peerId)}")
     }
 

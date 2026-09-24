@@ -256,12 +256,26 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** Flujo de mensajes de la conversación, descifrados para mostrar. */
+    /**
+     * Flujo de mensajes de la conversación, descifrados para mostrar.
+     *
+     * Dos cosas importantes aquí, ambas de la auditoría (A-2):
+     *  - **`flowOn(Dispatchers.Default)`**: cada mensaje son un descifrado AES-GCM y un
+     *    decodificado de sobre. Sin esto se ejecutaban en el hilo del colector, que es el
+     *    principal, y el coste crece con el historial: un chat largo bloqueaba la UI.
+     *  - **caché por mensaje** ([contentCache]): Room reemite la conversación **entera** cada
+     *    vez que cambia algo (un mensaje nuevo, un ✓✓), así que sin caché cada cambio volvía a
+     *    descifrar todo el historial. El ciphertext de un id no cambia nunca, así que la
+     *    caché es segura y basta con la clave (id + huella del ciphertext).
+     *
+     * La llamada desde Compose debe ir dentro de un `remember`: este método construye un Flow
+     * nuevo en cada invocación y `collectAsState` reinicia la colección con cada instancia.
+     */
     fun messages(contact: Contact): Flow<List<DisplayMessage>> =
         chat.observeConversation(contact.id).map { list ->
             list.map { m ->
                 val mine = m.senderId != contact.id
-                when (val c = runCatching { chat.content(contact, m) }.getOrNull()) {
+                when (val c = contentCached(contact, m)) {
                     is MessageContent.Image ->
                         DisplayMessage(
                             m.id, text = "", image = c.jpeg, mine = mine, status = m.status,
@@ -285,7 +299,31 @@ class ChatViewModel @Inject constructor(
                         )
                 }
             }
-        }
+        }.flowOn(Dispatchers.Default)
+
+    /**
+     * Descifra [m] reutilizando el resultado anterior si ya se descifró ese mismo mensaje.
+     *
+     * Solo se cachean texto y archivo: la imagen en línea lleva sus bytes dentro, y guardar
+     * cientos en memoria sería peor que volver a descifrarla. La clave incluye una huella del
+     * ciphertext para que un id reutilizado con otro contenido nunca devuelva lo anterior.
+     */
+    private fun contentCached(contact: Contact, m: chat.neto.nyx.core.model.Message): MessageContent? {
+        val key = "${m.id}:${m.ciphertext.contentHashCode()}"
+        contentCache[key]?.let { return it }
+        val content = runCatching { chat.content(contact, m) }.getOrNull() ?: return null
+        if (content !is MessageContent.Image) contentCache[key] = content
+        return content
+    }
+
+    // Sincronizado: el Flow corre en Dispatchers.Default y dos colecciones (p. ej. una
+    // rotación) pueden solaparse un instante.
+    private val contentCache: MutableMap<String, MessageContent> = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, MessageContent>(128, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MessageContent>?) =
+                size > MAX_DECODED_CACHE
+        },
+    )
 
     fun send(contact: Contact, text: String) {
         if (text.isBlank()) return
@@ -380,6 +418,8 @@ class ChatViewModel @Inject constructor(
     }
 
     private companion object {
+        /** Mensajes descifrados que se conservan en memoria por conversación abierta. */
+        const val MAX_DECODED_CACHE = 500
         const val MAX_FILE_BYTES = 8 * 1024 * 1024
         /**
          * Tope de una imagen animada. Por debajo del cupo del buzón por destinatario (5 MiB),

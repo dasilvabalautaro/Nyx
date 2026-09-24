@@ -46,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -96,7 +97,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import chat.neto.nyx.AgeGate
 import chat.neto.nyx.AppLock
@@ -1157,6 +1161,11 @@ private fun MessageBubble(
 ) {
     val align = if (message.mine) Alignment.CenterEnd else Alignment.CenterStart
     val failed = message.mine && message.status == MessageStatus.FAILED
+    // Solo hay algo que copiar en las burbujas de texto: en imagen, archivo, audio y GIF el
+    // `text` va vacío (lo pone ChatViewModel al mapear el contenido).
+    val copyable = message.text.isNotBlank()
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     // Un color de fondo por rol con su pareja "on" correcta. La burbuja **propia** usa
     // `primary` (color de marca saturado), no `primaryContainer`: primary es oscuro en tema
     // claro y brillante en oscuro, así queda con luminosidad **opuesta** a la recibida (un
@@ -1174,32 +1183,72 @@ private fun MessageBubble(
     val shape = remember(message.mine, first) { BubbleShape(mine = message.mine, first = first) }
     val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
+    // La pulsación larga ofrece lo que se pueda hacer con **este** mensaje: copiarlo (si es
+    // texto) y, en los recibidos, denunciarlo. Con dos acciones va un menú; con una sola (una
+    // burbuja propia de texto) basta el botón redondo de abajo — un DropdownMenu de un único
+    // item paga el ancho mínimo de M3 y queda un cartel encima del mensaje.
+    val longPressable = copyable || onReport != null
     var showMsgMenu by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(top = if (first) 6.dp else 0.dp)
-            .then(
-                if (onReport == null) Modifier
-                else Modifier.combinedClickable(
-                    onClick = {},
-                    onLongClick = { showMsgMenu = true },
-                )
-            ),
+            .padding(top = if (first) 6.dp else 0.dp),
         contentAlignment = align,
     ) {
-        DropdownMenu(expanded = showMsgMenu, onDismissRequest = { showMsgMenu = false }) {
-            DropdownMenuItem(
-                text = { Text("Denunciar este mensaje") },
-                leadingIcon = {
-                    Icon(
-                        NyxFlagIcon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
+        if (onReport != null) {
+            DropdownMenu(expanded = showMsgMenu, onDismissRequest = { showMsgMenu = false }) {
+                if (copyable) {
+                    DropdownMenuItem(
+                        text = { Text("Copiar") },
+                        leadingIcon = { Icon(NyxCopyIcon, contentDescription = null) },
+                        onClick = {
+                            showMsgMenu = false
+                            copyMessageText(context, message.text)
+                        },
                     )
-                },
-                onClick = { showMsgMenu = false; onReport?.invoke() },
-            )
+                }
+                DropdownMenuItem(
+                    text = { Text("Denunciar este mensaje") },
+                    leadingIcon = {
+                        Icon(
+                            NyxFlagIcon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    onClick = { showMsgMenu = false; onReport.invoke() },
+                )
+            }
+        } else if (showMsgMenu) {
+            Popup(
+                alignment = if (message.mine) Alignment.TopEnd else Alignment.TopStart,
+                offset = IntOffset(0, with(LocalDensity.current) { (-6).dp.roundToPx() }),
+                onDismissRequest = { showMsgMenu = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 3.dp,
+                ) {
+                    IconButton(
+                        onClick = {
+                            showMsgMenu = false
+                            copyMessageText(context, message.text)
+                        },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        // Con el texto fuera, la descripción es lo único que queda para
+                        // TalkBack: sin ella el botón sería un icono mudo.
+                        Icon(
+                            NyxCopyIcon,
+                            contentDescription = "Copiar mensaje",
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
         }
         Column(
             Modifier
@@ -1236,8 +1285,22 @@ private fun MessageBubble(
                         }
                     } else Modifier,
                 )
-                // Un mensaje fallido es tocable para reintentar el envío.
-                .then(if (failed) Modifier.clickable(onClick = onRetry) else Modifier)
+                // Un toque reintenta si el mensaje falló; la pulsación larga abre las acciones
+                // del mensaje. Va en un solo `combinedClickable` porque encadenar dos
+                // modificadores de gesto haría que el segundo no llegue a ver el evento.
+                .then(
+                    if (failed || longPressable) {
+                        Modifier.combinedClickable(
+                            onClick = { if (failed) onRetry() },
+                            onLongClick = if (longPressable) {
+                                {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMsgMenu = true
+                                }
+                            } else null,
+                        )
+                    } else Modifier,
+                )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             CompositionLocalProvider(LocalContentColor provides onBg) {
@@ -1268,7 +1331,7 @@ private fun MessageBubble(
                         } else {
                             FileAttachment(message.file)
                         }
-                    else -> Text(message.text, color = onBg)
+                    else -> Text(rememberLinkifiedText(message.text, onBg), color = onBg)
                 }
                 // Pie de burbuja: hora y, en las propias, el estado como icono (reloj/✓/✓✓).
                 if (failed) {

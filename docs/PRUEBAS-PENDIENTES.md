@@ -591,6 +591,14 @@ citadas, 24 sep) lo ignora; **el build del 2 sep no**: lo pintaría como un mens
 basura. Por eso conviene actualizar **los dos móviles a la vez**, o aceptar esa burbuja rara en
 el que vaya por detrás.
 
+**TECNO actualizado el 24 sep 2026 a las 11:50** (copia en crudo previa de la base v6, prefs
+y ficheros): las migraciones 6→7→8→9 corrieron sobre la base real sin tumbar la app, el segundo
+arranque va bien, Lucia sigue ahí y todo el historial visible se lee (ningún `[cifrado]` ni
+«no compatible»); red en verde (filtro 3 permitidos, DHT, relay, Lucia encontrada, wake). El
+anuncio `V` a Lucia salió en el primer arranque (en el segundo ya no queda nada pendiente), así
+que **si su móvil sigue con el build del 2 sep verá una burbuja rara**: es ese anuncio, no un
+mensaje suyo. Falta instalarle el APK del escritorio y seguir desde el punto 1.
+
 1. - [ ] Los dos móviles con este build. Tras un ciclo WAN (≤ 3 min), cada uno debe tener al otro
      con `peerProtocol ≥ 2` (se ve en que los mensajes siguientes ya no llevan la cabecera v1;
      en el diagnóstico, el anuncio sale una vez por contacto).

@@ -57,9 +57,22 @@ data class CallState(
 /**
  * Orquesta las llamadas de voz (Fase 7b, Opción A): señalización por sobres E2EE `C`
  * (vía [ChatService], directo → buzón), medios por un stream libp2p `/nyx/call/1.0.0`
- * (directo por DCUtR o relayed), y cada frame de audio cifrado con una **clave por llamada**
- * `HKDF(sharedSecret, callId)`. El que llama abre el stream tras el accept y manda un
- * "hello" cifrado; el receptor lo valida (autentica la llamada) antes de arrancar el audio.
+ * (directo por DCUtR o relayed), y cada frame de audio cifrado con una **clave por llamada**.
+ * El que llama abre el stream tras el accept y manda un "hello" cifrado; el receptor lo valida
+ * (autentica la llamada) antes de arrancar el audio.
+ *
+ * **La clave de la llamada se negocia** (fase 7 del ratchet): cada lado sortea 32 bytes y los
+ * manda dentro del sobre `C` —el invite lleva la mitad de quien llama, el accept la del que
+ * contesta— y la clave sale de las dos, `HKDF(k_llamante ‖ k_contestador)`. Antes se derivaba
+ * de `HKDF(secreto_estático, callId)`, o sea que **quien robara la identidad podía descifrar
+ * cualquier llamada que hubiera grabado**, pasada o futura. Ahora hace falta además el sobre
+ * de señalización de esa llamada concreta; y en cuanto el envío por ratchet esté encendido,
+ * ese sobre tiene secreto hacia adelante y la llamada lo hereda entero, sin tocar el
+ * streaming ni un byte.
+ *
+ * Con un contacto que aún no lo entiende se sigue por el camino antiguo (ver
+ * `ChatService.sendCallSignal`): una llamada que suena vale más que una llamada perfecta que
+ * el otro no puede recibir.
  */
 @Singleton
 class CallService @Inject constructor(
@@ -74,6 +87,14 @@ class CallService @Inject constructor(
 
     private val mutex = Mutex()
     private var callKey: ByteArray? = null
+
+    /** Mitad de clave propia de la llamada en curso (la que se manda en el invite/accept). */
+    private var localHalf: ByteArray? = null
+
+    /** Mitad del otro extremo, si la mandó. Null = contacto antiguo, sin negociación. */
+    private var remoteHalf: ByteArray? = null
+
+    private val random = java.security.SecureRandom()
     private var stream: CallStream? = null
     private var txFrames: Channel<ByteArray>? = null
     private var mediaJobs: List<Job> = emptyList()
@@ -124,14 +145,18 @@ class CallService @Inject constructor(
         val started = mutex.withLock {
             if (!idle()) return@withLock false
             val callId = UUID.randomUUID().toString()
+            // Clave de respaldo por si el otro extremo no negocia (contacto antiguo). Si
+            // negocia, el accept la sustituye antes de que se abra el stream.
             callKey = deriveCallKey(secret, callId)
+            localHalf = ByteArray(HALF_BYTES).also(random::nextBytes)
+            remoteHalf = null
             _state.value = CallState(CallPhase.CALLING, contact, callId, outgoing = true)
             armTimeout(RING_TIMEOUT_MS) { onOutgoingTimeout() }
             true
         }
         if (!started) return
         chat.diagnose("📞 llamando a ${contact.displayName}…")
-        runCatching { chat.sendCallSignal(contact, KIND_INVITE, _state.value.callId) }
+        runCatching { chat.sendCallSignal(contact, KIND_INVITE, _state.value.callId, localHalf) }
             .onFailure { endCall("sin conexión", sendHangup = false) }
     }
 
@@ -144,7 +169,7 @@ class CallService @Inject constructor(
             armTimeout(CONNECT_TIMEOUT_MS) { endCall("no se pudo conectar", sendHangup = true) }
             s
         }
-        runCatching { chat.sendCallSignal(st.contact!!, KIND_ACCEPT, st.callId) }
+        runCatching { chat.sendCallSignal(st.contact!!, KIND_ACCEPT, st.callId, localHalf) }
             .onFailure { endCall("sin conexión", sendHangup = false) }
     }
 
@@ -185,7 +210,18 @@ class CallService @Inject constructor(
                 val proceed = mutex.withLock {
                     val s = _state.value
                     (s.phase == CallPhase.CALLING && s.callId == sig.callId && s.contact?.id == contact.id)
-                        .also { if (it) _state.value = s.copy(phase = CallPhase.CONNECTING) }
+                        .also {
+                            if (it) {
+                                // La otra mitad llega aquí, **antes** de abrir el stream: el
+                                // primer byte de medios ya va con la clave negociada.
+                                remoteHalf = sig.key
+                                negotiatedKey(
+                                    contact.sharedSecret, s.callId,
+                                    caller = localHalf, callee = sig.key,
+                                )?.let { negociada -> callKey = negociada }
+                                _state.value = s.copy(phase = CallPhase.CONNECTING)
+                            }
+                        }
                 }
                 if (proceed) connectAsCaller()
             }
@@ -201,7 +237,7 @@ class CallService @Inject constructor(
                             teardownLocked()
                             _state.value = CallState()
                         }
-                        runCatching { chat.recordMissedCall(contact) }
+                        runCatching { chat.recordMissedCall(contact, sig.callId) }
                     }
                     CallPhase.CALLING, CallPhase.CONNECTING, CallPhase.ACTIVE ->
                         endCall("finalizada", sendHangup = false)
@@ -225,17 +261,43 @@ class CallService @Inject constructor(
         if (chat.isBlocked(contact.peerId)) return
 
         val secret = contact.sharedSecret ?: return
-        // Un invite rancio (llegó por buzón mucho después; reloj adelantado cuenta como
-        // fresco) ya no debe timbrar: fila de "llamada perdida" y listo.
-        if (System.currentTimeMillis() - sig.ts > INVITE_FRESH_MS) {
-            runCatching { chat.recordMissedCall(contact) }
+        val now = System.currentTimeMillis()
+        // Un invite se atiende UNA vez por llamada (H-7). Por la clave estática no hay
+        // deduplicación de sobres, así que un nodo que guarde un invite del buzón podía
+        // devolverlo y hacer sonar otra vez una llamada ya rechazada, mandar otro "busy", o
+        // sumar una fila de "llamada perdida" por cada entrega.
+        if (!firstSighting(contact.id, sig.callId, now)) {
+            chat.diagnose("📞 invite repetido de ${contact.displayName}: ignorado")
+            return
+        }
+        // Límite hacia el futuro. Antes no había ninguno, y un invite con la fecha adelantada
+        // seguía «fresco» tanto tiempo como el adelanto: es lo que acota cuánto tiene que durar
+        // la memoria de arriba. Es holgado a propósito, porque un reloj algo desajustado no puede
+        // costar la llamada; pasado el límite queda como perdida, no desaparece en silencio.
+        if (sig.ts - now > INVITE_FUTURE_MS) {
+            chat.diagnose(
+                "📞 invite de ${contact.displayName} con el reloj ${(sig.ts - now) / 60_000} min " +
+                    "adelantado: no timbra",
+            )
+            runCatching { chat.recordMissedCall(contact, sig.callId) }
+            return
+        }
+        // Un invite rancio (llegó por buzón mucho después) ya no debe timbrar: fila de
+        // "llamada perdida" y listo.
+        if (now - sig.ts > INVITE_FRESH_MS) {
+            runCatching { chat.recordMissedCall(contact, sig.callId) }
             return
         }
         val busy = mutex.withLock {
             if (!idle()) {
                 _state.value.callId != sig.callId // otra llamada distinta → ocupado
             } else {
-                callKey = deriveCallKey(secret, sig.callId)
+                remoteHalf = sig.key
+                localHalf = ByteArray(HALF_BYTES).also(random::nextBytes)
+                // Si el otro negoció, la clave sale ya de las dos mitades: quien contesta las
+                // tiene ambas desde este momento (la suya la acaba de sortear).
+                callKey = negotiatedKey(secret, sig.callId, caller = sig.key, callee = localHalf)
+                    ?: deriveCallKey(secret, sig.callId)
                 _state.value = CallState(CallPhase.RINGING, contact, sig.callId, outgoing = false)
                 armTimeout(RING_TIMEOUT_MS) { onRingingTimeout() }
                 chat.diagnose("📞 llamada entrante de ${contact.displayName}")
@@ -498,6 +560,8 @@ class CallService @Inject constructor(
         videoIn = null
         runCatching { audio.stop() }
         callKey = null
+        localHalf = null
+        remoteHalf = null
     }
 
     private suspend fun onOutgoingTimeout() {
@@ -513,7 +577,7 @@ class CallService @Inject constructor(
             _state.value = CallState()
             s
         }
-        st.contact?.let { runCatching { chat.recordMissedCall(it) } }
+        st.contact?.let { runCatching { chat.recordMissedCall(it, st.callId) } }
     }
 
     private fun scheduleReset() {
@@ -531,6 +595,31 @@ class CallService @Inject constructor(
 
     private fun currentCall(callId: String): Boolean = _state.value.callId == callId
 
+    /**
+     * `(contacto, callId)` de los invites ya atendidos, con la hora a la que llegaron (H-7).
+     * Solo hace falta para `invite`: `accept`, `reject`, `busy` y `hangup` ya se ignoran fuera
+     * de la llamada en curso, cuyo `callId` es aleatorio.
+     *
+     * Vive en memoria y no sobrevive a un reinicio, y basta: un invite con fecha `ts` solo puede
+     * timbrar mientras `now ∈ [ts − INVITE_FUTURE_MS, ts + INVITE_FRESH_MS]`, un intervalo de
+     * [INVITE_MEMORY_MS], así que recordarlo ese tiempo desde que se ve cubre toda su vida útil.
+     * Lo que sí puede volver días después, la fila de llamada perdida, es idempotente en la base
+     * (`ChatService.recordMissedCall`).
+     */
+    private val seenInvites = LinkedHashMap<String, Long>()
+
+    /** True la primera vez que se ve este invite; false si ya se atendió. */
+    private fun firstSighting(contactId: String, callId: String, now: Long): Boolean =
+        synchronized(seenInvites) {
+            val horizon = now - INVITE_MEMORY_MS
+            seenInvites.entries.removeIf { it.value < horizon }
+            val key = "$contactId\u0000$callId"
+            if (key in seenInvites) return false
+            seenInvites[key] = now
+            while (seenInvites.size > SEEN_INVITES_MAX) seenInvites.remove(seenInvites.keys.first())
+            true
+        }
+
     private fun armTimeout(ms: Long, action: suspend () -> Unit) {
         timeoutJob?.cancel()
         timeoutJob = scope.launch {
@@ -539,8 +628,32 @@ class CallService @Inject constructor(
         }
     }
 
+    /** Camino antiguo: la clave es función del secreto estático, así que no tiene PFS. */
     private fun deriveCallKey(sharedSecret: ByteArray, callId: String): ByteArray =
         Hkdf.derive(sharedSecret, CALL_KEY_SALT, callId.toByteArray(Charsets.UTF_8), 32)
+
+    /**
+     * Clave negociada de la llamada: `HKDF(k_llamante ‖ k_contestador, salt = secreto)`. Null
+     * si falta alguna mitad (contacto que no negocia) → se usa el camino antiguo.
+     *
+     * El orden es siempre llamante-primero, que ambos extremos conocen sin hablarlo. Y el
+     * secreto compartido va de sal para que la clave siga atada a **esa pareja**: sin él, dos
+     * mitades interceptadas bastarían.
+     */
+    private fun negotiatedKey(
+        sharedSecret: ByteArray?,
+        callId: String,
+        caller: ByteArray?,
+        callee: ByteArray?,
+    ): ByteArray? {
+        if (sharedSecret == null || caller == null || callee == null) return null
+        return Hkdf.derive(
+            ikm = caller + callee,
+            salt = sharedSecret,
+            info = "nyx-call-key-v2:$callId".toByteArray(Charsets.UTF_8),
+            length = 32,
+        )
+    }
 
     private fun helloPayload(callId: String): ByteArray =
         "HELLO:$callId".toByteArray(Charsets.UTF_8)
@@ -549,7 +662,13 @@ class CallService @Inject constructor(
     private fun videoHelloPayload(callId: String): ByteArray =
         "VHELLO:$callId".toByteArray(Charsets.UTF_8)
 
-    private companion object {
+    // `internal` (no `private`): el test que fija que la clave ya NO sale del secreto estático
+    // tiene que usar la sal de verdad. Escribiéndola a mano, la aserción pasa por el motivo
+    // equivocado — ninguna clave inventada abre nada.
+    internal companion object {
+        /** Bytes que aporta cada lado a la clave de la llamada. */
+        const val HALF_BYTES = 32
+
         const val KIND_INVITE = "invite"
         const val KIND_ACCEPT = "accept"
         const val KIND_REJECT = "reject"
@@ -560,6 +679,18 @@ class CallService @Inject constructor(
         const val RING_TIMEOUT_MS = 45_000L
         /** Un invite más viejo que esto (p. ej. del buzón) ya no timbra: perdida. */
         const val INVITE_FRESH_MS = 45_000L
+        /**
+         * Cuánto puede ir adelantado el reloj de quien llama. Más allá, el invite no timbra y
+         * queda como perdida. Holgado: los móviles sincronizan la hora, pero no todos.
+         */
+        const val INVITE_FUTURE_MS = 10 * 60_000L
+        /** Lo que dura la ventana en la que un mismo invite podría timbrar (ver `seenInvites`). */
+        const val INVITE_MEMORY_MS = INVITE_FRESH_MS + INVITE_FUTURE_MS
+        /**
+         * Tope de invites recordados. Echar uno fuera exige cientos de invites auténticos
+         * distintos y frescos a la vez; la red sola no los tiene.
+         */
+        const val SEEN_INVITES_MAX = 256
         /** Tras aceptar, cuánto esperar el stream de medios. */
         const val CONNECT_TIMEOUT_MS = 20_000L
         /** Espera del hello en un stream entrante. */

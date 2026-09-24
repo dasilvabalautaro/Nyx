@@ -12,10 +12,15 @@ package chat.neto.nyx.p2p
  *   FMETA: "F\n<fileId>\n<total>\n<size>\n<mime>\n<name>"  (anuncia un archivo troceado)
  *   FCHNK: "K\n<fileId>\n<index>\n" ++ <bytes del trozo>   (un trozo del archivo)
  *   FDESC: "D\n<size>\n<mime>\n<path>\n<name>"  (descriptor LOCAL del archivo; nunca se envía)
- *   CALL:  "C\n<kind>\n<callId>\n<ts>"  (señalización de llamada: invite/accept/reject/
- *          hangup/busy; ts = unix millis del emisor, para descartar invites rancios)
+ *   CALL:  "C\n<kind>\n<callId>\n<ts>[\n<mitad de clave en hex>]"  (señalización de llamada:
+ *          invite/accept/reject/hangup/busy; ts = unix millis del emisor, para descartar
+ *          invites rancios). La quinta línea es **opcional**: la mitad aleatoria de la clave
+ *          de esa llamada (ver `CallService`). Solo se le manda a quien haya anunciado que la
+ *          entiende — un cliente anterior parte esta cabecera en 3 y descartaría la señal
+ *          entera, o sea que la llamada ni sonaría.
  *   LIKE:  "L\n<ts>"                        ("me gusta" del tablón; ts = unix millis)
  *   REPLY: "Y\n<replyToId>\n" ++ <sobre interior>   (cita: envuelve a T/I/F/D)
+ *   HELLO: "V\n<versión>[\n<la versión que tengo apuntada de ti>]"  (anuncio de capacidad)
  *
  * REPLY es un **envoltorio**, no un tipo de contenido: cita el mensaje [replyToId] y dentro
  * lleva el sobre normal del mensaje que responde. Así responder funciona con cualquier
@@ -54,8 +59,30 @@ object MessageEnvelope {
         data class FileDescriptor(
             val name: String, val mime: String, val size: Long, val path: String?,
         ) : Decoded
-        /** Señal de llamada: [kind] ∈ invite/accept/reject/hangup/busy, [ts] = unix millis. */
-        data class Call(val kind: String, val callId: String, val ts: Long) : Decoded
+        /**
+         * Señal de llamada: [kind] ∈ invite/accept/reject/hangup/busy, [ts] = unix millis.
+         * [key] es la mitad de la clave de esa llamada que aporta quien envía la señal (solo
+         * en invite y accept, y solo hacia clientes que la entienden); null = camino antiguo,
+         * con la clave derivada del secreto estático.
+         */
+        data class Call(
+            val kind: String,
+            val callId: String,
+            val ts: Long,
+            val key: ByteArray? = null,
+        ) : Decoded {
+            override fun equals(other: Any?) = other is Call && kind == other.kind &&
+                callId == other.callId && ts == other.ts &&
+                (key?.contentEquals(other.key) ?: (other.key == null))
+
+            override fun hashCode(): Int {
+                var r = kind.hashCode()
+                r = 31 * r + callId.hashCode()
+                r = 31 * r + ts.hashCode()
+                r = 31 * r + (key?.contentHashCode() ?: 0)
+                return r
+            }
+        }
 
         /**
          * "Me gusta" desde el tablón. No lleva id ni cuerpo a propósito: **quién** lo manda ya
@@ -71,6 +98,21 @@ object MessageEnvelope {
          * otra [Reply] ni una señal.
          */
         data class Reply(val replyTo: String, val inner: Decoded) : Decoded
+        /**
+         * Anuncio de capacidad: el contacto dice qué versión de protocolo habla. Sirve para
+         * encender el ratchet **por contacto** en vez de por publicación (ver
+         * `docs/krypta/DISENO-ratchet.md` §5): un cliente anterior lo recibe como [Unsupported] y lo
+         * ignora sin pintar nada, que es justo lo que hace falta para poder anunciarlo ya.
+         *
+         * [knows] es la versión que el que lo envía **tiene apuntada de nosotros** (null = un
+         * cliente anterior al 14 sep 2026, que no la manda). Existe por el hallazgo H-1 de
+         * `docs/krypta/REVISION-protocolo-2026-09-14.md`: el anuncio sale una sola vez por versión, así
+         * que quien lo pierde (borró el contacto y lo volvió a añadir, importó un `.krbk`) no
+         * tenía forma de volver a saberlo, y el otro no tenía forma de enterarse de que hacía
+         * falta repetirlo. Un cliente anterior lee solo la primera línea, así que no le afecta.
+         */
+        data class Hello(val protocol: Int, val knows: Int? = null) : Decoded
+
         /** Sobre bien formado de un tipo que esta versión no conoce (cliente más nuevo). */
         data object Unsupported : Decoded
     }
@@ -93,8 +135,16 @@ object MessageEnvelope {
     fun encodeFileDescriptor(name: String, mime: String, size: Long, path: String?): ByteArray =
         "D\n$size\n$mime\n${path ?: ""}\n$name".toByteArray(Charsets.UTF_8)
 
-    fun encodeCall(kind: String, callId: String, ts: Long): ByteArray =
-        "C\n$kind\n$callId\n$ts".toByteArray(Charsets.UTF_8)
+    /**
+     * Anuncia a un contacto qué versión de protocolo habla este cliente y, si se pasa [knows],
+     * qué versión tenemos apuntada de él (ver [Decoded.Hello.knows]).
+     */
+    fun encodeHello(protocol: Int, knows: Int? = null): ByteArray =
+        ("V\n$protocol" + (knows?.let { "\n$it" } ?: "")).toByteArray(Charsets.UTF_8)
+
+    fun encodeCall(kind: String, callId: String, ts: Long, key: ByteArray? = null): ByteArray =
+        ("C\n$kind\n$callId\n$ts" + (key?.let { "\n" + it.toHex() } ?: ""))
+            .toByteArray(Charsets.UTF_8)
 
     fun encodeLike(ts: Long): ByteArray = "L\n$ts".toByteArray(Charsets.UTF_8)
 
@@ -133,13 +183,24 @@ object MessageEnvelope {
                 val index = String(bytes, idEnd + 1, idxEnd - idEnd - 1, Charsets.UTF_8).toIntOrNull() ?: return null
                 Decoded.FileChunk(fileId, index, bytes.copyOfRange(idxEnd + 1, bytes.size))
             }
+            'V' -> {
+                // V\n<versión>[\n<la que tengo apuntada de ti>]. La versión es la primera línea
+                // y es lo único obligatorio: un cliente anterior solo lee esa. Lo que no se
+                // entienda en la segunda (o lo que añada una versión futura detrás) se ignora
+                // sin que el sobre deje de entenderse.
+                val lines = String(bytes, 2, bytes.size - 2, Charsets.UTF_8).split('\n')
+                val protocol = lines[0].trim().toIntOrNull() ?: return null
+                Decoded.Hello(protocol, knows = lines.getOrNull(1)?.trim()?.toIntOrNull())
+            }
             'C' -> {
-                // C\n<kind>\n<callId>\n<ts>
-                val parts = String(bytes, 2, bytes.size - 2, Charsets.UTF_8).split("\n", limit = 3)
+                // C\n<kind>\n<callId>\n<ts>[\n<clave hex>]
+                val parts = String(bytes, 2, bytes.size - 2, Charsets.UTF_8).split("\n", limit = 4)
                 if (parts.size < 3) return null
                 val ts = parts[2].toLongOrNull() ?: return null
                 if (parts[0].isBlank() || parts[1].isBlank()) return null
-                Decoded.Call(parts[0], parts[1], ts)
+                // Una clave ilegible no invalida la señal: se trata como si no viniera y la
+                // llamada cae al camino antiguo, que es preferible a no timbrar.
+                Decoded.Call(parts[0], parts[1], ts, parts.getOrNull(3)?.let(::fromHex))
             }
             'L' -> {
                 // L\n<ts>
@@ -172,6 +233,16 @@ object MessageEnvelope {
             in 'A'..'Z' -> Decoded.Unsupported
             else -> null
         }
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    /** Hex → bytes; null si no es hexadecimal par (una señal con basura no debe romper nada). */
+    private fun fromHex(hex: String): ByteArray? {
+        if (hex.length % 2 != 0 || hex.isEmpty()) return null
+        return runCatching {
+            ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        }.getOrNull()
     }
 
     /** Parsea el prefijo común `X\n<id>\n<body>` → (id, body). */

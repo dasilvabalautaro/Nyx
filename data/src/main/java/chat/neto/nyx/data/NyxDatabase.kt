@@ -8,9 +8,12 @@ import chat.neto.nyx.data.dao.ContactDao
 import chat.neto.nyx.data.dao.LikeDao
 import chat.neto.nyx.data.dao.MessageDao
 import chat.neto.nyx.data.entity.BlockedPeerEntity
+import chat.neto.nyx.data.dao.RatchetDao
 import chat.neto.nyx.data.entity.ContactEntity
 import chat.neto.nyx.data.entity.LikeEntity
 import chat.neto.nyx.data.entity.MessageEntity
+import chat.neto.nyx.data.entity.RatchetSeenEntity
+import chat.neto.nyx.data.entity.RatchetSessionEntity
 
 @Database(
     entities = [
@@ -18,8 +21,10 @@ import chat.neto.nyx.data.entity.MessageEntity
         ContactEntity::class,
         LikeEntity::class,
         BlockedPeerEntity::class,
+        RatchetSessionEntity::class,
+        RatchetSeenEntity::class,
     ],
-    version = 6,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -28,4 +33,5 @@ abstract class NyxDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
     abstract fun likeDao(): LikeDao
     abstract fun blockedPeerDao(): BlockedPeerDao
+    abstract fun ratchetDao(): RatchetDao
 }

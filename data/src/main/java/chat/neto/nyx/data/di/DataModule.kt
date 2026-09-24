@@ -3,6 +3,8 @@ package chat.neto.nyx.data.di
 import android.content.Context
 import androidx.room.Room
 import chat.neto.nyx.core.repository.BlockRepository
+import chat.neto.nyx.core.RatchetStore
+import chat.neto.nyx.core.TransactionRunner
 import chat.neto.nyx.core.repository.ContactRepository
 import chat.neto.nyx.core.repository.LikeRepository
 import chat.neto.nyx.core.repository.MessageRepository
@@ -11,6 +13,9 @@ import chat.neto.nyx.data.MIGRATION_2_3
 import chat.neto.nyx.data.MIGRATION_3_4
 import chat.neto.nyx.data.MIGRATION_4_5
 import chat.neto.nyx.data.MIGRATION_5_6
+import chat.neto.nyx.data.MIGRATION_6_7
+import chat.neto.nyx.data.MIGRATION_7_8
+import chat.neto.nyx.data.MIGRATION_8_9
 import chat.neto.nyx.data.crypto.DatabaseEncryption
 import chat.neto.nyx.data.crypto.DatabaseKey
 import chat.neto.nyx.data.crypto.KeyPrefs
@@ -21,9 +26,12 @@ import chat.neto.nyx.data.dao.ContactDao
 import chat.neto.nyx.data.dao.LikeDao
 import chat.neto.nyx.data.dao.MessageDao
 import chat.neto.nyx.data.repository.RoomBlockRepository
+import chat.neto.nyx.data.dao.RatchetDao
 import chat.neto.nyx.data.repository.RoomContactRepository
 import chat.neto.nyx.data.repository.RoomLikeRepository
 import chat.neto.nyx.data.repository.RoomMessageRepository
+import chat.neto.nyx.data.repository.RoomRatchetStore
+import chat.neto.nyx.data.repository.RoomTransactionRunner
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -55,7 +63,7 @@ object DatabaseModule {
         return Room.databaseBuilder(context, NyxDatabase::class.java, "nyx.db")
             .openHelperFactory(SqlCipher.openHelperFactory(passphrase))
             // Migraciones reales: preservan contactos + mensajes al subir de versión.
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             // Red de seguridad solo para la v1 antigua (sin migración definida); v2+ migra.
             .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
             .build()
@@ -85,6 +93,9 @@ object DatabaseModule {
 
     @Provides
     fun provideBlockedPeerDao(database: NyxDatabase): BlockedPeerDao = database.blockedPeerDao()
+
+    @Provides
+    fun provideRatchetDao(database: NyxDatabase): RatchetDao = database.ratchetDao()
 }
 
 @Module
@@ -102,4 +113,10 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindBlockRepository(impl: RoomBlockRepository): BlockRepository
+
+    @Binds
+    abstract fun bindRatchetStore(impl: RoomRatchetStore): RatchetStore
+
+    @Binds
+    abstract fun bindTransactionRunner(impl: RoomTransactionRunner): TransactionRunner
 }

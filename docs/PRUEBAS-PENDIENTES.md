@@ -578,6 +578,35 @@ en el TECNO con los tests de `:data`, pero **ninguna sobre la base real** de la 
 
 ---
 
+## 18. Doble ratchet y depósito ciego entre dos móviles (porte del 24 sep) — **PENDIENTE (2 móviles)**
+
+El build con el doble ratchet (porte de Krypta, ver `docs/SYNC-KRYPTA.md` y `docs/krypta/`)
+cifra con claves que cambian con cada mensaje a quien haya **anunciado** protocolo ≥ 2 con el
+sobre `V`, y deposita **a ciegas** en el buzón a ese mismo contacto. Con cualquier otro sigue en
+v1. Krypta tiene esta misma prueba pendiente (su §16): nadie la ha hecho con dos móviles.
+
+**Aviso antes de instalar en uno solo**: al arrancar, el build nuevo manda el sobre `V` a cada
+contacto. Un cliente con el manejo de «sobre desconocido» (desde el porte de las respuestas
+citadas, 24 sep) lo ignora; **el build del 2 sep no**: lo pintaría como un mensaje de texto
+basura. Por eso conviene actualizar **los dos móviles a la vez**, o aceptar esa burbuja rara en
+el que vaya por detrás.
+
+1. - [ ] Los dos móviles con este build. Tras un ciclo WAN (≤ 3 min), cada uno debe tener al otro
+     con `peerProtocol ≥ 2` (se ve en que los mensajes siguientes ya no llevan la cabecera v1;
+     en el diagnóstico, el anuncio sale una vez por contacto).
+2. - [ ] Mensajes en los dos sentidos, **también a la vez** (los dos escribiendo): las épocas
+     están pensadas para que no se bifurquen, y es lo primero que conviene ver en vivo.
+3. - [ ] Con uno de los dos cerrado: el mensaje debe depositarse **a ciegas** (en el nodo,
+     `ls /var/lib/nyx/mailbox/` muestra un directorio de 64 hex, no un PeerID) y llegar al abrir.
+4. - [ ] Foto, nota de voz y GIF: los adjuntos se guardan cifrados (`FileVault`), así que la nota
+     debe reproducirse y el GIF animarse desde memoria.
+5. - [ ] Una llamada: la clave se negocia ahora dentro del sobre `C`; debe conectar y oírse igual.
+6. - [ ] Historial anterior intacto (las filas de antes se convierten en segundo plano).
+7. - [ ] **Si algo va mal**: `ChatService.RATCHET_SEND = false` en un build devuelve los envíos a
+     v1 sin tocar lo guardado (el interruptor de emergencia de Krypta).
+
+---
+
 ## 10. DCUtR directo en celular (gate de NAT) — **BLOQUEADO por hardware**
 Requiere **2 SIMs de operadoras distintas** (CGNAT real). Medir si la conexión sube a
 directa (DCUtR) o se queda en relay.

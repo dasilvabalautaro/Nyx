@@ -81,7 +81,7 @@ func Sum(a, b int) int { return a + b }
 //
 // Sustituye a un número de versión escrito a mano que nadie mantenía: hasta el 14 sep 2026
 // decía "0.0.18-rdv1pass" aunque el AAR se había regenerado varias veces después, así que no
-// servía para saber de qué fuente salía un binario. Ver docs/PLAN-privacidad-y-confianza.md §4.3.
+// servía para saber de qué fuente salía un binario. Ver docs/krypta/PLAN-privacidad-y-confianza.md §4.3.
 var buildCommit = "desconocido"
 
 // Version devuelve el commit del que se compiló el puente (ver buildCommit).
@@ -153,6 +153,37 @@ func SharedSecretFor(identity []byte, peerID string) ([]byte, error) {
 	montPub := point.BytesMontgomery() // u-coordinate Montgomery (X25519)
 
 	return curve25519.X25519(scalar[:], montPub)
+}
+
+// RatchetKeyPair sortea un par efímero X25519 para el ratchet y lo devuelve como
+// privada(32) || pública(32). Es material efímero de un solo uso: nunca se deriva de la
+// identidad, y borrarlo es lo que da el secreto hacia adelante (docs/krypta/DISENO-ratchet.md §0).
+//
+// Vive aquí y no en Kotlin porque Android no trae X25519 (`XDH`) hasta la API 33 y el minSdk
+// de Nyx es 30; en la JVM de los tests se usa el del JDK.
+func RatchetKeyPair() ([]byte, error) {
+	var priv [32]byte
+	if _, err := io.ReadFull(rand.Reader, priv[:]); err != nil {
+		return nil, err
+	}
+	// Clamp RFC 7748: descarta la cofactor-torsión y fija el bit alto.
+	priv[0] &= 248
+	priv[31] &= 127
+	priv[31] |= 64
+	pub, err := curve25519.X25519(priv[:], curve25519.Basepoint)
+	if err != nil {
+		return nil, err
+	}
+	return append(priv[:], pub...), nil
+}
+
+// RatchetAgree calcula X25519(priv, pub). Devuelve error con un punto de orden bajo (el
+// resultado sería todo ceros), que es justo lo que el ratchet no debe aceptar.
+func RatchetAgree(priv []byte, pub []byte) ([]byte, error) {
+	if len(priv) != 32 || len(pub) != 32 {
+		return nil, fmt.Errorf("X25519 espera claves de 32 bytes, no %d/%d", len(priv), len(pub))
+	}
+	return curve25519.X25519(priv, pub)
 }
 
 // MessageHandler is implemented on the Kotlin side to receive inbound messages.
@@ -321,7 +352,7 @@ func (n *Node) SetPeerHandler(h PeerHandler) { n.peerHandler = h }
 // same serviceTag are found and auto-connected (no bootstrap/DHT needed). This is Nyx's
 // optional LAN path; WAN discovery still goes through the DHT + rendezvous.
 // Va **apagado de serie** desde el 10 sep 2026 (lo decide la app): anunciarse en la WiFi
-// delata el PeerID a cualquiera que comparta la red. Ver docs/security-model.md §5.1.
+// delata el PeerID a cualquiera que comparta la red. Ver docs/krypta/security-model.md §5.1.
 func (n *Node) StartMdns(serviceTag string) error {
 	svc := mdns.NewMdnsService(n.h, serviceTag, &mdnsNotifee{n: n})
 	if err := svc.Start(); err != nil {
@@ -821,7 +852,7 @@ const (
 	mbxGetProtocol = protocol.ID("/nyx/mbx/get/1.0.0")
 
 	// v2 — depósito ciego: el buzón se direcciona por una etiqueta derivada del secreto de la
-	// pareja, no por el PeerID del destinatario (docs/DISENO-buzon-ciego.md). El cliente
+	// pareja, no por el PeerID del destinatario (docs/krypta/DISENO-buzon-ciego.md). El cliente
 	// intenta siempre v2 y cae a v1 SOLO si el nodo no lo entiende todavía.
 	mbxPutProtocolV2 = protocol.ID("/nyx/mbx/put/2.0.0")
 	mbxGetProtocolV2 = protocol.ID("/nyx/mbx/get/2.0.0")

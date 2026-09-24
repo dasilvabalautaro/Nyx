@@ -1,5 +1,6 @@
 package chat.neto.nyx.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -23,6 +24,10 @@ data class ContactEntity(
     val peerId: String,
     val publicKey: ByteArray,
     val verified: Boolean = false,
+    /** Versión de protocolo anunciada por el contacto (0 = desconocida). */
+    @ColumnInfo(defaultValue = "0") val peerProtocol: Int = 0,
+    /** Versión que ya le anunciamos (0 = nunca), para no repetir el anuncio cada arranque. */
+    @ColumnInfo(defaultValue = "0") val announcedProtocol: Int = 0,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -31,7 +36,9 @@ data class ContactEntity(
             displayName == other.displayName &&
             peerId == other.peerId &&
             publicKey.contentEquals(other.publicKey) &&
-            verified == other.verified
+            verified == other.verified &&
+            peerProtocol == other.peerProtocol &&
+            announcedProtocol == other.announcedProtocol
     }
 
     override fun hashCode(): Int {
@@ -40,6 +47,8 @@ data class ContactEntity(
         result = 31 * result + peerId.hashCode()
         result = 31 * result + publicKey.contentHashCode()
         result = 31 * result + verified.hashCode()
+        result = 31 * result + peerProtocol
+        result = 31 * result + announcedProtocol
         return result
     }
 }

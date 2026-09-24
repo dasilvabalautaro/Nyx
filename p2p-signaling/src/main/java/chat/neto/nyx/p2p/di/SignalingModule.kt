@@ -1,9 +1,11 @@
 package chat.neto.nyx.p2p.di
 
+import chat.neto.nyx.core.Curve25519
 import chat.neto.nyx.core.ISignalingService
 import chat.neto.nyx.core.KeyExchange
 import chat.neto.nyx.core.MessageCipher
 import chat.neto.nyx.p2p.AesGcmMessageCipher
+import chat.neto.nyx.nativebridge.BridgeCurve25519
 import chat.neto.nyx.p2p.Libp2pKeyExchange
 import chat.neto.nyx.p2p.SignalingService
 import dagger.Binds
@@ -23,4 +25,9 @@ abstract class SignalingModule {
 
     @Binds
     abstract fun bindKeyExchange(impl: Libp2pKeyExchange): KeyExchange
+
+    // X25519 efímero para el ratchet: lo pone el puente Go porque Android no trae `XDH`
+    // hasta la API 33 y el minSdk es 30 (ver [Curve25519]).
+    @Binds
+    abstract fun bindCurve25519(impl: BridgeCurve25519): Curve25519
 }

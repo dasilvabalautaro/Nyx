@@ -183,4 +183,41 @@ class MessageEnvelopeTest {
         assertNull(MessageEnvelope.decode(ByteArray(0)))
         assertNull(MessageEnvelope.decode(byteArrayOf('T'.code.toByte()))) // sin salto
     }
+
+    @Test
+    fun `el anuncio de capacidad va y vuelve, y uno antiguo no lo entiende como texto`() {
+        val decoded = MessageEnvelope.decode(MessageEnvelope.encodeHello(2))
+        assertEquals(2, (decoded as MessageEnvelope.Decoded.Hello).protocol)
+
+        // Una versión futura puede añadir líneas detrás: el número sigue leyéndose.
+        val futuro = MessageEnvelope.decode("V\n3\ncosas-nuevas".toByteArray())
+        assertEquals(3, (futuro as MessageEnvelope.Decoded.Hello).protocol)
+
+        // Y algo que no es un número no se cuela como anuncio.
+        assertNull(MessageEnvelope.decode("V\nhola".toByteArray()))
+    }
+
+    /**
+     * H-1 de `docs/krypta/REVISION-protocolo-2026-09-14.md`: el anuncio lleva además **lo que tengo
+     * apuntado del otro**, para que quien lo haya perdido pueda pedir que se le repita. Tiene que
+     * seguir leyéndose igual en un cliente anterior, que solo mira la primera línea.
+     */
+    @Test
+    fun `el anuncio lleva lo que tengo apuntado del otro sin romper a un cliente anterior`() {
+        val con = MessageEnvelope.decode(MessageEnvelope.encodeHello(3, knows = 0)) as MessageEnvelope.Decoded.Hello
+        assertEquals(3, con.protocol)
+        assertEquals(0, con.knows)
+
+        val sin = MessageEnvelope.decode(MessageEnvelope.encodeHello(3)) as MessageEnvelope.Decoded.Hello
+        assertNull("sin segunda línea no se inventa nada", sin.knows)
+
+        // Así leía el anuncio el cliente anterior (hasta el 14 sep 2026): solo la primera línea.
+        val bytes = MessageEnvelope.encodeHello(3, knows = 2)
+        assertEquals(3, String(bytes, 2, bytes.size - 2).substringBefore('\n').trim().toInt())
+
+        // Basura en la segunda línea no invalida el anuncio: solo se ignora.
+        val basura = MessageEnvelope.decode("V\n3\nxx".toByteArray()) as MessageEnvelope.Decoded.Hello
+        assertEquals(3, basura.protocol)
+        assertNull(basura.knows)
+    }
 }

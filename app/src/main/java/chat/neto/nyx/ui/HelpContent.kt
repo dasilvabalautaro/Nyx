@@ -87,9 +87,10 @@ object HelpContent {
                 "Metadatos sí. Como tu contacto y tú publicáis el mismo punto de cita para " +
                 "poder encontraros, el nodo puede saber que sois pareja aunque vuestros " +
                 "mensajes viajen directos y no pasen por él; también sabe cuándo estás " +
-                "conectado y ve tu IP. Y si escribes a alguien desconectado, el mensaje espera " +
-                "en su buzón, donde el nodo ve qué PeerID deposita para cuál y a qué hora, " +
-                "hasta que se recoge.",
+                "conectado y ve tu IP. Y si escribes a alguien desconectado, el mensaje " +
+                "espera en su buzón: con un contacto que tenga Nyx al día va bajo una " +
+                "etiqueta opaca, sin remitente ni destinatario; si no, con los dos PeerID y " +
+                "la hora.",
         ),
         HelpItem(
             category = "Privacidad y seguridad",
@@ -108,6 +109,16 @@ object HelpContent {
                 "pase lo que pase con el envío. La denuncia viaja cifrada y solo puede leerla " +
                 "el operador de Nyx, que puede expulsar la tarjeta del tablón; tu conversación " +
                 "solo se adjunta si tú marcas la casilla y ves antes exactamente qué se envía.",
+        ),
+        HelpItem(
+            category = "Privacidad y seguridad",
+            question = "¿La clave de cifrado cambia con el tiempo?",
+            answer = "Nyx está incorporando claves que cambian con cada mensaje, en vez de " +
+                "una fija por contacto. Se activa sola con los contactos cuya app también lo " +
+                "admite; con el resto, y con lo ya enviado antes, la clave sigue siendo fija. " +
+                "Mientras sea fija, quien lograra sacar tu identidad podría descifrar esas " +
+                "conversaciones. Es reciente y aún en verificación, así que preferimos " +
+                "contártelo tal cual antes que prometerlo.",
         ),
         HelpItem(
             category = "Privacidad y seguridad",
@@ -145,7 +156,7 @@ object HelpContent {
                 "incluye mensajes ni archivos, y no existe ninguna otra copia en ningún sitio. " +
                 "Sin ella, perder el móvil significa perder tu PeerID, y tus contactos tendrían " +
                 "que volver a añadirte y verificarte. Guarda la copia y su frase-clave en un " +
-                "lugar seguro.",
+                "lugar seguro, y antes de importarla pon el móvil en fecha y hora automáticas.",
         ),
         HelpItem(
             category = "Mensajes y llamadas",
@@ -218,6 +229,16 @@ object HelpContent {
                 "mensaje es delicado, cópialo solo cuando de verdad lo necesites.",
         ),
         HelpItem(
+            category = "Privacidad y seguridad",
+            question = "Si alguien consigue mi móvil, ¿puede leer mis conversaciones?",
+            answer = "Tu identidad, la base de datos de los chats y los archivos que recibes se " +
+                "guardan cifrados con una clave del almacén seguro del sistema: copiar los " +
+                "ficheros de la app desde fuera no basta para abrirlos. Pero quien tenga tu " +
+                "móvil desbloqueado sí puede leer los chats. Activa el bloqueo de la app y el " +
+                "del móvil, y guarda bien tu copia de seguridad. Y ojo: abrir un archivo con " +
+                "otra aplicación le deja una copia sin cifrar, fuera de Nyx.",
+        ),
+        HelpItem(
             category = "Problemas frecuentes",
             question = "Uso “Cerrar todo” en aplicaciones recientes, ¿afecta a Nyx?",
             answer = "Sí, y es distinto de ocultar el aviso: “Cerrar todo” cierra Nyx de " +
@@ -226,6 +247,19 @@ object HelpContent {
                 "usa el candado: así queda fuera de “Cerrar todo”. Otras apps de mensajería no " +
                 "lo necesitan porque usan los servidores de Google; Nyx no los usa, y por " +
                 "eso depende de seguir viva en tu móvil.",
+        ),
+        // W-6 de docs/krypta/ESPECIFICACION-protocolo.md: tras restaurar con el reloj atrasado, lo que
+        // escribe el otro se pierde y corregir la hora no basta. El remedio va en el móvil
+        // restaurado, que no tiene historial que perder (el .krbk no lleva mensajes).
+        HelpItem(
+            category = "Problemas frecuentes",
+            question = "Importé mi copia de seguridad y no me llegan los mensajes de un contacto",
+            answer = "Una causa posible es que, al importar, el móvil tuviera la fecha u hora " +
+                "atrasada. Entonces lo que tú escribes le llega, pero lo suyo no te llega a ti, y " +
+                "poner la hora bien después no basta. Solución: activa la fecha y hora " +
+                "automáticas, elimina ese contacto y vuelve a añadirlo con su PeerID (se borra " +
+                "esa conversación en tu móvil y tendréis que verificaros de nuevo). Para " +
+                "evitarlo, pon la hora automática antes de importar.",
         ),
     )
 

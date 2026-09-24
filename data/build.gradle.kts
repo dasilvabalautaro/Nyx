@@ -56,6 +56,9 @@ dependencies {
     // org.json real: el de android.jar es un stub que lanza en tests JVM, y MigrationSqlTest
     // necesita leer de verdad el esquema exportado por Room (schemas/*.json).
     testImplementation(libs.org.json)
+    // SQLite de verdad en la JVM: la poda de `ratchet_seen` es SQL, y probarla en el móvil
+    // costó dos intentos y horas de reloj (desconexión del USB y luego el proceso muerto).
+    testImplementation(libs.sqlite.jdbc)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

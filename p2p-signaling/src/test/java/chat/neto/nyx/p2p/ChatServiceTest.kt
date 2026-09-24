@@ -5,10 +5,13 @@ import chat.neto.nyx.core.KeyExchange
 import chat.neto.nyx.core.SignalingEvent
 import chat.neto.nyx.core.model.Contact
 import chat.neto.nyx.core.model.Message
+import chat.neto.nyx.core.model.MessageContent
 import chat.neto.nyx.core.model.MessageStatus
 import chat.neto.nyx.core.model.LikeSource
 import chat.neto.nyx.core.repository.ContactRepository
 import chat.neto.nyx.core.repository.MessageRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
@@ -18,6 +21,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,9 +94,11 @@ class ChatServiceTest {
         override suspend fun openVideoStream(contact: Contact): chat.neto.nyx.core.CallStream =
             error("sin streams de vídeo en este fake")
         var failOnSend = false
+        /** Intentos de entrega que fallan por las dos vías (directo y buzón) antes de ir bien. */
+        var flakyAttempts = 0
         val sentAll = mutableListOf<ByteArray>()
         override suspend fun send(contact: Contact, ciphertext: ByteArray) {
-            if (failOnSend) error("failed to dial ${contact.peerId}: no addresses")
+            if (failOnSend || flakyAttempts > 0) error("failed to dial ${contact.peerId}: no addresses")
             sentCiphertext = ciphertext
             sentAll.add(ciphertext)
         }
@@ -100,6 +107,7 @@ class ChatServiceTest {
         /** Etiquetas con las que se depositó (vacía = camino antiguo por PeerID). */
         val depositLabels = mutableListOf<String>()
         override suspend fun sendOffline(contact: Contact, ciphertext: ByteArray, label: String) {
+            if (flakyAttempts > 0) { flakyAttempts--; error("buzón lleno") }
             if (failOnMailbox) error("connect buzón: sin ruta al nodo")
             mailboxDeposits.add(contact.peerId to ciphertext)
             depositLabels.add(label)
@@ -162,6 +170,9 @@ class ChatServiceTest {
             val i = saved.indexOfFirst { it.id == message.id }
             if (i >= 0) saved[i] = message else saved.add(message)
         }
+        override suspend fun saveAll(messages: List<Message>) { messages.forEach { save(it) } }
+        override suspend fun findEncrypted(limit: Int, offset: Int): List<Message> =
+            saved.filter { it.encrypted }.drop(offset).take(limit)
         override suspend fun findById(id: String): Message? = saved.find { it.id == id }
         override suspend fun findByStatus(status: MessageStatus, limit: Int): List<Message> =
             saved.filter { it.status == status }.sortedByDescending { it.timestamp }.take(limit)
@@ -184,14 +195,18 @@ class ChatServiceTest {
     private class FakeContacts(all: List<Contact>) : ContactRepository {
         val store = all.associateBy { it.id }.toMutableMap()
         override fun observeAll() = flowOf(store.values.toList())
-        override suspend fun upsert(contact: Contact) { store[contact.id] = contact }
+        // El contrato de `ContactRepository.upsert` (y del SQL de Room): peerProtocol nunca baja.
+        override suspend fun upsert(contact: Contact) {
+            val previa = store[contact.id]?.peerProtocol ?: 0
+            store[contact.id] = contact.copy(peerProtocol = maxOf(previa, contact.peerProtocol))
+        }
         override suspend fun findById(id: String) = store[id]
         override suspend fun findByPeerId(peerId: String) = store.values.find { it.peerId == peerId }
         override suspend fun delete(id: String) { store.remove(id) }
     }
 
-    private class FakeKeyExchange : KeyExchange {
-        override fun localPeerId() = "12D3KooWSelf"
+    private class FakeKeyExchange(private val me: String = "12D3KooWSelf") : KeyExchange {
+        override fun localPeerId() = me
         override fun sharedSecretWith(peerId: String) = ByteArray(32) { 7 }
     }
 
@@ -218,18 +233,25 @@ class ChatServiceTest {
             }
         }
         var assembled: ByteArray? = null
+        /** Simula que no se pudo guardar la copia del emisor (o una fila de antes de guardarla). */
+        var failSaveSent = false
         /** Borrados pedidos al vaciar un chat: (fileId, path de la copia local). */
         val deleted = mutableListOf<Pair<String, String?>>()
+        /** Copias propias del emisor, por ruta. */
+        val saved = mutableMapOf<String, ByteArray>()
+        override suspend fun read(path: String): ByteArray? = saved[path]
+        override suspend fun saveSent(name: String, bytes: ByteArray): String? =
+            if (failSaveSent) null else "/fake/sent/$name".also { saved[it] = bytes }
         override suspend fun deleteLocal(fileId: String, path: String?) {
             deleted.add(fileId to path)
         }
     }
 
     @Test
-    fun `send encrypts, persists as SENT, and transmits ciphertext`() = runTest {
+    fun `send cifra para la red, guarda el sobre en claro y marca SENT`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val plaintext = "hola camarada".toByteArray()
         val sent = chat.send(contact, plaintext)
@@ -241,8 +263,17 @@ class ChatServiceTest {
         // persistido y marcado SENT
         assertEquals(MessageStatus.SENT, sent.status)
         assertEquals(MessageStatus.SENT, messages.saved.single().status)
-        // nunca se guarda el texto plano
-        assertFalse(messages.saved.single().ciphertext.contentEquals(plaintext))
+        // Lo guardado es el SOBRE EN CLARO, no lo que viajó: desde la v8 el historial no se
+        // puede guardar cifrado con la clave de transporte, porque el ratchet la borra al
+        // usarla (ver docs/krypta/DISENO-ratchet.md §4). Lo que lo protege es el cifrado de la base.
+        val guardado = messages.saved.single()
+        assertFalse("no debe guardarse ya la clave de transporte", guardado.encrypted)
+        assertFalse(
+            "lo guardado no puede ser lo mismo que viajó por la red",
+            guardado.payload.contentEquals(signaling.sentCiphertext!!),
+        )
+        val guardadoEnv = MessageEnvelope.decode(guardado.payload)
+        assertArrayEquals(plaintext, (guardadoEnv as MessageEnvelope.Decoded.Text).body)
     }
 
     /** El fallo del envío directo cae al buzón (entrega offline) y el mensaje queda SENT. */
@@ -250,7 +281,7 @@ class ChatServiceTest {
     fun `send falls back to mailbox when dialing fails and marks SENT`() = runTest {
         val signaling = FakeSignaling().apply { failOnSend = true }
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val plaintext = "hola offline".toByteArray()
         val result = chat.send(contact, plaintext)
@@ -269,21 +300,22 @@ class ChatServiceTest {
     fun `send marks FAILED and does not throw when direct and mailbox both fail`() = runTest {
         val signaling = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val result = chat.send(contact, "hola".toByteArray())
 
         assertEquals(MessageStatus.FAILED, result.status)
         assertEquals(MessageStatus.FAILED, messages.saved.single().status)
-        // se guardó ciphertext (nunca texto plano), aunque el envío fallara
-        assertFalse(messages.saved.single().ciphertext.contentEquals("hola".toByteArray()))
+        // Y el sobre queda guardado igual, para poder reintentarlo (aunque el envío fallara).
+        val env = MessageEnvelope.decode(messages.saved.single().payload)
+        assertArrayEquals("hola".toByteArray(), (env as MessageEnvelope.Decoded.Text).body)
     }
 
     /** Una reentrega del buzón (ack perdido) con el mismo id de sobre no duplica el mensaje. */
     @Test
     fun `mailbox redelivery with same envelope id does not duplicate`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         // Sin sobre (legado): el id del Message cae al del buzón (mailboxId) → dedup por id.
         val ciphertext = cipher.encrypt(secret, "del buzón".toByteArray())
@@ -302,7 +334,7 @@ class ChatServiceTest {
     fun `sendImage persists and content returns the image`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val jpeg = ByteArray(300) { (it % 256).toByte() }
         val sent = chat.sendImage(contact, jpeg)
@@ -322,7 +354,7 @@ class ChatServiceTest {
     @Test
     fun `received image is stored and decodable`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val jpeg = ByteArray(128) { it.toByte() }
         val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeImage("img-9", jpeg))
@@ -339,9 +371,9 @@ class ChatServiceTest {
     fun `sendFile chunks a file and it reassembles on receive`() = runTest {
         // Emisor y receptor son instancias distintas (como dos móviles).
         val senderSig = FakeSignaling()
-        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val rxFileStore = FakeFileStore()
-        val receiver = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope)
+        val receiver = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         // 120 KiB → meta + 3 trozos de 48 KiB = 4 envíos.
         val fileBytes = ByteArray(120 * 1024) { (it % 251).toByte() }
@@ -359,7 +391,7 @@ class ChatServiceTest {
     @Test
     fun `sendFile with localPath keeps sender copy and audio notification label`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val sent = chat.sendFile(
             contact, "nota-voz-1.m4a", "audio/mp4", ByteArray(1024) { 3 },
@@ -383,7 +415,7 @@ class ChatServiceTest {
     fun `an animated GIF travels intact as a chunked file and is labelled as GIF`() = runTest {
         val senderSig = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(senderSig, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(senderSig, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         // 100 KiB: por encima del límite del sobre en línea, así que obliga al troceado.
         val gif = ByteArray(100 * 1024) { (it % 251).toByte() }
 
@@ -401,7 +433,7 @@ class ChatServiceTest {
         // Y del otro lado los bytes se reensamblan **idénticos** (sin recodificar).
         val rxSig = FakeSignaling()
         val rxFileStore = FakeFileStore()
-        ChatService(rxSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope)
+        ChatService(rxSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val processor: suspend (String, ByteArray, String, Long) -> Boolean =
             { p, c, i, t -> rxSig.registeredMailboxProcessor!!(p, c, i, t, "") }
         senderSig.sentAll.forEachIndexed { i, env ->
@@ -420,9 +452,9 @@ class ChatServiceTest {
     fun `a reply carries the quoted id end to end and never a copy of the quoted text`() = runTest {
         val senderSig = FakeSignaling()
         val senderMessages = FakeMessages()
-        val sender = ChatService(senderSig, cipher, senderMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val sender = ChatService(senderSig, cipher, senderMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val rxMessages = FakeMessages()
-        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         // Un primer mensaje, que será el citado.
         val quoted = sender.send(contact, "el texto del mensaje citado".toByteArray())
@@ -457,9 +489,9 @@ class ChatServiceTest {
     @Test
     fun `a voice note sent as a reply keeps its quote after reassembly`() = runTest {
         val senderSig = FakeSignaling()
-        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val rxMessages = FakeMessages()
-        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val sent = sender.sendFile(
             contact, "nota.m4a", "audio/mp4", ByteArray(1024) { 7 },
@@ -476,11 +508,117 @@ class ChatServiceTest {
         assertEquals("id-citado", decoded.replyTo)
     }
 
+    /**
+     * Regresión del 20 sep 2026 (dos móviles, PDF de 6,5 MB): reintentar un archivo FALLIDO
+     * reenviaba **la fila**, que es el descriptor local — al otro lado salía una burbuja con
+     * nombre y tamaño y sin archivo, y aquí quedaba como enviado. Tiene que reenviar la meta y
+     * todos los trozos (mismo id) desde la copia local, y el receptor reensamblar el archivo.
+     */
+    @Test
+    fun `reintentar un archivo fallido reenvia el archivo y no su descriptor`() = runTest {
+        val senderSig = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
+        val senderMessages = FakeMessages()
+        val sender = ChatService(senderSig, cipher, senderMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val fileBytes = ByteArray(120 * 1024) { (it % 251).toByte() }
+
+        val failed = sender.sendFile(contact, "libro.pdf", "application/pdf", fileBytes)
+        assertEquals(MessageStatus.FAILED, failed.status)
+
+        senderSig.failOnSend = false
+        senderSig.sentAll.clear()
+        val retried = sender.retry(contact, failed.id)!!
+
+        assertEquals(MessageStatus.SENT, retried.status)
+        assertEquals(failed.id, retried.id)
+        assertEquals(4, senderSig.sentAll.size) // meta + 3 trozos, no un sobre suelto
+        senderSig.sentAll.forEach {
+            val env = MessageEnvelope.decode(cipher.decrypt(secret, it))
+            assertFalse("viajó el descriptor local", env is MessageEnvelope.Decoded.FileDescriptor)
+        }
+
+        val rxFileStore = FakeFileStore()
+        val rxMessages = FakeMessages()
+        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        senderSig.sentAll.forEach { receiver.onReceived(contact.peerId, it) }
+        assertArrayEquals(fileBytes, rxFileStore.assembled)
+        assertEquals(failed.id, rxMessages.saved.single().id)
+    }
+
+    /** Un descriptor que llega por la red no pinta una burbuja de archivo inexistente. */
+    @Test
+    fun `un descriptor de archivo recibido por la red se descarta`() = runTest {
+        val rxMessages = FakeMessages()
+        val receiver = ChatService(FakeSignaling(), cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val descriptor = MessageEnvelope.encodeFileDescriptor(
+            "libro.pdf", "application/pdf", 6_500_000, "/data/user/0/chat.neto.nyx/files/nyx_files/otro",
+        )
+
+        assertNull(receiver.onReceived(contact.peerId, cipher.encrypt(secret, descriptor)))
+        assertNull(receiver.onReceived(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeReply("x", descriptor))))
+        assertTrue(rxMessages.saved.isEmpty())
+    }
+
+    /**
+     * Una pieza que falla un momento (dial caído, buzón lleno a mitad de ráfaga) se reintenta
+     * antes de dar el archivo por perdido: antes bastaba **un** fallo entre cientos de trozos.
+     */
+    @Test
+    fun `una pieza que falla un momento se reintenta y el archivo sale entero`() = runTest {
+        val senderSig = FakeSignaling().apply { flakyAttempts = 2 }
+        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val fileBytes = ByteArray(120 * 1024) { (it % 7).toByte() }
+
+        val sent = sender.sendFile(contact, "doc.bin", "application/octet-stream", fileBytes)
+
+        assertEquals(MessageStatus.SENT, sent.status)
+        assertEquals(4, senderSig.sentAll.size)
+        val rxFileStore = FakeFileStore()
+        val receiver = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        senderSig.sentAll.forEach { receiver.onReceived(contact.peerId, it) }
+        assertArrayEquals(fileBytes, rxFileStore.assembled)
+    }
+
+    /** Sin copia local no hay nada que reenviar: se dice, no se manda nada ni se finge. */
+    @Test
+    fun `reintentar un archivo sin copia local falla con un aviso y no envia nada`() = runTest {
+        val senderSig = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
+        val messages = FakeMessages()
+        val store = FakeFileStore().apply { failSaveSent = true }
+        val sender = ChatService(senderSig, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), store, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val failed = sender.sendFile(contact, "viejo.pdf", "application/pdf", ByteArray(1024))
+
+        senderSig.failOnSend = false
+        senderSig.failOnMailbox = false
+        val result = runCatching { sender.retry(contact, failed.id) }
+
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("vuelve a adjuntarlo"))
+        assertTrue(senderSig.sentAll.isEmpty())
+        assertEquals(MessageStatus.FAILED, messages.saved.single().status)
+    }
+
+    /** La reconciliación de cada ciclo WAN también reenvía archivos, y los reenvía enteros. */
+    @Test
+    fun `retryFailed reenvia un archivo fallido desde su copia`() = runTest {
+        val senderSig = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
+        val messages = FakeMessages()
+        val sender = ChatService(senderSig, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+        val failed = sender.sendFile(contact, "doc.bin", "application/octet-stream", ByteArray(100 * 1024) { 1 })
+        assertEquals(MessageStatus.FAILED, failed.status)
+
+        senderSig.failOnSend = false
+        senderSig.sentAll.clear()
+        sender.retryFailed() // lanza el reenvío en el scope, que aquí corre en el acto
+
+        val diag = sender.log.value.joinToString("\n")
+        assertEquals(diag, MessageStatus.SENT, messages.saved.single().status)
+        assertEquals(diag, 4, senderSig.sentAll.size) // meta + 3 trozos
+    }
+
     @Test
     fun `retry re-sends a FAILED message and marks SENT without duplicating`() = runTest {
         val signaling = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val failed = chat.send(contact, "hola".toByteArray())
         assertEquals(MessageStatus.FAILED, failed.status)
@@ -498,7 +636,7 @@ class ChatServiceTest {
     @Test
     fun `received resolves contact by peerId, persists DELIVERED, and decrypts`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-1", "buenas".toByteArray()))
         val received = chat.onReceived(contact.peerId, ciphertext)!!
@@ -514,7 +652,7 @@ class ChatServiceTest {
     @Test
     fun `read receipt marks the sent message READ`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val sent = chat.send(contact, "hola".toByteArray())
         assertEquals(MessageStatus.SENT, sent.status)
@@ -531,7 +669,7 @@ class ChatServiceTest {
     fun `markConversationRead sends a read receipt citing received ids`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         chat.onReceived(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeText("rx-1", "hola".toByteArray())))
 
         chat.markConversationRead(contact)
@@ -548,7 +686,7 @@ class ChatServiceTest {
     @Test
     fun `received from unknown peer is ignored`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         assertNull(chat.onReceived("12D3KooWStranger", ByteArray(28)))
         assertEquals(0, messages.saved.size)
@@ -565,7 +703,7 @@ class ChatServiceTest {
             failOnStart = true // mDNS revienta (datos móviles)
             bootstrapAddr = "/dns4/nyx.neto.chat/tcp/443/wss/p2p/12D3KooWNode"
         }
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.start() // no debe propagar la excepción de start()
         testScheduler.runCurrent() // deja correr la 1ª iteración del wanLoop (hasta su delay)
@@ -578,7 +716,7 @@ class ChatServiceTest {
     @Test
     fun `safety number matches on both sides`() = runTest {
         val contacts = FakeContacts(listOf(contact))
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         // Mi PeerID = FakeKeyExchange.localPeerId(); el del contacto = contact.peerId.
         val mine = chat.safetyNumber(contact)
@@ -590,7 +728,7 @@ class ChatServiceTest {
     @Test
     fun `verifying persists and re-adding same peerId keeps it`() = runTest {
         val contacts = FakeContacts(listOf(contact))
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.setVerified(contact, true)
         assertTrue(contacts.findById(contact.id)!!.verified)
@@ -607,7 +745,7 @@ class ChatServiceTest {
     @Test
     fun `addContact rejects your own peerId`() = runTest {
         val contacts = FakeContacts(emptyList())
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val rejected = runCatching { chat.addContact("Yo mismo", chat.myPeerId()) }
         assertTrue(rejected.exceptionOrNull() is IllegalArgumentException)
@@ -628,7 +766,7 @@ class ChatServiceTest {
     fun `addContact rejects a blocked peerId until it is unblocked`() = runTest {
         val contacts = FakeContacts(emptyList())
         val blocks = FakeBlocks(setOf("12D3KooWAcosador"))
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), blocks, FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), blocks, FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val rejected = runCatching { chat.addContact("Acosador", "12D3KooWAcosador") }
         assertTrue(rejected.exceptionOrNull() is IllegalArgumentException)
@@ -656,7 +794,7 @@ class ChatServiceTest {
     fun `un mensaje de un peer bloqueado no se persiste`() = runTest {
         val messages = FakeMessages()
         val blocks = FakeBlocks(setOf(contact.peerId))
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), blocks, FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), blocks, FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-b1", "hola".toByteArray()))
         assertNull(chat.onReceived(contact.peerId, ciphertext))
@@ -680,7 +818,7 @@ class ChatServiceTest {
     fun `un sobre de un peer bloqueado se confirma para que el nodo lo borre`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope)
+        ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val processor: suspend (String, ByteArray, String, Long) -> Boolean =
             { p, c, i, t -> signaling.registeredMailboxProcessor!!(p, c, i, t, "") }
 
@@ -697,7 +835,7 @@ class ChatServiceTest {
      */
     @Test
     fun `un peer bloqueado no puede emitir una senal de llamada`() = runTest {
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(setOf(contact.peerId)), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val senales = mutableListOf<Pair<Contact, MessageEnvelope.Decoded.Call>>()
         val job = backgroundScope.launch { chat.callSignals.collect { senales += it } }
@@ -717,7 +855,7 @@ class ChatServiceTest {
     fun `bloquear conserva el contacto y su historial`() = runTest {
         val messages = FakeMessages()
         val contacts = FakeContacts(listOf(contact))
-        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-b3", "previo".toByteArray()))
         chat.onReceived(contact.peerId, ciphertext)
@@ -736,7 +874,7 @@ class ChatServiceTest {
     fun `deleteContact also clears the like state`() = runTest {
         val contacts = FakeContacts(listOf(contact))
         val likes = FakeLikes()
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), likes, backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), likes, backgroundScope, testSessions(FakeKeyExchange()))
 
         likes.recordSent(contact.peerId, LikeSource.BOARD, now = 10)
         likes.recordReceived(contact.peerId, LikeSource.BOARD, now = 20)
@@ -777,7 +915,7 @@ class ChatServiceTest {
     @Test
     fun `setBootstrap accepts a multi-node list and persists it normalized`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val second = "/ip4/9.9.9.9/tcp/4001/p2p/12D3KooWSegundo"
         val result = chat.setBootstrap(" $validAddr \n$second\n")
@@ -790,7 +928,7 @@ class ChatServiceTest {
     @Test
     fun `setBootstrap rejects invalid addr without persisting or starting WAN`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val result = chat.setBootstrap("esto-no-es-un-multiaddr")
         testScheduler.runCurrent()
@@ -805,7 +943,7 @@ class ChatServiceTest {
     @Test
     fun `kickWan runs the next WAN cycle immediately`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.setBootstrap(validAddr)
         testScheduler.runCurrent()
@@ -824,7 +962,7 @@ class ChatServiceTest {
     @Test
     fun `wan loop relaxes its interval when wake is connected`() = runTest {
         val signaling = FakeSignaling().apply { wakeUp = true }
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.setBootstrap(validAddr)
         testScheduler.runCurrent()
@@ -845,7 +983,7 @@ class ChatServiceTest {
     @Test
     fun `wake event triggers an immediate mailbox fetch`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         testScheduler.runCurrent() // el colector de eventos queda suscrito
 
         signaling.events.emit(SignalingEvent.WakeReceived)
@@ -859,7 +997,7 @@ class ChatServiceTest {
     @Test
     fun `wan start and stop toggle the wake subscription`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.setBootstrap(validAddr)
         testScheduler.runCurrent()
@@ -874,7 +1012,7 @@ class ChatServiceTest {
     @Test
     fun `clearing bootstrap stops the WAN loop live`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         assertEquals(BootstrapResult.OK, chat.setBootstrap(validAddr))
         testScheduler.runCurrent()
@@ -886,6 +1024,27 @@ class ChatServiceTest {
         assertEquals("", signaling.lastSetBootstrap)  // persistió "solo LAN"
     }
 
+    /**
+     * Abrir el chat de un bloqueado limpia el badge (vista local) pero **no** le manda el acuse
+     * de lectura: un ✓✓ le confirmaría que sigues ahí. Porte del test de Krypta (1ab4453),
+     * adaptado a `blocked_peers`.
+     */
+    @Test
+    fun `reading a blocked conversation clears the badge without sending a receipt`() = runTest {
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val text = cipher.encrypt(secret, MessageEnvelope.encodeText("m1", "hola".toByteArray()))
+        chat.onReceived(contact.peerId, text)
+        chat.block(contact.peerId)
+
+        chat.markConversationRead(contact)
+
+        assertEquals(MessageStatus.READ, messages.saved.single().status) // solo vista local
+        assertTrue(signaling.sentAll.isEmpty())
+        assertTrue(signaling.mailboxDeposits.isEmpty())
+    }
+
     // --- Ack-tras-persistir del buzón (v2, 5 jul) -------------------------------------
 
     /** El procesador del buzón confirma (true) solo lo persistido: un fallo de Room → false. */
@@ -893,7 +1052,7 @@ class ChatServiceTest {
     fun `mailbox processor acks after persist and rejects on storage failure`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val processor: suspend (String, ByteArray, String, Long) -> Boolean =
             { p, c, i, t -> signaling.registeredMailboxProcessor!!(p, c, i, t, "") } // registrado en el init
 
@@ -925,7 +1084,7 @@ class ChatServiceTest {
     fun `incoming notifier fires without any subscriber to the incoming flow`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val avisados = mutableListOf<Pair<String, String>>()
         chat.setIncomingNotifier { c, m -> avisados.add(c.id to m.id) }
         val processor: suspend (String, ByteArray, String, Long) -> Boolean =
@@ -936,11 +1095,66 @@ class ChatServiceTest {
         assertTrue(processor(contact.peerId, texto, "env-1", 111L))
         assertTrue(processor(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeFileMeta("f1", "n.txt", "text/plain", 4L, 1)), "env-2", 222L))
         assertTrue(processor(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeFileChunk("f1", 0, "hola".toByteArray())), "env-3", 333L))
-        chat.recordMissedCall(contact)
+        chat.recordMissedCall(contact, "call-1")
 
         assertEquals(listOf("mid-1", "f1"), avisados.take(2).map { it.second })
         assertEquals(3, avisados.size) // + la fila de llamada perdida
         assertTrue(avisados.all { it.first == contact.id })
+    }
+
+    /**
+     * H-7: una llamada deja **una** fila de perdida y **un** aviso, la registre quien la registre y
+     * cuantas veces llegue. Otra llamada del mismo contacto sí deja la suya.
+     */
+    @Test
+    fun `la fila de llamada perdida es una por llamada y no vuelve a avisar`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val avisados = mutableListOf<String>()
+        chat.setIncomingNotifier { _, m -> avisados.add(m.id) }
+
+        chat.recordMissedCall(contact, "call-1")
+        val fila = messages.saved.single()
+        chat.recordMissedCall(contact, "call-1")
+        chat.recordMissedCall(contact, "call-1")
+
+        assertEquals(1, messages.saved.size)
+        assertEquals("la segunda vez no la reescribe (volvería a no leída)", fila, messages.saved.single())
+        assertEquals(1, avisados.size)
+
+        chat.recordMissedCall(contact, "call-2")
+        assertEquals(2, messages.saved.size)
+        assertEquals(2, avisados.size)
+    }
+
+    /** El id no es el `callId` que manda el otro, y depende del contacto. */
+    @Test
+    fun `el id de la fila de llamada perdida no lo elige el otro extremo`() {
+        val id = ChatService.missedCallId("contacto-a", "call-1")
+        assertEquals(id, ChatService.missedCallId("contacto-a", "call-1"))
+        assertTrue(id != "call-1")
+        assertTrue(id != ChatService.missedCallId("contacto-b", "call-1"))
+        assertTrue(id != ChatService.missedCallId("contacto-a", "call-2"))
+    }
+
+    /**
+     * El id de la fila de llamada perdida es el de la especificación §8: SHA-256 de la etiqueta, el
+     * contacto y el `callId`, separados por **el byte 0**. El valor esperado se calcula aquí aparte,
+     * byte a byte, para que un cambio en cómo se escribe el separador en el código fuente no pueda
+     * alterar el id sin que se note (el 15 sep 2026 se coló un NUL literal en ese fuente; se cambió
+     * por su escape sin tocar el valor).
+     */
+    @Test
+    fun `el id de la fila de llamada perdida es el de la especificacion`() {
+        val esperado = java.security.MessageDigest.getInstance("SHA-256").run {
+            update("nyx-missed-call-v1".toByteArray(Charsets.UTF_8))
+            update(0.toByte())
+            update("contacto-a".toByteArray(Charsets.UTF_8))
+            update(0.toByte())
+            update("call-1".toByteArray(Charsets.UTF_8))
+            digest().joinToString("") { "%02x".format(it) }
+        }
+        assertEquals(esperado, ChatService.missedCallId("contacto-a", "call-1"))
     }
 
     /** Un aviso que revienta no debe impedir el ack: el mensaje ya está persistido. */
@@ -948,7 +1162,7 @@ class ChatServiceTest {
     fun `a failing notifier does not block the mailbox ack`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         chat.setIncomingNotifier { _, _ -> error("NotificationManager murió") }
 
         val texto = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-9", "hola".toByteArray()))
@@ -966,7 +1180,7 @@ class ChatServiceTest {
     fun `pollOnce starts the host and falls back to the saved bootstrap`() = runTest {
         val signaling = FakeSignaling()
         signaling.bootstrapAddr = validAddr // pref guardada, pero start() nunca se llamó
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.pollOnce()
 
@@ -987,7 +1201,7 @@ class ChatServiceTest {
             bootstrapAddr = validAddr
             hangOnConnect = true
         }
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.pollOnce()
 
@@ -1002,7 +1216,7 @@ class ChatServiceTest {
             bootstrapAddr = validAddr
             failOnConnect = true
         }
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(emptyList()), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.pollOnce()
 
@@ -1013,11 +1227,11 @@ class ChatServiceTest {
     @Test
     fun `file chunk that fails to stage is redelivered and completes the file`() = runTest {
         val senderSig = FakeSignaling()
-        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val sender = ChatService(senderSig, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val rxSig = FakeSignaling()
         val rxMessages = FakeMessages()
         val rxFileStore = FakeFileStore()
-        ChatService(rxSig, cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope)
+        ChatService(rxSig, cipher, rxMessages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), rxFileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         val processor: suspend (String, ByteArray, String, Long) -> Boolean =
             { p, c, i, t -> rxSig.registeredMailboxProcessor!!(p, c, i, t, "") }
 
@@ -1049,7 +1263,7 @@ class ChatServiceTest {
         val messages = FakeMessages()
         val contacts = FakeContacts(listOf(contact))
         val fileStore = FakeFileStore()
-        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), fileStore, FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), fileStore, FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.send(contact, "un texto".toByteArray())
         val voiceNote = chat.sendFile(
@@ -1072,7 +1286,7 @@ class ChatServiceTest {
     fun `deleteContact removes the contact and its conversation`() = runTest {
         val messages = FakeMessages()
         val contacts = FakeContacts(listOf(contact))
-        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.send(contact, "adiós".toByteArray())
         chat.deleteContact(contact)
@@ -1081,13 +1295,112 @@ class ChatServiceTest {
         assertTrue(contacts.store.isEmpty()) // announceAndFind ya no lo verá (relee de Room)
     }
 
+    // --- Reengache de sesiones desincronizadas (DISENO-ratchet §1.9) ------------------------
+
+    /** Un sobre con cabecera de ratchet que no se puede abrir por ninguna vía. */
+    private fun sobreIlegible() = ByteArray(Ratchet.HEADER_BYTES + 24) { i ->
+        if (i == 0) Ratchet.WIRE_VERSION else (i * 13 + 7).toByte()
+    }
+
+    /**
+     * Scope para los tests del reengache, que se envía **lanzado** (el camino del buzón es
+     * síncrono y no se puede bloquear con una llamada de red). `Unconfined` ejecuta el `launch`
+     * en el acto y de forma determinista.
+     *
+     * Por qué no `backgroundScope` + `advanceUntilIdle()`, que sería lo natural: se midió y
+     * **no ejecuta** el cuerpo del `launch` en este montaje. Costó tres hipótesis equivocadas
+     * antes de comprobarlo en vez de razonarlo, así que queda escrito aquí.
+     */
+    private fun scopeInmediato() = CoroutineScope(Dispatchers.Unconfined)
+
+    /**
+     * La premisa de los tres tests de abajo: el sobre sintético tiene que **parecer** ratchet,
+     * porque si no `onReceived` se va por la rama v1 y no hay reengache que probar. Se afirma
+     * aparte para que un fallo diga *esto* en vez de "no salió el reengache".
+     */
+    @Test
+    fun `el sobre sintetico parece un sobre de ratchet`() {
+        val bytes = sobreIlegible()
+        assertTrue(
+            "size=${bytes.size} byte0=${bytes[0]} (esperado > ${Ratchet.HEADER_BYTES} y ${Ratchet.WIRE_VERSION})",
+            Ratchet.looksLikeRatchet(bytes),
+        )
+    }
+
+    /**
+     * Cuando alguien reinstala, su linaje nuevo es mayor y **el nuestro se descarta**: sus
+     * mensajes dejan de ser legibles para él hasta que escriba. Aquí somos el que lo sabe
+     * —acabamos de fallar al abrir su sobre—, así que le mandamos algo para que adopte nuestro
+     * linaje en vez de esperar a que el usuario escriba y perder mensajes por el camino.
+     */
+    @Test
+    fun `un sobre de ratchet que no abre provoca un reengache`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contactoV2)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            assertNull(chat.onReceived(contactoV2.peerId, sobreIlegible()))
+
+            // El log va en el mensaje a propósito: distingue "reengache enviado" de "no salió",
+            // que es justo lo que no se puede adivinar desde un `expected 1 but was 0`.
+            assertEquals("debería salir un reengache · log=${chat.log.value}", 1, signaling.sentAll.size)
+        }
+    }
+
+    /**
+     * Y **uno solo**: cualquiera de tus contactos podría mandar basura a propósito, y sin tope
+     * eso nos haría emitir un mensaje por cada una.
+     */
+    @Test
+    fun `el reengache no se repite con cada fallo`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contactoV2)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            repeat(5) { chat.onReceived(contactoV2.peerId, sobreIlegible()) }
+
+            assertEquals(
+                "cinco fallos seguidos, un solo reengache · log=${chat.log.value}",
+                1,
+                signaling.sentAll.size,
+            )
+        }
+    }
+
+    /**
+     * Este test decía lo contrario hasta el 14 sep 2026 («sin ratchet no hay linajes que
+     * desincronizar: no hay nada que reenganchar»), y ese era justo el punto ciego del hallazgo
+     * H-1 de `docs/krypta/REVISION-protocolo-2026-09-14.md`: un contacto que aquí consta como v1 **y nos
+     * escribe por ratchet** es uno cuya versión perdimos (lo borramos y lo volvimos a añadir,
+     * importamos un `.krbk`). Callarse dejaba sus mensajes perdiéndose para siempre. Ahora se le
+     * manda nuestro anuncio **por la clave estática** —sin sesión es lo único que abre— diciendo
+     * qué tenemos apuntado de él, para que nos repita el suyo. Y sigue siendo uno solo por mucho
+     * que insista, porque cualquiera de tus contactos podría mandar basura a propósito.
+     */
+    @Test
+    fun `un contacto que consta como v1 y escribe por ratchet recibe un anuncio por la clave estatica`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            repeat(3) { chat.onReceived(contact.peerId, sobreIlegible()) }
+
+            assertEquals("uno solo, por mucho que insista · log=${chat.log.value}", 1, signaling.sentAll.size)
+            // Se abre con la clave estática: si fuera por ratchet, esto lanzaría.
+            val hello = MessageEnvelope.decode(cipher.decrypt(secret, signaling.sentAll.single()))
+                as MessageEnvelope.Decoded.Hello
+            assertEquals(ChatService.PROTOCOL_VERSION, hello.protocol)
+            assertEquals("le decimos lo que tenemos apuntado de él", 0, hello.knows)
+        }
+    }
+
     // --- Reconciliación de envíos fallidos (Fase 4 del plan; hallazgo A-7) ---
 
     @Test
     fun `retryFailed reenvia los FALLIDOS cuando vuelve la conexion`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         // Un envío que falla por las dos vías queda FAILED (antes se quedaba así para siempre).
         signaling.failOnSend = true
@@ -1101,24 +1414,25 @@ class ChatServiceTest {
         chat.retryFailed()
 
         assertEquals(MessageStatus.SENT, messages.findById(failed.id)!!.status)
-        assertArrayEquals(
-            "debe reusar el ciphertext ya persistido, sin volver a cifrar",
-            failed.ciphertext,
-            signaling.sentCiphertext,
-        )
+        // Desde la v8 el sobre se guarda en claro, así que reintentar **vuelve a cifrarlo**:
+        // los bytes de la red no son los mismos, pero el sobre —y sobre todo su id, que es
+        // por donde el receptor deduplica— sí. Eso es lo que impide que salga duplicado.
+        val reenviado = MessageEnvelope.decode(cipher.decrypt(secret, signaling.sentCiphertext!!))
+        assertEquals(failed.id, (reenviado as MessageEnvelope.Decoded.Text).id)
+        assertArrayEquals("no salió".toByteArray(), reenviado.body)
     }
 
     @Test
     fun `retryFailed no resucita un fallo antiguo`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val viejo = Message(
             id = "hace-semanas",
             conversationId = contact.id,
             senderId = "self",
-            ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("hace-semanas", "viejo".toByteArray())),
+            payload = MessageEnvelope.encodeText("hace-semanas", "viejo".toByteArray()),
             timestamp = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000,
             status = MessageStatus.FAILED,
         )
@@ -1135,7 +1449,7 @@ class ChatServiceTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
         val contacts = FakeContacts(listOf(contact))
-        val chat = ChatService(signaling, cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         signaling.failOnSend = true
         signaling.failOnMailbox = true
@@ -1150,18 +1464,444 @@ class ChatServiceTest {
         assertTrue("a un bloqueado no se le manda nada", signaling.sentAll.isEmpty())
     }
 
+    // --- fase 6: el envío con ratchet, encendido contacto a contacto ---
+
+    /**
+     * Ejecuta [body] con el envío por ratchet encendido y **deja el interruptor como estaba**.
+     * Restaurarlo a `false` a pelo era un error latente: cuando el valor de producción pasó a
+     * `true` (10 sep 2026), este helper lo habría apagado para el resto de la suite.
+     */
+    private inline fun conRatchet(body: () -> Unit) {
+        val antes = ChatService.RATCHET_SEND
+        ChatService.RATCHET_SEND = true
+        try { body() } finally { ChatService.RATCHET_SEND = antes }
+    }
+
+    /** El contacto de enfrente, que ya anunció que sabe recibir v2. */
+    private val contactoV2 get() = contact.copy(peerProtocol = ChatService.PROTOCOL_VERSION)
+
+    private fun parte(
+        me: String,
+        peer: Contact,
+        signaling: FakeSignaling = FakeSignaling(),
+        messages: FakeMessages = FakeMessages(),
+        fileStore: FakeFileStore = FakeFileStore(),
+        contacts: FakeContacts = FakeContacts(listOf(peer)),
+        scope: kotlinx.coroutines.CoroutineScope,
+    ) = ChatService(
+        signaling, cipher, messages, contacts, FakeKeyExchange(me), RendezvousService(),
+        fileStore, FakeBlocks(), FakeLikes(), scope, testSessions(FakeKeyExchange(me)),
+    )
+
+    @Test
+    fun `a quien ha anunciado v2 se le escribe con ratchet, y al resto no`() = runTest {
+        conRatchet {
+            val conRatchetSignaling = FakeSignaling()
+            val chatV2 = parte("12D3KooWSelf", contactoV2, conRatchetSignaling, scope = backgroundScope)
+            kotlinx.coroutines.runBlocking { chatV2.send(contactoV2, "para el nuevo".toByteArray()) }
+            assertTrue(
+                "un contacto que anunció v2 debe recibir un sobre de ratchet",
+                Ratchet.looksLikeRatchet(conRatchetSignaling.sentCiphertext!!),
+            )
+
+            // El mismo build, un contacto que no ha anunciado nada: sigue en v1.
+            val v1Signaling = FakeSignaling()
+            val chatV1 = parte("12D3KooWSelf", contact, v1Signaling, scope = backgroundScope)
+            kotlinx.coroutines.runBlocking { chatV1.send(contact, "para el de siempre".toByteArray()) }
+            val env = MessageEnvelope.decode(cipher.decrypt(secret, v1Signaling.sentCiphertext!!))
+            assertEquals("para el de siempre", String((env as MessageEnvelope.Decoded.Text).body))
+        }
+    }
+
+    /** Ida y vuelta completa entre dos clientes, cada uno con su propio estado de ratchet. */
+    @Test
+    fun `dos clientes conversan por ratchet de extremo a extremo`() = runTest {
+        conRatchet {
+            val contactoDeA = contact.copy(peerProtocol = 2) // para A, el otro es Bob
+            // Ojo al id: "self" es el marcador de emisor propio en Room, así que un contacto
+            // con ese id haría indistinguibles las dos mitades de la conversación.
+            val contactoDeB = Contact(
+                id = "contacto-a", displayName = "Yo", peerId = "12D3KooWSelf",
+                publicKey = ByteArray(0), sharedSecret = secret, peerProtocol = 2,
+            )
+            val sigA = FakeSignaling()
+            val sigB = FakeSignaling()
+            val msgsB = FakeMessages()
+            val a = parte("12D3KooWSelf", contactoDeA, sigA, scope = backgroundScope)
+            val b = parte("12D3KooWBob", contactoDeB, sigB, messages = msgsB, scope = backgroundScope)
+
+            kotlinx.coroutines.runBlocking {
+                repeat(3) { i ->
+                    val enviado = a.send(contactoDeA, "mensaje $i".toByteArray())
+                    val recibido = b.onReceived("12D3KooWSelf", sigA.sentCiphertext!!)!!
+                    assertEquals(enviado.id, recibido.id)
+                    assertEquals(
+                        "mensaje $i",
+                        (b.content(contactoDeB, recibido) as MessageContent.Text).text,
+                    )
+                    // Y de vuelta, que es lo que hace girar la época.
+                    val vuelta = b.send(contactoDeB, "respuesta $i".toByteArray())
+                    val enA = a.onReceived("12D3KooWBob", sigB.sentCiphertext!!)!!
+                    assertEquals(vuelta.id, enA.id)
+                }
+            }
+            // B acaba con las dos mitades de la conversación: 3 recibidos y 3 enviados.
+            assertEquals(3, msgsB.saved.count { it.senderId == contactoDeB.id })
+            assertEquals(3, msgsB.saved.count { it.senderId == "self" })
+            assertTrue("nada se guarda ya cifrado con la clave estática", msgsB.saved.none { it.encrypted })
+        }
+    }
+
+    /** Un archivo troceado (ráfaga de sobres) entre dos extremos con ratchet. */
+    @Test
+    fun `un archivo troceado viaja completo por ratchet`() = runTest {
+        conRatchet {
+            val contactoDeA = contact.copy(peerProtocol = 2)
+            // Ojo al id: "self" es el marcador de emisor propio en Room, así que un contacto
+            // con ese id haría indistinguibles las dos mitades de la conversación.
+            val contactoDeB = Contact(
+                id = "contacto-a", displayName = "Yo", peerId = "12D3KooWSelf",
+                publicKey = ByteArray(0), sharedSecret = secret, peerProtocol = 2,
+            )
+            val sigA = FakeSignaling()
+            val fsB = FakeFileStore()
+            val a = parte("12D3KooWSelf", contactoDeA, sigA, scope = backgroundScope)
+            val b = parte("12D3KooWBob", contactoDeB, FakeSignaling(), fileStore = fsB, scope = backgroundScope)
+
+            val bytes = ByteArray(120_000) { (it % 251).toByte() }
+            kotlinx.coroutines.runBlocking {
+                a.send(contactoDeA, "voy a mandarte algo".toByteArray())
+                sigA.sentAll.clear()
+                a.sendFile(contactoDeA, "cosa.bin", "application/octet-stream", bytes)
+                // Todo lo que salió (meta + trozos) entra por el camino v2 del receptor.
+                for (wire in sigA.sentAll.toList()) {
+                    assertTrue("cada sobre debe ir con ratchet", Ratchet.looksLikeRatchet(wire))
+                    b.onReceived("12D3KooWSelf", wire)
+                }
+            }
+            assertArrayEquals("el archivo debe llegar idéntico", bytes, fsB.assembled)
+        }
+    }
+
+    /**
+     * El estado del ratchet se guarda **antes** de que los bytes salgan. Si se guardara después
+     * y el envío fallara, el siguiente mensaje reutilizaría la misma clave —y el mismo nonce de
+     * AES-GCM—, que es la forma clásica de romper del todo un cifrado autenticado.
+     */
+    @Test
+    fun `un envio que falla deja el ratchet avanzado y no repite clave`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
+            val store = FakeRatchetStore()
+            val sessions = testSessions(FakeKeyExchange("12D3KooWSelf"), store)
+            val chat = ChatService(
+                signaling, cipher, FakeMessages(), FakeContacts(listOf(contactoV2)),
+                FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, sessions,
+            )
+
+            kotlinx.coroutines.runBlocking {
+                val fallido = chat.send(contactoV2, "no sale".toByteArray())
+                assertEquals(MessageStatus.FAILED, fallido.status)
+                assertTrue("el estado debe estar guardado aunque el envío fallara", store.sessions.isNotEmpty())
+                val primerEstado = store.sessions.getValue(contactoV2.id).toList()
+
+                signaling.failOnSend = false
+                signaling.failOnMailbox = false
+                chat.send(contactoV2, "este sí".toByteArray())
+                assertNotEquals(
+                    "el segundo mensaje no puede salir del mismo estado que el primero",
+                    primerEstado,
+                    store.sessions.getValue(contactoV2.id).toList(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `eliminar un contacto olvida su sesion de ratchet`() = runTest {
+        conRatchet {
+            val store = FakeRatchetStore()
+            val sessions = testSessions(FakeKeyExchange("12D3KooWSelf"), store)
+            val contacts = FakeContacts(listOf(contactoV2))
+            val chat = ChatService(
+                FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(),
+                RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, sessions,
+            )
+
+            kotlinx.coroutines.runBlocking {
+                chat.send(contactoV2, "hola".toByteArray())
+                assertTrue(store.sessions.isNotEmpty())
+                chat.deleteContact(contactoV2)
+                assertTrue("la sesión se va con el contacto", store.sessions.isEmpty())
+            }
+        }
+    }
+
+    // --- v2 del transporte: recepción por ratchet y anuncio de capacidad (fase 5) ---
+
+    /** El ratchet del "otro extremo", para fabricar sobres v2 como los fabricaría su móvil. */
+    private fun emisorRatchet(): Pair<Ratchet, RatchetState> {
+        val ratchet = Ratchet(JdkCurve25519())
+        // Los PeerID van cruzados respecto al receptor: el sentido de cada cadena sale de
+        // ordenarlos, así que invertirlos sería exactamente el error que rompería la sesión.
+        return ratchet to ratchet.initial(secret, contact.peerId, "12D3KooWSelf", lineage = 1_000L)
+    }
+
+    @Test
+    fun `un sobre de ratchet entrante se abre y se persiste`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val (ratchet, estado) = emisorRatchet()
+        val sobre = MessageEnvelope.encodeText("rtc-1", "por ratchet".toByteArray())
+        val wire = ratchet.encrypt(estado, sobre).ciphertext
+        assertTrue("debe parecer un sobre v2", Ratchet.looksLikeRatchet(wire))
+
+        val recibido = chat.onReceived(contact.peerId, wire)!!
+
+        assertEquals("rtc-1", recibido.id)
+        assertEquals("por ratchet", (chat.content(contact, recibido) as MessageContent.Text).text)
+        assertFalse("se guarda el sobre en claro", messages.findById("rtc-1")!!.encrypted)
+    }
+
+    /**
+     * La reentrega del buzón de un sobre v2 ya procesado **no puede parecer basura**: su clave
+     * está gastada. Se reconoce por huella y se descarta, que es además lo que lo ack'ea en el
+     * nodo en vez de dejarlo volviendo cada ciclo.
+     */
+    @Test
+    fun `una reentrega de un sobre de ratchet se descarta sin duplicar`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val (ratchet, estado) = emisorRatchet()
+        val wire = ratchet.encrypt(estado, MessageEnvelope.encodeText("rtc-2", "una vez".toByteArray())).ciphertext
+
+        assertNotNull(chat.onReceived(contact.peerId, wire, mailboxId = "env-1"))
+        assertNull("la reentrega no debe crear otra burbuja", chat.onReceived(contact.peerId, wire, mailboxId = "env-1"))
+        assertEquals(1, messages.saved.size)
+    }
+
+    @Test
+    fun `un anuncio de capacidad apunta la version del contacto y no crea burbuja`() = runTest {
+        val messages = FakeMessages()
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(FakeSignaling(), cipher, messages, contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val anuncio = cipher.encrypt(secret, MessageEnvelope.encodeHello(2))
+        val resultado = chat.onReceived(contact.peerId, anuncio)
+
+        assertNull("un anuncio no es un mensaje", resultado)
+        assertTrue("no debe crear burbuja", messages.saved.isEmpty())
+        assertEquals(2, contacts.findById(contact.id)!!.peerProtocol)
+    }
+
+    @Test
+    fun `la capacidad se anuncia una sola vez por contacto`() = runTest {
+        val signaling = FakeSignaling()
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(signaling, cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        chat.announceCapabilities()
+        chat.announceCapabilities()
+
+        assertEquals("no debe repetirse en cada ciclo", 1, signaling.sentAll.size)
+        val env = MessageEnvelope.decode(cipher.decrypt(secret, signaling.sentAll.single()))
+        assertEquals(ChatService.PROTOCOL_VERSION, (env as MessageEnvelope.Decoded.Hello).protocol)
+        assertEquals(ChatService.PROTOCOL_VERSION, contacts.findById(contact.id)!!.announcedProtocol)
+    }
+
+    /** Si no salió por ninguna vía, no se da por anunciado: se reintenta en el próximo ciclo. */
+    @Test
+    fun `un anuncio que no sale se reintenta`() = runTest {
+        val signaling = FakeSignaling().apply { failOnSend = true; failOnMailbox = true }
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(signaling, cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        chat.announceCapabilities()
+        assertEquals(0, contacts.findById(contact.id)!!.announcedProtocol)
+
+        signaling.failOnSend = false
+        signaling.failOnMailbox = false
+        chat.announceCapabilities()
+        assertEquals(ChatService.PROTOCOL_VERSION, contacts.findById(contact.id)!!.announcedProtocol)
+    }
+
+    @Test
+    fun `a un contacto bloqueado no se le anuncia nada`() = runTest {
+        val signaling = FakeSignaling()
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(signaling, cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        chat.block(contact.peerId)
+
+        chat.announceCapabilities()
+
+        assertTrue(signaling.sentAll.isEmpty())
+        assertEquals(0, contacts.findById(contact.id)!!.announcedProtocol)
+    }
+
+    /**
+     * **Uno de cada 256 mensajes v1 largos empieza por el byte de versión del ratchet**: el
+     * sobre v1 es `nonce(12) ‖ ct+tag` y el nonce es aleatorio. No es un caso rebuscado, es el
+     * ~0,4% de todo lo que pase de los 86 bytes — o sea, fotos, trozos de archivo y cualquier
+     * texto de más de un par de líneas. (Lo más corto que eso nunca se confunde, porque
+     * `looksLikeRatchet` exige además el tamaño mínimo de una cabecera; el test lo descubrió
+     * solo, fallando con un mensaje corto que no había forma de disfrazar.)
+     *
+     * La cabecera es una pista para decidir en qué orden intentarlo; quien decide es el AEAD, y
+     * si v2 no abre hay que caer a v1 en vez de perder el mensaje.
+     */
+    @Test
+    fun `un mensaje v1 que parece de ratchet se entrega igual`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        // Se cifra hasta que el nonce empiece por 0x02, que es lo que pasa solo por azar.
+        val texto = "hola de la vieja escuela, " + "y algo más de longitud para pasar de 86 bytes ".repeat(3)
+        val sobre = MessageEnvelope.encodeText("v1-disfrazado", texto.toByteArray())
+        var wire = cipher.encrypt(secret, sobre)
+        var intentos = 0
+        while (!Ratchet.looksLikeRatchet(wire) && intentos++ < 10_000) {
+            wire = cipher.encrypt(secret, sobre)
+        }
+        assertTrue("no se pudo fabricar el caso en 10.000 intentos", Ratchet.looksLikeRatchet(wire))
+
+        val recibido = chat.onReceived(contact.peerId, wire)!!
+
+        assertEquals("v1-disfrazado", recibido.id)
+        assertEquals(texto, (chat.content(contact, recibido) as MessageContent.Text).text)
+    }
+
+    /**
+     * Lo que no se puede abrir por ninguna vía se descarta con una línea de diagnóstico. Antes
+     * se persistía el ciphertext como "texto legado" y salía una burbuja de basura.
+     */
+    @Test
+    fun `un mensaje ilegible no crea una burbuja de basura`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val basura = ByteArray(64) { it.toByte() }
+        assertNull(chat.onReceived(contact.peerId, basura, mailboxId = "env-basura"))
+        assertTrue(messages.saved.isEmpty())
+    }
+
+    // --- v8: el historial deja de guardarse cifrado con la clave estática ---
+
+    /**
+     * Una fila anterior a la v8 guarda su ciphertext y **se sigue leyendo igual**. Es la
+     * condición para que la conversión pueda ir en segundo plano sin que el usuario vea nada
+     * raro mientras tanto (y para que una fila que no se pueda convertir nunca desaparezca).
+     */
+    @Test
+    fun `un mensaje de antes de la v8 se lee sin convertirlo`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val viejo = Message(
+            id = "v7-1",
+            conversationId = contact.id,
+            senderId = contact.id,
+            payload = cipher.encrypt(secret, MessageEnvelope.encodeText("v7-1", "del pasado".toByteArray())),
+            timestamp = 1,
+            status = MessageStatus.DELIVERED,
+            encrypted = true,
+        )
+        messages.save(viejo)
+
+        val contenido = chat.content(contact, viejo)
+        assertEquals("del pasado", (contenido as MessageContent.Text).text)
+    }
+
+    @Test
+    fun `unsealHistory convierte el historial y lo deja legible`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        repeat(3) { i ->
+            messages.save(
+                Message(
+                    id = "v7-$i",
+                    conversationId = contact.id,
+                    senderId = contact.id,
+                    payload = cipher.encrypt(secret, MessageEnvelope.encodeText("v7-$i", "hola $i".toByteArray())),
+                    timestamp = i.toLong(),
+                    status = MessageStatus.DELIVERED,
+                    encrypted = true,
+                ),
+            )
+        }
+
+        chat.unsealHistory()
+
+        assertTrue("no debe quedar nada cifrado con la clave estática", messages.saved.none { it.encrypted })
+        repeat(3) { i ->
+            val m = messages.findById("v7-$i")!!
+            // Y el contenido es el mismo, ahora legible sin descifrar.
+            assertEquals("hola $i", (chat.content(contact, m) as MessageContent.Text).text)
+            val env = MessageEnvelope.decode(m.payload)
+            assertEquals("v7-$i", (env as MessageEnvelope.Decoded.Text).id)
+        }
+    }
+
+    /**
+     * Regresión del bucle infinito: una fila que no se puede abrir (corrupta, o de un contacto
+     * que ya no está) **no puede bloquear el resto del historial**. Sin el desplazamiento, la
+     * consulta devolvería siempre la misma fila y el resto no se convertiría jamás.
+     */
+    @Test
+    fun `unsealHistory salta lo que no puede abrir y sigue con el resto`() = runTest {
+        val messages = FakeMessages()
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        fun legado(id: String, payload: ByteArray) = Message(
+            id = id, conversationId = contact.id, senderId = contact.id,
+            payload = payload, timestamp = 1, status = MessageStatus.DELIVERED, encrypted = true,
+        )
+        messages.save(legado("ok-1", cipher.encrypt(secret, MessageEnvelope.encodeText("ok-1", "uno".toByteArray()))))
+        messages.save(legado("corrupto", "esto no descifra".toByteArray()))
+        messages.save(legado("ok-2", cipher.encrypt(secret, MessageEnvelope.encodeText("ok-2", "dos".toByteArray()))))
+
+        chat.unsealHistory(batch = 1)
+
+        assertFalse(messages.findById("ok-1")!!.encrypted)
+        assertFalse("el de después del corrupto también se convierte", messages.findById("ok-2")!!.encrypted)
+        assertTrue("el ilegible se queda como estaba, no se destruye", messages.findById("corrupto")!!.encrypted)
+    }
+
+    /** Una fila anterior a la v8 se reenvía tal cual: sus bytes ya son los de la red. */
+    @Test
+    fun `reintentar un mensaje de antes de la v8 reenvia su ciphertext`() = runTest {
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        val original = cipher.encrypt(secret, MessageEnvelope.encodeText("v7-fallido", "reintento".toByteArray()))
+        messages.save(
+            Message(
+                id = "v7-fallido", conversationId = contact.id, senderId = "self",
+                payload = original, timestamp = System.currentTimeMillis(),
+                status = MessageStatus.FAILED, encrypted = true,
+            ),
+        )
+
+        chat.retry(contact, "v7-fallido")
+
+        assertArrayEquals(original, signaling.sentCiphertext)
+    }
+
     // --- El id lo elige el emisor: no debe poder pisar otra conversación (hallazgo A-9) ---
 
     @Test
     fun `un entrante no puede sobrescribir el mensaje de otra conversacion`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val ajeno = Message(
             id = "id-en-disputa",
             conversationId = "otra-conversacion",
             senderId = "otra-conversacion",
-            ciphertext = "intacto".toByteArray(),
+            payload = "intacto".toByteArray(),
             timestamp = 1,
             status = MessageStatus.DELIVERED,
         )
@@ -1177,13 +1917,13 @@ class ChatServiceTest {
     @Test
     fun `un acuse de lectura solo marca mensajes de quien lo envia`() = runTest {
         val messages = FakeMessages()
-        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val paraOtro = Message(
             id = "m-de-otro-chat",
             conversationId = "otra-conversacion",
             senderId = "self",
-            ciphertext = ByteArray(1),
+            payload = ByteArray(1),
             timestamp = 1,
             status = MessageStatus.SENT,
         )
@@ -1204,7 +1944,7 @@ class ChatServiceTest {
     @Test
     fun `el rendezvous se anuncia con la ventana de solape del dia`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.announceAndFind()
 
@@ -1227,7 +1967,7 @@ class ChatServiceTest {
     @Test
     fun `a un contacto bloqueado no se le anuncia el rendezvous`() = runTest {
         val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.block(contact.peerId)
         chat.announceAndFind()
@@ -1245,7 +1985,7 @@ class ChatServiceTest {
     fun `the allowed-peer list carries contacts and infra nodes`() = runTest {
         val signaling = FakeSignaling()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.announceAndFind()
 
@@ -1262,7 +2002,7 @@ class ChatServiceTest {
     fun `a blocked contact is left out of the allowed-peer list`() = runTest {
         val signaling = FakeSignaling()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.block(contact.peerId)
         chat.refreshAllowedPeers()
@@ -1275,7 +2015,7 @@ class ChatServiceTest {
     /** El PeerID sale del multiaddr, también con `/p2p-circuit` detrás (direcciones de relay). */
     @Test
     fun `bootstrapPeerIds extracts one id per node, circuit form included`() = runTest {
-        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         val ids = chat.bootstrapPeerIds(
             "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWUno\n" +
@@ -1288,7 +2028,7 @@ class ChatServiceTest {
         assertEquals(listOf("12D3KooWUno", "12D3KooWDos"), ids)
     }
 
-    // --- Buzón ciego: recepción por etiqueta (docs/DISENO-buzon-ciego.md) ---
+    // --- Buzón ciego: recepción por etiqueta (docs/krypta/DISENO-buzon-ciego.md) ---
 
     private fun etiquetaDe(c: Contact, chat: ChatService): String =
         MailboxLabel.toHex(
@@ -1299,7 +2039,7 @@ class ChatServiceTest {
     fun `la retirada pide las etiquetas de recepcion de cada contacto`() = runTest {
         val signaling = FakeSignaling()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
 
         chat.pollOnce() // arranca y retira el buzón
 
@@ -1313,7 +2053,7 @@ class ChatServiceTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         chat.pollOnce() // construye el índice de etiquetas
 
         val ciphertext = cipher.encrypt(secret, MessageEnvelope.encodeText("mid-ciego", "hola a ciegas".toByteArray()))
@@ -1327,12 +2067,79 @@ class ChatServiceTest {
         assertEquals("hola a ciegas", String(chat.decrypt(contact, guardado)))
     }
 
+    /**
+     * **Limitación conocida, fijada a propósito** (H-5 de `docs/krypta/REVISION-protocolo-2026-09-14.md`,
+     * W-3 de la especificación). La autenticación del remitente es la del secreto compartido `S`,
+     * y `S` sale igual de la privada de cualquiera de los dos extremos. Quien robe **tu** identidad
+     * —por ejemplo, tu `.krbk` con su frase— calcula el mismo `S` que cada uno de tus contactos
+     * **sin tener la privada de ninguno**, y puede escribirte como cualquiera de ellos: suplantación
+     * ante el compromiso de la propia clave (KCI). Nyx no promete resistirla (15 sep 2026).
+     *
+     * Lo que fija el test es **por qué vía entra y por cuál no**:
+     *
+     * - **buzón ciego**: el sobre no lleva remitente y lo atribuye la etiqueta, que también sale de
+     *   `S`. Entra como del contacto;
+     * - **buzón por PeerID, con un nodo honrado**: el nodo pone de remitente la identidad del stream,
+     *   que es la robada, o sea tu propio PeerID. No es un contacto y no entra;
+     * - **pero con un nodo que miente** sobre el remitente también entra: esa negativa depende de
+     *   que el nodo sea honrado.
+     *
+     * Por stream directo no hace falta probarlo: el remitente lo autentica libp2p con la clave del
+     * contacto, que el ladrón no tiene. Si algún cambio lo cierra (firmar los sobres con la
+     * identidad), este test tiene que cambiar con él.
+     */
+    @Test
+    fun `con tu identidad robada te pueden escribir como cualquier contacto por el buzon ciego`() = runTest {
+        val curva = JdkCurve25519()
+        val yo = curva.generateKeyPair() // este móvil, la víctima
+        val bob = curva.generateKeyPair() // el contacto al que se suplanta
+        val sDeMiMovil = curva.agree(yo.privateKey, bob.publicKey)
+        // El ladrón tiene mi privada y la pública de Bob, que es su PeerID. La de Bob no le hace falta.
+        val robada = yo.privateKey.copyOf()
+        val sDelLadron = curva.agree(robada, bob.publicKey)
+        assertArrayEquals(
+            "sin la privada de Bob, el ladrón calcula el mismo S que Bob",
+            curva.agree(bob.privateKey, yo.publicKey),
+            sDelLadron,
+        )
+
+        val bobContacto = contact.copy(sharedSecret = sDeMiMovil)
+        val signaling = FakeSignaling()
+        val messages = FakeMessages()
+        signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(bobContacto)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        chat.pollOnce() // construye el índice de etiquetas
+        val procesar = signaling.registeredMailboxProcessor!!
+
+        // Todo lo que sigue lo fabrica el ladrón con S y los dos PeerID, nada más.
+        fun comoBob(id: String, texto: String) =
+            cipher.encrypt(sDelLadron, MessageEnvelope.encodeText(id, texto.toByteArray()))
+        val etiqueta = MailboxLabel.toHex(
+            MailboxLabel.outbox(sDelLadron, myPeerId = bobContacto.peerId, theirPeerId = chat.myPeerId()),
+        )
+
+        // 1. Buzón ciego: entra como de Bob.
+        assertTrue(procesar("", comoBob("kci-ciego", "soy Bob"), "env-1", 1L, etiqueta))
+        val suplantado = messages.saved.single()
+        assertEquals("el buzón ciego lo atribuye a Bob", bobContacto.id, suplantado.senderId)
+        assertEquals("soy Bob", String(chat.decrypt(bobContacto, suplantado)))
+
+        // 2. Buzón por PeerID con un nodo honrado: el remitente es la identidad robada, la mía.
+        procesar(chat.myPeerId(), comoBob("kci-peerid", "soy Bob otra vez"), "env-2", 2L, "")
+        assertEquals("por PeerID y con un nodo honrado no entra", 1, messages.saved.size)
+
+        // 3. Un nodo que miente sobre el remitente sí lo cuela.
+        assertTrue(procesar(bobContacto.peerId, comoBob("kci-nodo", "soy Bob, dice el nodo"), "env-3", 3L, ""))
+        assertEquals(2, messages.saved.size)
+        assertEquals("con un nodo que miente, también entra", bobContacto.id, messages.saved.last().senderId)
+    }
+
     @Test
     fun `una etiqueta desconocida no se confirma, para no destruir el sobre`() = runTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         chat.pollOnce()
 
         val ajena = "f".repeat(64)
@@ -1345,20 +2152,439 @@ class ChatServiceTest {
         assertTrue(messages.saved.isEmpty())
     }
 
+    /**
+     * A ciegas solo a quien ha anunciado que retira por etiquetas; al resto por PeerID.
+     * Depositar a ciegas donde el otro aún no mira perdería el mensaje (caducaría en el nodo).
+     */
     @Test
-    fun `el deposito ciego sigue apagado hasta que la recepcion este repartida`() = runTest {
-        val signaling = FakeSignaling()
-        val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+    fun `el deposito ciego se decide por contacto, segun lo que haya anunciado`() = runTest {
+        val v1 = FakeSignaling().apply { failOnSend = true } // fuerza la caída al buzón
+        parte("12D3KooWSelf", contact, v1, scope = backgroundScope).send(contact, "por buzón".toByteArray())
+        assertEquals("sin anuncio, por PeerID", "", v1.depositLabels.single())
 
-        signaling.failOnSend = true // fuerza la caída al buzón
-        chat.send(contact, "por buzón".toByteArray())
-
-        assertEquals(1, signaling.depositLabels.size)
+        val v2 = FakeSignaling().apply { failOnSend = true }
+        parte("12D3KooWSelf", contactoV2, v2, scope = backgroundScope).send(contactoV2, "a ciegas".toByteArray())
         assertEquals(
-            "depositar a ciegas donde el otro aún no mira perdería el mensaje",
-            "",
-            signaling.depositLabels.single(),
+            "quien anunció v2 ya retira por etiquetas: se le deposita bajo la suya",
+            MailboxLabel.toHex(MailboxLabel.outbox(secret, "12D3KooWSelf", contact.peerId)),
+            v2.depositLabels.single(),
         )
+
+        // El interruptor global sigue mandando: apagarlo devuelve todos los depósitos a v1.
+        val antes = ChatService.BLIND_DEPOSIT
+        ChatService.BLIND_DEPOSIT = false
+        try {
+            val apagado = FakeSignaling().apply { failOnSend = true }
+            parte("12D3KooWSelf", contactoV2, apagado, scope = backgroundScope).send(contactoV2, "v1".toByteArray())
+            assertEquals("", apagado.depositLabels.single())
+        } finally {
+            ChatService.BLIND_DEPOSIT = antes
+        }
+    }
+
+    /**
+     * Dos extremos recién añadidos hacen el intercambio de anuncios de capacidad y después el
+     * usuario de A escribe. Devuelve la cabecera de ese primer mensaje y los dos servicios.
+     *
+     * [relojDeA] adelanta o atrasa el reloj de A al crear su sesión: los linajes son la hora
+     * local de cada móvil, y **de eso depende en qué época sale el primer mensaje** (ver los
+     * dos tests de abajo). Se siembra el estado en el almacén de A en vez de tocar el reloj
+     * del sistema, que es lo que `RatchetSessions.stateFor` haría con `now`.
+     */
+    private fun primerMensajeTrasAnadirse(
+        scope: kotlinx.coroutines.CoroutineScope,
+        relojDeA: Long,
+    ): Triple<Ratchet.Header, Pair<ChatService, ChatService>, Pair<FakeSignaling, FakeSignaling>> {
+        val contactoDeB = Contact(
+            id = "contacto-a", displayName = "Yo", peerId = "12D3KooWSelf",
+            publicKey = ByteArray(0), sharedSecret = secret,
+        )
+        val sigA = FakeSignaling()
+        val sigB = FakeSignaling()
+        val contactsA = FakeContacts(listOf(contact))
+        val contactsB = FakeContacts(listOf(contactoDeB))
+        val storeA = FakeRatchetStore().apply {
+            sessions[contact.id] = Ratchet(JdkCurve25519())
+                .initial(secret, "12D3KooWSelf", contact.peerId, lineage = System.currentTimeMillis() + relojDeA)
+                .encode()
+        }
+        val a = ChatService(
+            sigA, cipher, FakeMessages(), contactsA, FakeKeyExchange("12D3KooWSelf"), RendezvousService(),
+            FakeFileStore(), FakeBlocks(), FakeLikes(), scope, testSessions(FakeKeyExchange("12D3KooWSelf"), storeA),
+        )
+        val b = parte("12D3KooWBob", contactoDeB, sigB, contacts = contactsB, scope = scope)
+
+        return kotlinx.coroutines.runBlocking {
+            // 1. A anuncia; como no sabe qué habla B, va por el camino estático.
+            a.announceCapabilities()
+            assertFalse(Ratchet.looksLikeRatchet(sigA.sentCiphertext!!))
+            assertNull(b.onReceived("12D3KooWSelf", sigA.sentCiphertext!!))
+            // 2. B ya sabe que A habla v3: su anuncio va por el ratchet (época 0, con propuesta).
+            b.announceCapabilities()
+            assertEquals(0, Ratchet.Header.decode(sigB.sentCiphertext!!)!!.epoch)
+            assertNull(a.onReceived("12D3KooWBob", sigB.sentCiphertext!!))
+            // 3. El usuario de A escribe.
+            val contactoActual = contactsA.findById(contact.id)!!
+            assertEquals(ChatService.PROTOCOL_VERSION, contactoActual.peerProtocol)
+            a.send(contactoActual, "hola".toByteArray())
+            val recibido = b.onReceived("12D3KooWSelf", sigA.sentCiphertext!!)!!
+            assertEquals("hola", (b.content(contactsB.findById(contactoDeB.id)!!, recibido) as MessageContent.Text).text)
+            Triple(Ratchet.Header.decode(sigA.sentCiphertext!!)!!, a to b, sigA to sigB)
+        }
+    }
+
+    /**
+     * La época 0 se deriva del secreto compartido y no tiene secreto hacia adelante. Este test
+     * fija **dónde acaba** esa exposición al añadir un contacto, que no es donde se pensaba:
+     * el intercambio de anuncios de capacidad no basta. Cada lado crea su sesión por su cuenta
+     * con su hora local como linaje; en el caso normal el receptor la crea **después** y su
+     * linaje es mayor, así que abre el anuncio de B por `openOld` (la época 0 de cualquier
+     * linaje es derivable) sin adoptar el linaje menor —y no puede, ver `RatchetTest`—, y **el
+     * primer mensaje del usuario sale en la época 0**. Solo la primera respuesta de B saca a
+     * los dos. Es el coste que documenta `docs/krypta/DISENO-ratchet.md` §1.8.4; si algún cambio lo
+     * alargara (que la respuesta de B tampoco avanzara), este test lo diría.
+     */
+    @Test
+    fun `al anadirse, el primer mensaje del usuario va en epoca 0 y la primera respuesta saca a los dos`() = runTest {
+        conRatchet {
+            val (primero, servicios, señales) = primerMensajeTrasAnadirse(backgroundScope, relojDeA = +60_000L)
+            val (a, b) = servicios
+            val (sigA, sigB) = señales
+            assertEquals("el primer mensaje del usuario no tiene secreto hacia adelante", 0, primero.epoch)
+
+            kotlinx.coroutines.runBlocking {
+                // B adopta el linaje de A (mayor) y su respuesta ya lleva material efímero;
+                // con ella A también sale de la época 0. Desde aquí, todo tiene PFS.
+                b.send(contact.copy(id = "contacto-a", peerId = "12D3KooWSelf", peerProtocol = 3), "qué tal".toByteArray())
+                val respuesta = Ratchet.Header.decode(sigB.sentCiphertext!!)!!
+                assertEquals(primero.lineage, respuesta.lineage)
+                assertEquals("la primera respuesta ya va en época 1", 1, respuesta.epoch)
+                assertNotNull(a.onReceived("12D3KooWBob", sigB.sentCiphertext!!))
+                a.send(contactoV2, "bien".toByteArray())
+                assertEquals(2, Ratchet.Header.decode(sigA.sentCiphertext!!)!!.epoch)
+            }
+        }
+    }
+
+    /**
+     * El otro caso, que también ocurre: si el reloj de A va **por detrás** del de B, el anuncio
+     * de B trae un linaje mayor, A lo adopta y consume la propuesta, y el primer mensaje del
+     * usuario ya sale en la época 1. O sea que hoy el secreto hacia adelante del primer
+     * mensaje **depende de los relojes**, no de nada que controle el protocolo. Documentado en
+     * `docs/krypta/DISENO-ratchet.md` §1.8.4 junto con lo que haría falta para que fuera siempre así.
+     */
+    @Test
+    fun `si el reloj de A va por detras, el primer mensaje del usuario ya sale en epoca 1`() = runTest {
+        conRatchet {
+            val (primero, _, _) = primerMensajeTrasAnadirse(backgroundScope, relojDeA = -60_000L)
+            assertEquals(1, primero.epoch)
+        }
+    }
+
+    // --- Revisión del protocolo (14 sep 2026): lo que cada lado sabe de la versión del otro ---
+    // Hallazgos H-1, H-2, H-3 y H-6 de docs/krypta/REVISION-protocolo-2026-09-14.md.
+
+    /** Entrega a [to] lo que [from] haya enviado desde la última vez, como haría la red. */
+    private class Cable(
+        private val from: FakeSignaling,
+        private val fromPeerId: String,
+        private val to: ChatService,
+    ) {
+        private var entregados = 0
+
+        /** Da por entregado lo que ya salió (se lo quedó otro destinatario, p. ej. el móvil viejo). */
+        fun saltarLoEnviado() {
+            entregados = from.sentAll.size
+        }
+
+        suspend fun entregar(): Int {
+            val pendientes = from.sentAll.drop(entregados)
+            entregados += pendientes.size
+            for (wire in pendientes) to.onReceived(fromPeerId, wire)
+            return pendientes.size
+        }
+    }
+
+    /** Entrega en los dos sentidos hasta que ninguno tenga nada más que decir. */
+    private suspend fun bombear(vararg cables: Cable) {
+        repeat(10) {
+            var movidos = 0
+            for (c in cables) movidos += c.entregar()
+            if (movidos == 0) return
+        }
+    }
+
+    /**
+     * Dos extremos con una conversación por ratchet ya establecida, fuera de la época 0. Los
+     * linajes se siembran en el pasado para que el que nazca después (al borrar y volver a
+     * añadir, al importar) sea estrictamente mayor, como pasa en la vida real.
+     */
+    private inner class Pareja {
+        val secreto = ByteArray(32) { 7 } // el que deriva FakeKeyExchange: lo usa addContact
+        private val ahora = System.currentTimeMillis()
+        val bobDeAna = Contact(
+            id = "12D3KooWBob", displayName = "Bob", peerId = "12D3KooWBob", publicKey = ByteArray(0),
+            sharedSecret = secreto,
+            peerProtocol = ChatService.PROTOCOL_VERSION, announcedProtocol = ChatService.PROTOCOL_VERSION,
+        )
+        val anaDeBob = Contact(
+            id = "12D3KooWSelf", displayName = "Ana", peerId = "12D3KooWSelf", publicKey = ByteArray(0),
+            sharedSecret = secreto,
+            peerProtocol = ChatService.PROTOCOL_VERSION, announcedProtocol = ChatService.PROTOCOL_VERSION,
+        )
+        val sigAna = FakeSignaling()
+        val sigBob = FakeSignaling()
+        val contactosAna = FakeContacts(listOf(bobDeAna))
+        val contactosBob = FakeContacts(listOf(anaDeBob))
+        val mensajesBob = FakeMessages()
+        private val storeAna = FakeRatchetStore().apply {
+            sessions[bobDeAna.id] = Ratchet(JdkCurve25519())
+                .initial(secreto, anaDeBob.peerId, bobDeAna.peerId, lineage = ahora - 7_200_000L).encode()
+        }
+        private val storeBob = FakeRatchetStore().apply {
+            sessions[anaDeBob.id] = Ratchet(JdkCurve25519())
+                .initial(secreto, bobDeAna.peerId, anaDeBob.peerId, lineage = ahora - 3_600_000L).encode()
+        }
+        val ana = ChatService(
+            sigAna, cipher, FakeMessages(), contactosAna, FakeKeyExchange(anaDeBob.peerId), RendezvousService(),
+            FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange(anaDeBob.peerId), storeAna),
+        )
+        val bob = ChatService(
+            sigBob, cipher, mensajesBob, contactosBob, FakeKeyExchange(bobDeAna.peerId), RendezvousService(),
+            FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange(bobDeAna.peerId), storeBob),
+        )
+        val anaHaciaBob = Cable(sigAna, anaDeBob.peerId, bob)
+        val bobHaciaAna = Cable(sigBob, bobDeAna.peerId, ana)
+
+        suspend fun bobVistoPorAna() = contactosAna.findById(bobDeAna.id)!!
+        suspend fun anaVistaPorBob() = contactosBob.findById(anaDeBob.id)!!
+
+        /** Tres mensajes de ida y vuelta: la sesión sale de la época 0 y los dos se reconocen. */
+        suspend fun conversar() {
+            ana.send(bobVistoPorAna(), "hola".toByteArray()); bombear(anaHaciaBob, bobHaciaAna)
+            bob.send(anaVistaPorBob(), "qué tal".toByteArray()); bombear(anaHaciaBob, bobHaciaAna)
+            ana.send(bobVistoPorAna(), "bien".toByteArray()); bombear(anaHaciaBob, bobHaciaAna)
+            assertTrue(
+                "la sesión debía haber salido de la época 0",
+                Ratchet.Header.decode(sigAna.sentCiphertext!!)!!.epoch >= 1,
+            )
+        }
+
+        fun textosDeBob(): List<String> = mensajesBob.saved
+            .filter { it.senderId == anaDeBob.id }
+            .mapNotNull { (MessageEnvelope.decode(it.payload) as? MessageEnvelope.Decoded.Text)?.let { t -> String(t.body) } }
+
+        fun logs() = "log Bob=${bob.log.value} · log Ana=${ana.log.value}"
+    }
+
+    /**
+     * **H-1.** Bob borra a Ana y la vuelve a añadir (o importa un `.krbk`, que desde aquí es lo
+     * mismo: contacto sin sesión y sin saber qué versión habla Ana). Ana ya le anunció su versión
+     * una vez y no lo repite, así que Bob se queda creyendo que Ana habla v1; Ana le sigue
+     * escribiendo por ratchet en una sesión que Bob ya no tiene, y el reengache de Bob no sale
+     * porque "no usa ratchet". Resultado antes del arreglo: **todo lo que Ana escribía se
+     * descartaba (y se confirmaba en el buzón) para siempre**.
+     */
+    @Test
+    fun `borrar y volver a anadir a un contacto no pierde para siempre lo que te escriba`() = runTest {
+        conRatchet {
+            val p = Pareja()
+            kotlinx.coroutines.runBlocking {
+                p.conversar()
+
+                p.bob.deleteContact(p.anaVistaPorBob())
+                p.bob.addContact("Ana", p.anaDeBob.peerId)
+                p.bob.announceCapabilities()
+                bombear(p.anaHaciaBob, p.bobHaciaAna)
+
+                p.ana.send(p.bobVistoPorAna(), "¿me lees?".toByteArray())
+                bombear(p.anaHaciaBob, p.bobHaciaAna)
+            }
+            assertTrue("lo que escribe Ana tiene que llegar · ${p.logs()}", "¿me lees?" in p.textosDeBob())
+
+            // Y Bob vuelve al ratchet con ella, en vez de quedarse en la clave estática.
+            kotlinx.coroutines.runBlocking { p.bob.send(p.anaVistaPorBob(), "sí".toByteArray()) }
+            assertTrue(
+                "Bob debe volver a escribirle por ratchet · ${p.logs()}",
+                Ratchet.looksLikeRatchet(p.sigBob.sentCiphertext!!),
+            )
+        }
+    }
+
+    /**
+     * **H-1, el otro camino**: Bob estrena móvil e importa su `.krbk`. La identidad es la misma,
+     * pero el contacto llega sin la versión de Ana y sin sesión —el respaldo no lleva ninguna de
+     * las dos—, que para el protocolo es exactamente borrar y volver a añadir. Es el punto 5 de
+     * `PRUEBAS-PENDIENTES` §16 de Krypta (§18 aquí), que con el código anterior habría fallado en el móvil.
+     */
+    @Test
+    fun `tras importar un krbk en un movil nuevo lo que te escriben vuelve a llegar`() = runTest {
+        conRatchet {
+            val p = Pareja()
+            val contactosNuevos = FakeContacts(listOf(p.anaDeBob.copy(peerProtocol = 0, announcedProtocol = 0)))
+            val mensajesNuevos = FakeMessages()
+            val sigNuevo = FakeSignaling()
+            val bobNuevo = ChatService(
+                sigNuevo, cipher, mensajesNuevos, contactosNuevos, FakeKeyExchange(p.bobDeAna.peerId),
+                RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(),
+                testSessions(FakeKeyExchange(p.bobDeAna.peerId)),
+            )
+            val anaHaciaNuevo = Cable(p.sigAna, p.anaDeBob.peerId, bobNuevo)
+            val nuevoHaciaAna = Cable(sigNuevo, p.bobDeAna.peerId, p.ana)
+            kotlinx.coroutines.runBlocking {
+                p.conversar()
+                anaHaciaNuevo.saltarLoEnviado() // eso se lo quedó el móvil viejo
+                bobNuevo.announceCapabilities()
+                bombear(anaHaciaNuevo, nuevoHaciaAna)
+                p.ana.send(p.bobVistoPorAna(), "¿estrenas móvil?".toByteArray())
+                bombear(anaHaciaNuevo, nuevoHaciaAna)
+            }
+            val textos = mensajesNuevos.saved.filter { it.senderId == p.anaDeBob.id }
+                .mapNotNull { (MessageEnvelope.decode(it.payload) as? MessageEnvelope.Decoded.Text)?.let { t -> String(t.body) } }
+            assertTrue(
+                "lo que escribe Ana tiene que llegar al móvil nuevo · log nuevo=${bobNuevo.log.value} · log Ana=${p.ana.log.value}",
+                "¿estrenas móvil?" in textos,
+            )
+        }
+    }
+
+    /**
+     * Quien nos tiene apuntados por debajo de lo que ya le anunciamos lo ha perdido: se le repite
+     * **por la clave estática** (sin sesión es lo único que abre), con lo que tenemos apuntado de
+     * él, y **una sola vez** aunque insista — cualquiera de tus contactos podría provocarlo.
+     */
+    @Test
+    fun `a quien nos tiene atrasados se le repite el anuncio por la clave estatica y una sola vez`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val yaAnunciado = contactoV2.copy(announcedProtocol = ChatService.PROTOCOL_VERSION)
+            val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(yaAnunciado)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+            val nosTieneAtrasados = cipher.encrypt(secret, MessageEnvelope.encodeHello(ChatService.PROTOCOL_VERSION, knows = 0))
+
+            repeat(3) { chat.onReceived(yaAnunciado.peerId, nosTieneAtrasados) }
+
+            assertEquals("una sola respuesta · log=${chat.log.value}", 1, signaling.sentAll.size)
+            val respuesta = MessageEnvelope.decode(cipher.decrypt(secret, signaling.sentAll.single()))
+                as MessageEnvelope.Decoded.Hello
+            assertEquals(ChatService.PROTOCOL_VERSION, respuesta.protocol)
+            assertEquals("con lo que tenemos apuntado de él", ChatService.PROTOCOL_VERSION, respuesta.knows)
+        }
+    }
+
+    /** Si aún no le hemos anunciado nada, no hay que repetir: el anuncio del ciclo WAN ya va a salir. */
+    @Test
+    fun `sin anuncio previo no se responde a quien nos tiene atrasados`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val chat = ChatService(signaling, cipher, FakeMessages(), FakeContacts(listOf(contactoV2)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            chat.onReceived(contactoV2.peerId, cipher.encrypt(secret, MessageEnvelope.encodeHello(ChatService.PROTOCOL_VERSION, knows = 0)))
+
+            assertTrue("log=${chat.log.value}", signaling.sentAll.isEmpty())
+        }
+    }
+
+    /**
+     * Al enterarnos de que un contacto habla ratchet se le escribe algo **por ratchet**: si había
+     * perdido la sesión, adopta nuestro linaje antes de escribirnos y no pierde lo primero que mande.
+     */
+    @Test
+    fun `al saber que un contacto habla ratchet se le manda un primer sobre por ratchet`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val contacts = FakeContacts(listOf(contact))
+            val chat = ChatService(signaling, cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            chat.onReceived(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeHello(ChatService.PROTOCOL_VERSION, knows = ChatService.PROTOCOL_VERSION)))
+
+            assertEquals(ChatService.PROTOCOL_VERSION, contacts.findById(contact.id)!!.peerProtocol)
+            assertEquals("log=${chat.log.value}", 1, signaling.sentAll.size)
+            assertTrue("tiene que ir por ratchet", Ratchet.looksLikeRatchet(signaling.sentAll.single()))
+        }
+    }
+
+    /**
+     * **H-3.** Un anuncio con una versión menor que la apuntada no la baja. Si la bajara, quien
+     * tenga el secreto compartido podría devolver la conversación a la clave estática con un solo
+     * sobre y leer en pasivo todo lo que viniera después, sin romper nada que se notara.
+     */
+    @Test
+    fun `un anuncio con una version menor no rebaja la del contacto`() = runTest {
+        conRatchet {
+            val signaling = FakeSignaling()
+            val contacts = FakeContacts(listOf(contactoV2))
+            val chat = ChatService(signaling, cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), scopeInmediato(), testSessions(FakeKeyExchange()))
+
+            chat.onReceived(contactoV2.peerId, cipher.encrypt(secret, MessageEnvelope.encodeHello(1)))
+
+            assertEquals(ChatService.PROTOCOL_VERSION, contacts.findById(contactoV2.id)!!.peerProtocol)
+            chat.send(contacts.findById(contactoV2.id)!!, "sigo por ratchet".toByteArray())
+            assertTrue(
+                "debe seguir escribiéndole por ratchet · log=${chat.log.value}",
+                Ratchet.looksLikeRatchet(signaling.sentCiphertext!!),
+            )
+        }
+    }
+
+    /**
+     * **H-2.** Verificar desde la copia que tenía la pantalla —leída antes de que llegara
+     * el anuncio del contacto— lo devolvía a v1 para siempre. Lo impide el contrato del repositorio
+     * (en Room, el SQL que prueba `ContactUpsertSqlTest`); esto fija el caso real en el dominio.
+     */
+    @Test
+    fun `verificar desde una copia vieja del contacto no lo devuelve a la clave estatica`() = runTest {
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val copiaDeLaPantalla = contacts.findById(contact.id)!!
+
+        chat.onReceived(contact.peerId, cipher.encrypt(secret, MessageEnvelope.encodeHello(ChatService.PROTOCOL_VERSION)))
+        chat.setVerified(copiaDeLaPantalla, true)
+
+        val guardado = contacts.findById(contact.id)!!
+        assertTrue("lo que se quería guardar se guarda", guardado.verified)
+        assertEquals("y lo que anunció no se pierde", ChatService.PROTOCOL_VERSION, guardado.peerProtocol)
+    }
+
+    /**
+     * Al ratchet se le cree lo que demuestra: un sobre v2 que **abre** prueba que el contacto lo
+     * habla, y uno relleno, que habla la v3. Cura a quien ya se quedó en v1 por H-2 antes del
+     * arreglo: en cuanto escriba, vuelve a constar su versión.
+     */
+    @Test
+    fun `un sobre de ratchet que abre sube la version apuntada del contacto`() = runTest {
+        val contacts = FakeContacts(listOf(contact))
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+        val (ratchet, estado) = emisorRatchet()
+
+        val sinRelleno = ratchet.encrypt(estado, MessageEnvelope.encodeText("r-1", "hola".toByteArray()))
+        assertNotNull(chat.onReceived(contact.peerId, sinRelleno.ciphertext))
+        assertEquals(ChatService.RATCHET_MIN_PROTOCOL, contacts.findById(contact.id)!!.peerProtocol)
+
+        val relleno = ratchet.encrypt(sinRelleno.state, MessageEnvelope.encodeText("r-2", "otra".toByteArray()), pad = true)
+        assertNotNull(chat.onReceived(contact.peerId, relleno.ciphertext))
+        assertEquals(ChatService.PADDING_MIN_PROTOCOL, contacts.findById(contact.id)!!.peerProtocol)
+    }
+
+    /**
+     * **H-2/H-6.** Volver a dar de alta (p. ej. renombrar) a un contacto no olvida la versión que
+     * anunció ni que ya se le anunció. (La otra mitad del H-6 de Krypta —que no lo desbloquee—
+     * aquí no aplica: `addContact` rechaza un PeerID bloqueado.)
+     */
+    @Test
+    fun `volver a anadir a un contacto no olvida su version`() = runTest {
+        val existente = contact.copy(
+            id = contact.peerId,
+            peerProtocol = ChatService.PROTOCOL_VERSION, announcedProtocol = ChatService.PROTOCOL_VERSION,
+        )
+        val contacts = FakeContacts(listOf(existente))
+        val chat = ChatService(FakeSignaling(), cipher, FakeMessages(), contacts, FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
+
+        chat.addContact("Bob renombrado", contact.peerId)
+
+        val guardado = contacts.findById(contact.peerId)!!
+        assertEquals("Bob renombrado", guardado.displayName)
+        assertEquals(ChatService.PROTOCOL_VERSION, guardado.peerProtocol)
+        assertEquals("no hace falta volver a anunciarse", ChatService.PROTOCOL_VERSION, guardado.announcedProtocol)
     }
 
     /**
@@ -1372,7 +2598,7 @@ class ChatServiceTest {
         val signaling = FakeSignaling()
         val messages = FakeMessages()
         signaling.bootstrapAddr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWNodo"
-        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope)
+        val chat = ChatService(signaling, cipher, messages, FakeContacts(listOf(contact)), FakeKeyExchange(), RendezvousService(), FakeFileStore(), FakeBlocks(), FakeLikes(), backgroundScope, testSessions(FakeKeyExchange()))
         chat.pollOnce() // construye el índice de etiquetas
         chat.block(contact.peerId)
 

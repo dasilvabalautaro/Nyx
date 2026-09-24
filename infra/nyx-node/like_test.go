@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -240,5 +241,53 @@ func TestLikeTriggersWake(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("un like debe despertar al destinatario")
+	}
+}
+
+// TestLikeWakesAV2Subscriber: el móvil actualizado se suscribe al wake **por etiquetas** (v2,
+// depósito ciego), pero los likes se depositan por PeerID. Si el wake v2 registrara solo las
+// etiquetas, el like —y con él el match— no despertaría al destinatario.
+func TestLikeWakesAV2Subscriber(t *testing.T) {
+	node, a, b := newTestHost(t), newTestHost(t), newTestHost(t)
+	lk := newLikebox(t.TempDir())
+	lk.attach(node)
+	wake := newWakeRegistry()
+	wake.attach(node)
+	lk.notify = wake.wake
+	connect(t, a, node)
+	connect(t, b, node)
+
+	s, err := b.NewStream(context.Background(), node.ID(), wakeProtocolV2)
+	if err != nil {
+		t.Fatalf("wake v2 stream: %v", err)
+	}
+	defer s.Close()
+	req, _ := json.Marshal(map[string]any{"v": 2, "labels": []string{strings.Repeat("ab", 32)}})
+	fmt.Fprintf(s, "%s\n", req)
+	avisos := make(chan string, 4)
+	go func() {
+		r := bufio.NewReader(s)
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return
+			}
+			avisos <- line
+		}
+	}()
+	time.Sleep(300 * time.Millisecond) // que la suscripción quede registrada
+
+	_ = likePut(t, a, node.ID(), b.ID().String(), []byte("like"))
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case linea := <-avisos:
+			if strings.Contains(linea, `"wake"`) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("un like debe despertar también a quien se suscribió por etiquetas")
+		}
 	}
 }

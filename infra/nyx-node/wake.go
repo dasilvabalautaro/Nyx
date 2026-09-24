@@ -111,6 +111,13 @@ func (w *wakeRegistry) handleV2(s network.Stream) {
 		_ = s.Reset()
 		return
 	}
+	// Propio de Nyx: también se registra el PeerID del suscriptor. Lo que se deposita por
+	// PeerID —los likes (like.go) y el buzón v1 de un contacto sin actualizar— avisa por esa
+	// clave, y sin esto un móvil suscrito solo por etiquetas no se enteraría al momento de un
+	// like ni, por tanto, de un match: tardaría hasta el siguiente ciclo del wanLoop (hasta
+	// 180 s) o el latido. No enseña nada al nodo: el stream está autenticado y el PeerID del
+	// suscriptor ya lo tiene junto a sus etiquetas (DISENO-buzon-ciego §4.2 de Krypta).
+	keys = append(keys, s.Conn().RemotePeer().String())
 	w.serve(s, keys)
 }
 

@@ -30,10 +30,16 @@ internal open class FakeSignalingBase(private val selfPeerId: String = "12D3KooW
     override suspend fun pingProbe(count: Int, intervalMs: Int): String = ""
 
     override suspend fun send(contact: Contact, ciphertext: ByteArray) = Unit
-    override suspend fun sendOffline(contact: Contact, ciphertext: ByteArray) = Unit
-    override suspend fun fetchMailbox(): Int = 0
+    override suspend fun sendOffline(contact: Contact, ciphertext: ByteArray, label: String) = Unit
+    override suspend fun fetchMailbox(labels: String): Int = 0
     override fun setMailboxProcessor(
-        processor: suspend (fromPeerId: String, ciphertext: ByteArray, envelopeId: String, timestamp: Long) -> Boolean,
+        processor: suspend (
+            fromPeerId: String,
+            ciphertext: ByteArray,
+            envelopeId: String,
+            timestamp: Long,
+            label: String,
+        ) -> Boolean,
     ) = Unit
 
     /** Última tarjeta publicada, para comprobar qué se subió de verdad. */
@@ -70,7 +76,7 @@ internal open class FakeSignalingBase(private val selfPeerId: String = "12D3KooW
         processor: suspend (fromPeerId: String, ciphertext: ByteArray, timestamp: Long) -> Boolean,
     ) = Unit
 
-    override suspend fun startWake() = Unit
+    override suspend fun startWake(labels: String) = Unit
     override suspend fun stopWake() = Unit
     override suspend fun wakeConnected(): Boolean = false
 

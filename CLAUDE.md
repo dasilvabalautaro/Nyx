@@ -479,9 +479,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > the native lib anywhere else is how Krypta shipped (and we briefly inherited) an app that
 > started once and **crashed on every launch after**. Network: a **ConnectionGater** only lets
 > contacts and nodes dial in (with a public board card your PeerID is public, and without it
-> anyone could pull your IP via hole punching); mDNS is **opt-in**; the mailbox **receives
-> blind** (v2, weekly HKDF labels) but still **deposits by PeerID** — the per-contact switch
-> (`16a1c4a`) needs the double-ratchet block, which is **not ported yet**. Two Nyx-specific
+> anyone could pull your IP via hole punching); mDNS is **opt-in**; the mailbox is **blind**
+> (v2, weekly HKDF labels) toward contacts that announced protocol ≥ 2. **The double ratchet
+> is in** (`b8dd6d0`, a three-way merge of Krypta's whole block, 76 files): per-message keys
+> via DH epochs (X25519 from the Go bridge), a `V` envelope announcing each side's protocol
+> (`contacts.peerProtocol`, never lowered), **DB v9** — `messages.payload` holds the envelope in
+> clear *inside* the SQLCipher DB because ratchet keys are erased after use —, attachments
+> encrypted at rest (`FileVault`), and a negotiated call key. Krypta's design/review docs it
+> cites are copied verbatim into [docs/krypta/](docs/krypta/). **Likes never use the ratchet**
+> (strangers, no session). Trap for the two-phone test (PRUEBAS §18): a pre-24-Sep build has no
+> "unknown envelope" handling and would show the `V` announcement as a junk text bubble, so
+> update both phones together; `RATCHET_SEND = false` is the emergency switch. Two Nyx-specific
 > fixes ride on top: the wake v2 also registers the subscriber's PeerID, or **a like (and so a
 > match) would not wake the phone**; and `onReceived` checks the block against the contact
 > resolved by label, because a blind envelope carries no sender. Also ported: reply-to-message
@@ -1209,7 +1217,7 @@ in-app capture. Two trade-offs to keep in mind: casting
                 Palette, AvatarAttributes, AttributeParser, the RF-09 AvatarPrompt filter,
                 and AvatarIdentity — the PeerID-derived avatar).
 :data           Room persistence: MessageEntity / ContactEntity / LikeEntity /
-                BlockedPeerEntity + their DAOs, NyxDatabase (v6, SQLCipher), Converters,
+                BlockedPeerEntity + ratchet entities + their DAOs, NyxDatabase (v9, SQLCipher), Converters,
                 Migrations, Room*Repository impls, DataModule (Hilt).
 :native-bridge  Kotlin/JNI wrapper over the go-libp2p AAR (Libp2pNode). The FG service
                 lives in :app (it injects ChatService, which this module cannot see).
@@ -1329,7 +1337,7 @@ compiled to an AAR with gomobile. Kotlin calls it through generated classes
 - **DI = Hilt, KSP not kapt.** Modules with Hilt/Room annotations apply both the
   `ksp` and (for Hilt) `hilt` plugins and use `ksp(...)` for the compilers. Put `@Module`
   bindings in a `di/` package. Components install in `SingletonComponent`.
-- **Room migrations, not destructive.** `NyxDatabase` is at **v6** (since 24 Sep 2026) with real migrations
+- **Room migrations, not destructive.** `NyxDatabase` is at **v9** (since 24 Sep 2026) with real migrations
   (`data/Migrations.kt`, wired in `DatabaseModule` via `addMigrations`); `exportSchema=true`
   writes **`data/src/androidTest/assets/`** (not `data/schemas/` — see the Phase 2 box below).
   **Every schema change adds a `Migration` + bumps the version** —

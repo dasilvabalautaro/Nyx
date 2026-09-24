@@ -70,40 +70,40 @@ después: el `.aar` no está en git.
 | `7e3c969` | 22 sep 2026 | Docs: solicitud enviada al OTF Security Lab | **No aplica**: solo docs de Krypta (revisión externa de Krypta). |
 | `e66448b` | 22 sep 2026 | Docs: clave PGP en la respuesta 16 del OTF | **No aplica**: solo docs de Krypta (revisión externa de Krypta). |
 | `ecedb9a` | 22 sep 2026 | Clave PGP para recibir hallazgos del OTF | **No aplica**: solo docs de Krypta y su clave pública. Si Nyx quiere un canal de avisos de seguridad, necesita su propia clave, no la de Krypta. |
-| `a642758` | 21 sep 2026 | Reintentar reenvía el archivo, no su descriptor | **Pendiente — bloque «doble ratchet»** (ver abajo): el reintento que arregla pasa por el sobre del ratchet. |
+| `a642758` | 21 sep 2026 | Reintentar reenvía el archivo, no su descriptor | **Portado** en `b8dd6d0`. |
 | `58b2286` | 18 sep 2026 | Docs: los nodos los opera 4000MSNM S.R.L.; marco de metadatos | **No aplica**: solo docs de Krypta. Quién opera los nodos de Nyx es una decisión del autor que no se hereda. |
 | `dd95f04` | 18 sep 2026 | Docs: el wake v2 da la correlación en vivo en un paso | **Pendiente — bloque «buzón ciego»** (ver abajo). |
 | `04efc41` | 18 sep 2026 | Textos de usuario sobre lo que ve el nodo | **Portado en parte** en `7c2a59b`: entrada de ayuda nueva sobre metadatos (pareja por el punto de cita, conexión, IP). La frase de la etiqueta opaca no, porque aquí aún se deposita por PeerID. |
 | `3acc004` | 15 sep 2026 | Docs: respuesta al criterio de protocolo maduro | **No aplica**: solo docs de Krypta (revisión externa). |
 | `1980d3c` | 15 sep 2026 | Docs: referencias genéricas a la revisión independiente | **No aplica**: solo docs de Krypta (revisión externa). |
 | `fadb9fc` | 15 sep 2026 | Docs: respuesta al registro de hallazgos AK-2026-001 | **No aplica**: solo docs de Krypta (revisión externa). |
-| `ebf2d43` | 15 sep 2026 | Test de protocolo H-5 y fuera los bytes NUL del fuente | **Pendiente — bloque «doble ratchet»** (ver abajo). |
-| `f8d9a75` | 15 sep 2026 | Ayuda: qué hacer si tras importar la copia no llegan mensajes (W-6) | **Pendiente — bloque «doble ratchet»** (ver abajo): el W-6 es un fallo del estado del ratchet tras restaurar. |
-| `f119237` | 15 sep 2026 | Docs: revisión de diseño independiente (W-6, W-14, KCI) | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `fe21111` | 15 sep 2026 | Llamadas: invite repetido (H-7) y W-8 | **Pendiente — bloque «doble ratchet»** (ver abajo): el arreglo de H-7 viene de la misma revisión del protocolo; mirarlo al portar el bloque. |
+| `ebf2d43` | 15 sep 2026 | Test de protocolo H-5 y fuera los bytes NUL del fuente | **Portado** en `b8dd6d0`. |
+| `f8d9a75` | 15 sep 2026 | Ayuda: qué hacer si tras importar la copia no llegan mensajes (W-6) | **Portado** en `b8dd6d0` (entrada de ayuda W-6 y la hora automática al importar). |
+| `f119237` | 15 sep 2026 | Docs: revisión de diseño independiente (W-6, W-14, KCI) | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `fe21111` | 15 sep 2026 | Llamadas: invite repetido (H-7) y W-8 | **Portado** en `b8dd6d0`. |
 | `ea088b1` | 14 sep 2026 | Docs: AAR reproducible comprobado; NDK real de binarios anteriores | **No aplica**: solo docs de Krypta; lo que importaba ya entró con `8d02875`. |
 | `8d02875` | 14 sep 2026 | AAR reproducible y ligado a su commit | **Portado** en `2830bf3`, con el script. Verificado: go1.26.4, NDK 26.1, JDK 25, las cuatro ABI con páginas de 16 KB, el commit dentro y sin rutas locales. |
 | `d820609` | 14 sep 2026 | Docs: release revision-externa-1 publicada | **No aplica**: solo docs de Krypta. |
 | `26bd405` | 14 sep 2026 | `build-aar.sh` funciona en un clon limpio | **Portado** en `6429ab7`, solo el `mkdir -p ../libs`; el resto son docs de la revisión externa. |
-| `a97cbab` | 14 sep 2026 | Revisión del protocolo: clave y nonce repetidos, mensajes perdidos, versión que bajaba | **Pendiente — bloque «doble ratchet»** (ver abajo). Es el más importante del bloque: corrige defectos del propio ratchet, así que va con él o no va. |
+| `a97cbab` | 14 sep 2026 | Revisión del protocolo: clave y nonce repetidos, mensajes perdidos, versión que bajaba | **Portado** en `b8dd6d0`. El H-6 (re-añadir no desbloquea) no aplica: aquí `addContact` rechaza un PeerID bloqueado. |
 | `8c4d874` | 12 sep 2026 | Docs: comparación con Signal, SECURITY.md, rotación | **Portado solo el hunk de ayuda** en `055e757` (la copia recupera PeerID y contactos, no conversaciones). El resto no aplica. |
 | `f562c33` | 12 sep 2026 | `security.txt` en los nodos y vigilancia que avisa al cambiar | **Pendiente, menor**: el `security.txt` lleva el contacto de Krypta y el resto toca `deploy-caddy.sh`, que Nyx no usa. Rehacerlo con datos de Nyx cuando haya canal de avisos. |
-| `16a1c4a` | 12 sep 2026 | Depósito ciego por contacto y fuzzing del parseo | **Pendiente — bloque «doble ratchet»**: enciende el depósito ciego según el protocolo que anuncia cada contacto (sobre `V`), y ese anuncio llega con el ratchet. Hasta entonces Nyx **recibe** a ciegas pero **deposita** por PeerID. |
+| `16a1c4a` | 12 sep 2026 | Depósito ciego por contacto y fuzzing del parseo | **Portado** en `b8dd6d0`: el depósito ciego ya se enciende por contacto (protocolo ≥ 2). |
 | `5e11f05` | 12 sep 2026 | Una sola conexión por nodo, sin WebSocket redundantes | **Portado** en `04e20eb`; el campo `wsPruned` a mano. Aquí la WebSocket de sobra viene del ws/8081 que identify aprende, no de Caddy. |
 | `cb42f47` | 12 sep 2026 | Límite de ritmo en la retirada del buzón | **Portado** en `7886db2`, solo la retirada v1 (el hunk y el test de v2 son del buzón ciego). La bandeja de likes no pasa por este límite. Desplegado el 24 sep. |
 | `ecf6833` | 12 sep 2026 | Licencia MIT o Apache-2.0 y README | **No aplica**: la licencia de Nyx la decide el autor; no se hereda de Krypta. |
 | `3abeada` | 11 sep 2026 | Docs: fases 1 y 2 del post-cuántico | **Pendiente — bloque «post-cuántico»** (ver abajo). |
 | `7eca8df` | 11 sep 2026 | Primitiva post-cuántica (ML-KEM-768), sin protocolo | **Pendiente — bloque «post-cuántico»** (ver abajo). No cambia nada por sí sola: solo tiene sentido junto al diseño que la usa. |
 | `13037ec` | 11 sep 2026 | Docs: diseño post-cuántico cerrado | **Pendiente — bloque «post-cuántico»** (ver abajo). |
-| `87d6152` | 11 sep 2026 | Docs: la v3 se anuncia sola tras el salto de versión | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `69dd3b3` | 11 sep 2026 | Docs: relleno por tramos | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `d2523ff` | 11 sep 2026 | Rellenar el tamaño por tramos dentro del cifrado | **Pendiente — bloque «doble ratchet»** (ver abajo): el relleno va dentro del sobre v3. |
-| `7f2bbac` | 11 sep 2026 | Docs: ventana de deduplicación | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `dd1d8e0` | 11 sep 2026 | La deduplicación se acota por tiempo | **Pendiente — bloque «doble ratchet»** (ver abajo): poda la tabla `ratchet_seen`, que aquí no existe. |
-| `04b6e43` | 10 sep 2026 | Docs: el reengache | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `3aca88a` | 10 sep 2026 | Reengachar la sesión cuando el otro perdió el estado | **Pendiente — bloque «doble ratchet»** (ver abajo). |
-| `15eb13a` | 10 sep 2026 | Docs: la prueba de propiedades del ratchet | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `6f5c624` | 10 sep 2026 | El ratchet bajo caos, con semillas fijas | **Pendiente — bloque «doble ratchet»** (ver abajo) (test). |
+| `87d6152` | 11 sep 2026 | Docs: la v3 se anuncia sola tras el salto de versión | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `69dd3b3` | 11 sep 2026 | Docs: relleno por tramos | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `d2523ff` | 11 sep 2026 | Rellenar el tamaño por tramos dentro del cifrado | **Portado** en `b8dd6d0`. |
+| `7f2bbac` | 11 sep 2026 | Docs: ventana de deduplicación | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `dd1d8e0` | 11 sep 2026 | La deduplicación se acota por tiempo | **Portado** en `b8dd6d0`. |
+| `04b6e43` | 10 sep 2026 | Docs: el reengache | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `3aca88a` | 10 sep 2026 | Reengachar la sesión cuando el otro perdió el estado | **Portado** en `b8dd6d0`. |
+| `15eb13a` | 10 sep 2026 | Docs: la prueba de propiedades del ratchet | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `6f5c624` | 10 sep 2026 | El ratchet bajo caos, con semillas fijas | **Portado** en `b8dd6d0`. |
 | `d84e714` | 10 sep 2026 | Docs: plan de privacidad y confianza; mDNS al día | **No aplica**: solo docs de Krypta. |
 | `cbb3f38` | 10 sep 2026 | mDNS opt-in, apagado de serie | **Portado** en `31cccf5`; tres hunks a mano por contexto. En Nyx pesa más: anunciarse decía a toda la WiFi que ese móvil lleva una app de citas. AAR regenerado. |
 | `af34a42` | 10 sep 2026 | Docs: la fuga de IP, cómo se cerró | **No aplica**: solo docs de Krypta; el razonamiento va en el mensaje de `2fc8ba9`. |
@@ -113,8 +113,8 @@ después: el `.aar` no está en git.
 | `6133ff0` | 10 sep 2026 | Docs: confianza operativa, nodo de Dallas, wss/443 | **No aplica**: solo docs de Krypta e infra de Krypta. |
 | `68458bc` | 10 sep 2026 | VPS de Dallas + wss/443 por Caddy + ranker de marcado | **Portado solo el ranker** (`dial_ranker.go`) en `2bce58d`. Dallas, Caddy y el `DEFAULT_BOOTSTRAP` son infra de Krypta y no aplican. |
 | `3f393e4` | 10 sep 2026 | El log del nodo no guarda PeerIDs; retención del journal | **Portado** en `bb63308`; aquí ya estaba el sysctl de QUIC, entra el journal. Revisados `board.go`, `like.go` y `report.go`: no imprimen nada. Desplegado el 24 sep. |
-| `80af727` | 10 sep 2026 | Docs: poner al día lo que se promete | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
-| `afb576a` | 10 sep 2026 | Secreto hacia adelante con un doble ratchet por épocas | **Pendiente — bloque «doble ratchet»** (ver abajo). 56 ficheros y 4 453 líneas, con DB propia: es el núcleo del bloque. |
+| `80af727` | 10 sep 2026 | Docs: poner al día lo que se promete | **Docs de Krypta**: el diseño que describen está copiado en `docs/krypta/` (sin rebrandear), que es lo que cita el código portado. |
+| `afb576a` | 10 sep 2026 | Secreto hacia adelante con un doble ratchet por épocas | **Portado** en `b8dd6d0` (fusión a tres bandas del bloque entero). Migraciones 6→7→8→9 iguales a las de Krypta; esquemas 7 y 8 reconstruidos sobre el 6 de Nyx. Sin el KEM post-cuántico. El arreglo de la carga de SQLCipher de este commit ya había entrado antes, en `9e4add1`. |
 | `2a6118e` | 9 sep 2026 | Cifrar la base de datos con SQLCipher | **Portado** en `0fdf56e`. La frase se guarda con `commit()` en vez de `apply()`. 6/6 instrumentados en el TECNO; el falso cuelgue era HiOS congelando el proceso de test (anotado en el test). **La app instalada aún no ha convertido su base.** |
 | `867af62` | 9 sep 2026 | Sonda de depósito ciego en el chequeo de salud | **Portado** en `c1e3215`, sin el hunk del README. Tras el despliegue del 24 sep da «ciego ok» en las dos cajas. |
 | `63222d1` | 9 sep 2026 | El cliente recibe a ciegas (fase 4) | **Portado** en `2b31389`. Adaptado: la guarda de bloqueo mira el contacto resuelto por etiqueta (un sobre ciego no trae remitente; test propio). El registro del PeerID en el wake v2 ya estaba desde `705afc9`, que lo añadió aquí por los **likes**. |
@@ -161,7 +161,9 @@ Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el histori
 commits (los 11 que quedaban del 21 ago al 3 sep y los 68 del 8 al 22 sep): **26 portados** —dos
 solo en parte, `68458bc` y `8c4d874`— en 23 commits de aquí, y el resto anotados como «no
 aplica» o dentro de uno de los bloques pendientes. El de **respuestas citadas** (`37f185d`) se portó el
-mismo día en `2612bbf`. Del **buzón ciego** entró todo lo que no depende del ratchet (`3a92eeb`, `6db9efa`,
+mismo día en `2612bbf`. El **doble ratchet** se portó entero el 24 sep en `b8dd6d0` (fusión a tres bandas; ver el
+mensaje del commit y `docs/krypta/`), y con él el envío ciego por contacto. Queda solo el bloque
+**post-cuántico**. Del **buzón ciego** entró todo lo que no depende del ratchet (`3a92eeb`, `6db9efa`,
 `2b31389`, `c1e3215`, más `705afc9`, propio: el wake v2 también avisa por PeerID, o un like no
 despertaría al móvil): Nyx ya **recibe** a ciegas; el envío ciego va con el ratchet. El bucle de "Cómo se usa" no
 imprime nada.
@@ -174,10 +176,6 @@ ok · vuelta ok · ciego ok». La app del TECNO ya pasó las tres migraciones lo
 
 ### Bloques pendientes
 
-No son arreglos sueltos sino cambios de protocolo encadenados, cada uno con decisiones que en
-Nyx no son las de Krypta. Se portan como bloque o no se portan:
-
 | Bloque | Commits | Por qué no entra con el script |
 | --- | --- | --- |
-| **Doble ratchet** (+ `16a1c4a`, que enciende el depósito ciego) | `afb576a`, `6f5c624`, `15eb13a`, `3aca88a`, `04b6e43`, `dd1d8e0`, `7f2bbac`, `d2523ff`, `69dd3b3`, `87d6152`, `80af727`, `a97cbab`, `fe21111`, `f119237`, `ebf2d43`, `f8d9a75`, `a642758` | ~7 000 líneas con tablas propias, nuevo sobre v3 y una revisión externa que corrigió el propio ratchet (`a97cbab`). En Nyx toca `LikeService` (el like va con ECDH estático a un desconocido, sin sesión), la DB (que aquí va por otra numeración) y rompe la compatibilidad de mensajes con builds anteriores. |
-| **Post-cuántico** | `13037ec`, `7eca8df`, `3abeada` | Solo la primitiva y el diseño; sin el ratchet no tiene dónde usarse. |
+| **Post-cuántico** | `13037ec`, `7eca8df`, `3abeada` | Solo la primitiva (ML-KEM-768) y el diseño: en Krypta todavía **no la usa ningún protocolo** (espera revisión externa). Portarla ahora sería añadir código muerto; entra cuando Krypta la cablee. |

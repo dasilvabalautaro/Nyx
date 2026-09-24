@@ -215,6 +215,11 @@ func newNode(priv crypto.PrivKey, relayAddrs string) (*Node, error) {
 		libp2p.EnableRelay(),        // usa relays para dialar/ser dialado (cliente Relay v2)
 		libp2p.EnableHolePunching(), // DCUtR: tras conectar por relay, intenta upgrade a directo
 		libp2p.NATPortMap(),         // mapea puerto vía UPnP/NAT-PMP si el router lo permite
+		// Las WebSocket solo si la vía directa no conecta en ~1 s (ver dial_ranker.go): el ranker
+		// estándar las cuenta como TCP y marca antes el puerto más bajo. Hoy los nodos de Nyx
+		// solo publican tcp/4001 en DEFAULT_BOOTSTRAP, pero identify les aprende también el
+		// ws/8081, y el orden de marcado no debe depender de qué números de puerto toquen.
+		libp2p.DialRanker(directFirstDialRanker),
 		// Solo los contactos y los nodos pueden abrirnos conexión (ver gater.go). Sin esto,
 		// un extraño con tu PeerID te marcaba por el relay y el hole punching le entregaba
 		// tu IP pública antes de que la app pudiera descartarlo.

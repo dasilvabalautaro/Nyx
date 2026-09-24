@@ -146,6 +146,12 @@ dorado está para detectar.
   tiene que cazar— e **`identidades-40dp.png`**, las mismas 24 al tamaño de la lista de
   conversaciones. Esa última es la que importa para juzgar legibilidad: los defectos de
   contraste no se ven a 224 px.
+  **Aviso (2 sep 2026):** al afinar el vello facial se regeneró `identidades-casi-iguales.png`,
+  que sale de la invocación por defecto del script. `identidades-derivadas.png` e
+  `identidades-40dp.png` se hicieron con una lista de 24 PeerID que **no quedó registrada** (el
+  script sólo trae 10 de ejemplo) y con otro `TILE`, así que no son reproducibles: siguen
+  valiendo para juzgar distinción y contraste, pero los rostros con barba, bigote o perilla ya
+  no coinciden con lo que dibuja el código. Al rehacerlas, dejar la lista en el script.
 
 ## Lo que queda pendiente
 

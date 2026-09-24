@@ -372,12 +372,20 @@ Era el punto que faltaba para cerrar la Fase 1 del rebrand, y estaba parado por 
 APK que mandar a la persona que colabora. **Ya lo hay**: `~/Desktop/nyx-arm64-debug.apk`
 — 61 MB, solo `arm64-v8a`, `chat.neto.nyx` 1.0.
 
-**Regenerado el 2 sep 2026** (y el TECNO actualizado al mismo build). Trae el **arreglo del
-audio mudo de la §15**, que **exige este build en los dos móviles** — el reanuncio de códec lo
-emite el que habla, así que un solo móvil actualizado no prueba nada. También los iconos de
-corazón en los botones de like (4.10). Se reconstruye con `./gradlew :app:assembleDebug
--PslimAbi` y copiando `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. Conviene mandar
-**este**, no uno viejo, para que los dos móviles muestren lo mismo durante la sesión.
+**Regenerado el 2 sep 2026** (y el TECNO actualizado al mismo build, `lastUpdateTime`
+02:33). Trae el **arreglo del audio mudo de la §15**, que **exige este build en los dos
+móviles** — el reanuncio de códec lo emite el que habla, así que un solo móvil actualizado no
+prueba nada. También la identidad visual nueva (paleta índigo, icono de luna, ayuda reescrita
+para el producto), los iconos de corazón en los botones de like (4.10) y, del mismo día, el
+editor de perfil: «Elegir rasgos» como desplegable que se contrae al dibujar, y el **vello
+facial arreglado** — antes «perilla» dibujaba perilla *más* bigote y el bigote tapaba la nariz
+(4.17). Se reconstruye con `./gradlew :app:assembleDebug -PslimAbi` y copiando
+`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. Conviene mandar **este**, no uno viejo,
+para que los dos móviles muestren lo mismo durante la sesión.
+
+Comprobado en el APK que se manda: `chat.neto.nyx` versionCode 1 / versionName 1.0,
+`targetSdk 36`, `native-code: arm64-v8a` (61 MB), y **alineación de 16 KB** correcta
+(`zipalign -c -P 16`), que es el requisito de Play para `targetSdk ≥ 35`.
 
 Firma comprobada **contra el APK instalado en el TECNO**: mismo certificado
 (`4a223c54…bd40f`, `CN=Android Debug`), que es la propiedad que hace que ninguno de los dos

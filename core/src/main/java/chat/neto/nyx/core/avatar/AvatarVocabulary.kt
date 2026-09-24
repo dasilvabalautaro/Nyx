@@ -143,7 +143,11 @@ object AvatarVocabulary {
             "Detalles",
             opts(
                 "Pecas" to "light freckles",
-                "Muchas pecas" to "heavy freckles",
+                // "many", no "heavy": el parser lee `many freckles` y con cualquier otro
+                // adjetivo cae en `light`, así que la opción daba **las pocas pecas** de la
+                // opción de al lado. El test de abajo lo comprueba por valor, no por "cambió
+                // algo" — que es justo lo que no lo cazó.
+                "Muchas pecas" to "many freckles",
                 "Pendientes" to "studs earrings",
                 "Aros" to "hoops earrings",
                 "Cejas gruesas" to "thick brows",

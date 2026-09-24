@@ -331,7 +331,9 @@ def _draw_hair_front(
 
 
 def _facial_hair_color(attributes: AvatarAttributes, hair: Rgb, skin: Rgb) -> Rgb:
-    return mix(skin, hair, 0.45) if attributes.facial_hair == "stubble" else shade(hair, -0.04)
+    # La barba incipiente no es "barba clara": es piel con sombra. Al 0,45 tenía tono propio y
+    # se leía igual que una barba corta rubia, que es la opción de al lado; al 0,30 es sombra.
+    return mix(skin, hair, 0.30) if attributes.facial_hair == "stubble" else shade(hair, -0.04)
 
 
 def _draw_beard(
@@ -342,7 +344,13 @@ def _draw_beard(
         return
     color = _facial_hair_color(attributes, hair, skin)
     if style in {"stubble", "short beard", "full beard"}:
-        top = {"stubble": 150.0, "short beard": 146.0, "full beard": 138.0}[style]
+        # Las tres comparten recorrido y se distinguen por cuánto suben por la mejilla: la
+        # incipiente por debajo del pómulo, la corta a media mejilla, la cerrada casi bajo la
+        # patilla. Con la incipiente en 150 subía tanto como la corta y eran la misma barba.
+        top = {"stubble": 162.0, "short beard": 150.0, "full beard": 138.0}[style]
+        # Borde interior, atado al `top` de cada estilo y no a `top + 20`: si no, la incipiente
+        # se metía en el pómulo.
+        inner = {"stubble": 176.0, "short beard": 172.0, "full beard": 170.0}[style]
         # Un solo recorrido: mejilla izquierda, mandíbula, mentón, mandíbula
         # derecha y vuelta por el borde interior. Saltar de un lado a otro
         # cerraría el polígono sobre sí mismo y dibujaría una banda recta.
@@ -354,23 +362,26 @@ def _draw_beard(
             (CENTER + shape.chin + 8, shape.chin_y - 10),
             (CENTER + shape.jaw + 1, 178.0),
             (CENTER + shape.cheek - 4, top),
-            (CENTER + shape.cheek - 22, top + 20),
+            (CENTER + shape.cheek - 22, inner),
             (CENTER + 31, MOUTH_Y - (16.0 if style == "full beard" else 2.0)),
             (CENTER, MOUTH_Y + 6),
             (CENTER - 31, MOUTH_Y - (16.0 if style == "full beard" else 2.0)),
-            (CENTER - shape.cheek + 22, top + 20),
+            (CENTER - shape.cheek + 22, inner),
         ]
         fill(catmull_rom(points, samples=8), color)
     elif style == "goatee":
+        # Una perilla es la mancha del mentón y nada más. La anterior arrancaba en MOUTH_Y - 2
+        # con 21 de semiancho: envolvía la boca por los lados y llegaba casi al borde del
+        # mentón, así que se leía como una barba de collar.
         fill(
             catmull_rom(
                 [
-                    (CENTER - 21, MOUTH_Y + 4),
-                    (CENTER, MOUTH_Y - 2),
-                    (CENTER + 21, MOUTH_Y + 4),
-                    (CENTER + 15, shape.chin_y - 8),
-                    (CENTER, shape.chin_y - 2),
-                    (CENTER - 15, shape.chin_y - 8),
+                    (CENTER - 14, MOUTH_Y + 5),
+                    (CENTER, MOUTH_Y + 2),
+                    (CENTER + 14, MOUTH_Y + 5),
+                    (CENTER + 12, shape.chin_y - 12),
+                    (CENTER, shape.chin_y - 6),
+                    (CENTER - 12, shape.chin_y - 12),
                 ],
                 samples=10,
             ),
@@ -382,18 +393,22 @@ def _draw_mustache(
 ) -> None:
     """Capa posterior a la boca: el bigote se apoya sobre el labio superior."""
     # La barba corta y la incipiente también cubren el labio superior: sin
-    # bigote quedan con aire de barba de collar.
-    if attributes.facial_hair == "none":
+    # bigote quedan con aire de barba de collar. La perilla NO: pedir perilla
+    # devolvía perilla más bigote, que es otro peinado (barba de candado).
+    if attributes.facial_hair in {"none", "goatee"}:
         return
+    # La caja llegaba a MOUTH_Y - 22 = 164, por encima de NOSE_BOTTOM (170): el bigote se comía
+    # la nariz. Ahora vive entero en la franja que hay entre la nariz y la boca.
+    top = NOSE_BOTTOM + 1
     fill(
         catmull_rom(
             [
-                (CENTER - 28, MOUTH_Y - 17),
-                (CENTER, MOUTH_Y - 22),
-                (CENTER + 28, MOUTH_Y - 17),
-                (CENTER + 20, MOUTH_Y - 4),
-                (CENTER, MOUTH_Y - 10),
-                (CENTER - 20, MOUTH_Y - 4),
+                (CENTER - 24, top + 3),
+                (CENTER, top),
+                (CENTER + 24, top + 3),
+                (CENTER + 17, MOUTH_Y - 5),
+                (CENTER, MOUTH_Y - 9),
+                (CENTER - 17, MOUTH_Y - 5),
             ],
             samples=10,
         ),

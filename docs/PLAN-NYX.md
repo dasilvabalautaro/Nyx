@@ -1547,6 +1547,31 @@ resuelve la decisión. Detalle completo en
       mismo arreglo que ya tenía la pantalla de chat, que no se había llevado a las pantallas
       nuevas. Con el contenedor consciente del IME, Compose además sube solo el campo enfocado.
       Auditadas las cuatro pantallas: sólo esas dos tienen campos de texto.
+- [x] 4.17 **«Elegir rasgos» y el vello facial del dibujo** (2 sep 2026, reportado por el
+      autor mirando el editor en el móvil). Tres cosas, dos de interfaz y una de trazado.
+      (a) «Elegir rasgos» era un `TextButton` suelto entre la descripción y los botones, y ahí
+      se leía como una etiqueta más: no daba la idea de que detrás está lo único que permite
+      definir tu aspecto a quien no conozca el vocabulario **en inglés** del parser. Ahora es
+      una cabecera desplegable con su chevron y un subtítulo («Peinado, piel, ojos, barba,
+      gafas…»), el mismo lenguaje que las tarjetas de la Ayuda, así que se ve que se abre antes
+      de tocarla. (b) «Dibujar» **cierra** el desplegable: la lista de rasgos es larga y dejaba
+      el rostro fuera de la pantalla justo cuando se acababa de pedir verlo — elegir y mirar el
+      resultado son dos momentos, no uno. «El mío» hace lo mismo. (c) El vello facial no
+      respetaba lo que se pedía, y el fallo estaba heredado del kit, con lo cual también en el
+      gemelo de Python: **`_draw_mustache` se ejecutaba para todo lo que no fuera `none`**, así
+      que «perilla» devolvía perilla **más** bigote (que es otro peinado, una barba de candado);
+      y la caja del bigote llegaba a `MOUTH_Y - 22` = 164, por encima de `NOSE_BOTTOM` (170),
+      así que **se comía la nariz** — un pegote negro que tapaba nariz y boca. Además la
+      perilla arrancaba en `MOUTH_Y - 2` con 21 de semiancho: envolvía la boca por los lados y
+      llegaba al borde del mentón, o sea una barba de collar, no una perilla; y la barba
+      incipiente subía a 150 (la corta, a 146) con la mezcla al 0,45, así que era la barba
+      corta en otro color en vez de una sombra. Arreglado en las dos implementaciones con los
+      mismos números: bigote entre nariz y boca, perilla sólo mentón (14 de semiancho, desde
+      `MOUTH_Y + 2`), incipiente a 162 y al 0,30, y un borde interior por estilo en vez de
+      `top + 20`. Referencias regeneradas: `galeria.png` (cambian exactamente las 4 personas
+      con vello facial, ninguna más — que es la comprobación de que no hubo deriva) y
+      `identidades-casi-iguales.png`. Verificado en el TECNO: perilla y bigote se dibujan como
+      dicen, y el desplegable se contrae al dibujar.
 
 ### 5. Identidad visual
 - [x] 5.1 Nueva paleta — hecha el 2 sep 2026, y **no eligiendo 60 valores a ojo**: se parte

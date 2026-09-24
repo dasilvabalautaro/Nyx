@@ -2,6 +2,9 @@ package chat.neto.nyx.ui
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -45,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -150,22 +155,27 @@ fun ProfileEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
                 )
-                TextButton(onClick = { showVocab = !showVocab }) {
-                    Text(if (showVocab) "Ocultar opciones" else "Elegir rasgos")
-                }
-                if (showVocab) {
-                    AvatarVocabularyPicker(
-                        onPick = { term -> avatarPrompt = AvatarVocabulary.append(avatarPrompt, term) },
-                    )
-                }
+                Spacer(Modifier.height(8.dp))
+                AvatarVocabularyPicker(
+                    expanded = showVocab,
+                    onToggle = { showVocab = !showVocab },
+                    onPick = { term -> avatarPrompt = AvatarVocabulary.append(avatarPrompt, term) },
+                )
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { viewModel.setAvatarFromText(avatarPrompt) },
+                        onClick = {
+                            // Dibujar cierra el desplegable: la lista de rasgos es larga y deja
+                            // el rostro fuera de la pantalla, justo lo que se acaba de pedir
+                            // ver. Elegir rasgos y mirar el resultado son dos momentos, no uno.
+                            showVocab = false
+                            viewModel.setAvatarFromText(avatarPrompt)
+                        },
                         enabled = avatarPrompt.isNotBlank(),
                         modifier = Modifier.weight(1f),
                     ) { Text("Dibujar") }
                     OutlinedButton(
-                        onClick = { avatarPrompt = ""; viewModel.useDerivedAvatar() },
+                        onClick = { avatarPrompt = ""; showVocab = false; viewModel.useDerivedAvatar() },
                         modifier = Modifier.weight(1f),
                     ) { Text("El mío") }
                 }
@@ -396,28 +406,77 @@ private fun Counter(actual: Int, maximo: Int, sufijo: String = "") {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AvatarVocabularyPicker(onPick: (String) -> Unit) {
-    Column {
-        Text(
-            "Toca los rasgos que quieras. Se van sumando a la descripción, y lo que no elijas " +
-                "queda como está.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        AvatarVocabulary.groups.forEach { grupo ->
-            Text(
-                grupo.title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                grupo.options.forEach { opcion ->
-                    SuggestionChip(
-                        onClick = { onPick(opcion.term) },
-                        label = { Text(opcion.label, style = MaterialTheme.typography.bodySmall) },
+private fun AvatarVocabularyPicker(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onPick: (String) -> Unit,
+) {
+    // Cabecera con forma de control desplegable, no un enlace de texto.
+    //
+    // Antes era un `TextButton` suelto debajo del campo, y ahí se perdía: leído entre una
+    // descripción y dos botones parecía una etiqueta más, no la puerta de "aquí se define tu
+    // aspecto" — que es lo único que hay en esta pantalla para quien no conozca el vocabulario
+    // en inglés del parser. Ahora es una superficie con su chevron, el mismo lenguaje que las
+    // tarjetas de la Ayuda, y se ve que se abre antes de tocarla.
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "rasgos-chevron")
+    Surface(
+        onClick = onToggle,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Elegir rasgos",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
+                    Text(
+                        "Peinado, piel, ojos, barba, gafas…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    NyxExpandMoreIcon,
+                    contentDescription = if (expanded) "Contraer" else "Desplegar",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp).rotate(rotation),
+                )
+            }
+            AnimatedVisibility(expanded) {
+                Column {
+                    Text(
+                        "Toca los rasgos que quieras. Se van sumando a la descripción, y lo que " +
+                            "no elijas queda como está.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    )
+                    AvatarVocabulary.groups.forEach { grupo ->
+                        Text(
+                            grupo.title,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            grupo.options.forEach { opcion ->
+                                SuggestionChip(
+                                    onClick = { onPick(opcion.term) },
+                                    label = {
+                                        Text(
+                                            opcion.label,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

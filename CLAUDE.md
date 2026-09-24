@@ -447,6 +447,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > [infra/nyx-node/OPERACION.md](infra/nyx-node/OPERACION.md). Still open: the live failover test
 > (kill the primary, check delivery via the second's mailbox).
 >
+> **Facial hair drew something other than what you asked for (2 sep 2026, plan 4.17).** The
+> defect was inherited from the kit, so it was in `AvatarRenderer.kt` **and** its Python twin:
+> `drawMustache` ran for every `facialHair != "none"`, so **"goatee" returned goatee *plus*
+> mustache** — a different style altogether — and the mustache box reached `MOUTH_Y - 22` = 164,
+> **above `NOSE_BOTTOM` (170)**, so it covered the nose and the mouth with one black slab. Two
+> more: the goatee started at `MOUTH_Y - 2` with a half-width of 21, wrapping around the mouth
+> down to the chin edge (a chinstrap, not a goatee); and stubble climbed to 150 — short beard is
+> 146 — at a 0.45 skin/hair mix, making it *short beard in another color* rather than a shadow.
+> Fixed with the same numbers on both sides (the two must draw the same image): mustache lives
+> entirely between nose and mouth, goatee is chin-only, stubble sits at 162 and 0.30, and the
+> beard's inner edge is per-style instead of `top + 20`. The check that there was **no drift**
+> is that regenerating `tools/avatar/referencia/galeria.png` changed exactly the 4 personas with
+> facial hair and no others. Note for whoever touches the drawing next:
+> `identidades-derivadas.png` and `identidades-40dp.png` are **not** reproducible — their
+> 24-PeerID list was never recorded — so they now lag the code on bearded faces
+> (`identidades-casi-iguales.png` is the default invocation and was regenerated). Same day, in
+> the profile editor: "Elegir rasgos" became a **disclosure header with a chevron** instead of a
+> bare `TextButton` that read as a label, and **"Dibujar" collapses it** — the trait list is
+> long enough to push the face off-screen at the exact moment you asked to see it.
+>
 > **Git remotes** (both over **SSH** — the repos are private and there are no HTTPS
 > credentials on this machine; HTTPS silently fails as "Repository not found"): `origin` is
 > `git@github.com:dasilvabalautaro/Nyx.git` (`main` + `feat/rebrand-nyx` pushed). Krypta is

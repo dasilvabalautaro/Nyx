@@ -391,9 +391,14 @@ class AvatarRenderer(private val imageSize: Int = 256) {
         }
     }
 
+    /**
+     * La barba incipiente no es "barba clara": es piel con sombra. Con la mezcla al 0,45 salia
+     * un tono propio, lo bastante lejos de la piel como para leerse igual que una barba corta
+     * rubia — que es justo la opcion de al lado. Al 0,30 se queda en sombra.
+     */
     private fun facialHairColor(attributes: AvatarAttributes, hair: Int, skin: Int): Int =
         if (attributes.facialHair == "stubble") {
-            Palette.mix(skin, hair, 0.45f)
+            Palette.mix(skin, hair, 0.30f)
         } else {
             Palette.shade(hair, -0.04f)
         }
@@ -408,10 +413,21 @@ class AvatarRenderer(private val imageSize: Int = 256) {
         if (style == "none") return
         val color = facialHairColor(attributes, hair, skin)
         if (style == "stubble" || style == "short beard" || style == "full beard") {
+            // Las tres se dibujan con el mismo recorrido y se diferencian por cuanto suben por
+            // la mejilla: la incipiente arranca por debajo del pomulo (162), la corta a media
+            // mejilla (150) y la cerrada casi bajo la patilla (138). Con la incipiente en 150
+            // subia tanto como la corta y las dos opciones eran la misma barba en dos colores.
             val top = when (style) {
-                "stubble" -> 150f
-                "short beard" -> 146f
+                "stubble" -> 162f
+                "short beard" -> 150f
                 else -> 138f
+            }
+            // Borde interior: por donde baja el vello desde la mejilla hacia la boca. Va atado
+            // al `top` de cada estilo y no a `top + 20`, o la incipiente se metia en el pomulo.
+            val inner = when (style) {
+                "stubble" -> 176f
+                "short beard" -> 172f
+                else -> 170f
             }
             val lift = if (style == "full beard") 16f else 2f
             val points = listOf(
@@ -422,23 +438,27 @@ class AvatarRenderer(private val imageSize: Int = 256) {
                 Point(CENTER + shape.chin + 8, shape.chinY - 10),
                 Point(CENTER + shape.jaw + 1, 178f),
                 Point(CENTER + shape.cheek - 4, top),
-                Point(CENTER + shape.cheek - 22, top + 20),
+                Point(CENTER + shape.cheek - 22, inner),
                 Point(CENTER + 31, MOUTH_Y - lift),
                 Point(CENTER, MOUTH_Y + 6),
                 Point(CENTER - 31, MOUTH_Y - lift),
-                Point(CENTER - shape.cheek + 22, top + 20),
+                Point(CENTER - shape.cheek + 22, inner),
             )
             fill(catmullRom(points, 8), color)
         } else if (style == "goatee") {
+            // Una perilla es la mancha del menton, y nada mas. La anterior arrancaba en
+            // MOUTH_Y - 2 con 21 de semiancho: envolvia la boca por los lados y llegaba casi al
+            // borde del menton, asi que se leia como una barba de collar. Ahora empieza por
+            // debajo del labio (MOUTH_Y + 2) y con 14, que es el ancho de la boca.
             fill(
                 catmullRom(
                     listOf(
-                        Point(CENTER - 21, MOUTH_Y + 4),
-                        Point(CENTER, MOUTH_Y - 2),
-                        Point(CENTER + 21, MOUTH_Y + 4),
-                        Point(CENTER + 15, shape.chinY - 8),
-                        Point(CENTER, shape.chinY - 2),
-                        Point(CENTER - 15, shape.chinY - 8),
+                        Point(CENTER - 14, MOUTH_Y + 5),
+                        Point(CENTER, MOUTH_Y + 2),
+                        Point(CENTER + 14, MOUTH_Y + 5),
+                        Point(CENTER + 12, shape.chinY - 12),
+                        Point(CENTER, shape.chinY - 6),
+                        Point(CENTER - 12, shape.chinY - 12),
                     ),
                     10,
                 ),
@@ -447,17 +467,32 @@ class AvatarRenderer(private val imageSize: Int = 256) {
         }
     }
 
+    /**
+     * Bigote, encima del labio superior.
+     *
+     * Se dibuja despues de la boca a proposito: se apoya sobre el labio. La barba corta, la
+     * cerrada y la incipiente lo llevan tambien — sin el quedan con aire de barba de collar.
+     *
+     * La **perilla no**, y ese era el fallo: pedir "perilla" devolvia perilla *mas* bigote, que
+     * es otro peinado (una barba de candado). Quien quiere las dos cosas tiene «bigote» al lado.
+     *
+     * La caja tambien estaba mal: llegaba hasta `MOUTH_Y - 22` = 164, por encima de
+     * [NOSE_BOTTOM] (170), asi que el bigote se comia la nariz. Ahora vive entero en la franja
+     * que hay entre la nariz y la boca.
+     */
     private fun drawMustache(attributes: AvatarAttributes, hair: Int, skin: Int) {
-        if (attributes.facialHair == "none") return
+        val style = attributes.facialHair
+        if (style == "none" || style == "goatee") return
+        val top = NOSE_BOTTOM + 1
         fill(
             catmullRom(
                 listOf(
-                    Point(CENTER - 28, MOUTH_Y - 17),
-                    Point(CENTER, MOUTH_Y - 22),
-                    Point(CENTER + 28, MOUTH_Y - 17),
-                    Point(CENTER + 20, MOUTH_Y - 4),
-                    Point(CENTER, MOUTH_Y - 10),
-                    Point(CENTER - 20, MOUTH_Y - 4),
+                    Point(CENTER - 24, top + 3),
+                    Point(CENTER, top),
+                    Point(CENTER + 24, top + 3),
+                    Point(CENTER + 17, MOUTH_Y - 5),
+                    Point(CENTER, MOUTH_Y - 9),
+                    Point(CENTER - 17, MOUTH_Y - 5),
                 ),
                 10,
             ),

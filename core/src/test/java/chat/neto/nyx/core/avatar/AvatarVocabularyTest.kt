@@ -98,6 +98,37 @@ class AvatarVocabularyTest {
         assertEquals("round", AttributeParser.parse("round glasses").effectiveGlasses)
         assertEquals("hoodie", AttributeParser.parse("hoodie").clothing)
         assertEquals("mint", AttributeParser.parse("mint background").background)
+        assertEquals("goatee", AttributeParser.parse("goatee").facialHair)
+    }
+
+    /**
+     * Dos opciones del mismo grupo no pueden acabar dibujando lo mismo.
+     *
+     * Es el hueco por el que se coló "Muchas pecas" → `heavy freckles`: el parser sólo entiende
+     * `many freckles`, así que devolvía `light` — el valor de "Pecas", la opción de al lado. El
+     * test general pasaba porque *algo* cambiaba respecto al defecto, y el usuario tocaba una
+     * cosa y obtenía otra, en silencio.
+     *
+     * Se dejan fuera los términos que coinciden con el valor de fábrica, que ya tienen su propio
+     * test: dos de ellos **sí** dan el mismo resultado sin que haya nada roto — "Marrones" y
+     * "Almendrados" fijan atributos distintos del mismo grupo y los dos son el defecto, así que
+     * parsear cualquiera de los dos por separado devuelve el rostro de fábrica entero.
+     */
+    @Test
+    fun `dos opciones de un grupo no producen el mismo rostro`() {
+        AvatarVocabulary.groups.forEach { grupo ->
+            grupo.options
+                .filterNot { it.term in coincidenConElDefecto }
+                .groupBy { AttributeParser.parse(it.term) }
+                .values
+                .filter { it.size > 1 }
+                .forEach { chocan ->
+                    throw AssertionError(
+                        "en «${grupo.title}» estas opciones dibujan lo mismo: " +
+                            chocan.map { "${it.label} → '${it.term}'" },
+                    )
+                }
+        }
     }
 
     // --- Composición del texto ----------------------------------------------------------

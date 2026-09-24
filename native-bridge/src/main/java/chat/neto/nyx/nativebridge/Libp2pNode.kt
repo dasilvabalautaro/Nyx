@@ -2,7 +2,6 @@ package chat.neto.nyx.nativebridge
 
 import android.content.Context
 import android.net.wifi.WifiManager
-import android.util.Base64
 import chat.neto.nyx.bridge.Bridge
 import chat.neto.nyx.bridge.LikeHandler
 import chat.neto.nyx.bridge.MailboxHandler
@@ -20,11 +19,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Wrapper Kotlin sobre el nodo go-libp2p empaquetado con gomobile (nyx-p2p.aar).
- *
- * STUB: la Fase 0 (spike) y la Fase 2 del plan sustituirán los TODO por llamadas reales
- * al AAR (Noise, DHT client, relay client v2, DCUtR, AutoNAT). Se mantiene como clase
- * inyectable @Singleton para poder cablear ya el grafo de dependencias.
+ * Wrapper Kotlin sobre el nodo go-libp2p empaquetado con gomobile (nyx-p2p.aar): arranque
+ * y parada del host, identidad persistente, DHT + rendezvous, relay v2, buzón, wake y streams
+ * de llamada/vídeo. Todo lo que cruza a Go pasa por aquí, y los eventos vuelven como [events].
  */
 @Singleton
 class Libp2pNode @Inject constructor(
@@ -37,15 +34,27 @@ class Libp2pNode @Inject constructor(
     private val _events = Channel<NodeEvent>(Channel.UNLIMITED)
     val events: Flow<NodeEvent> = _events.receiveAsFlow()
 
-    // Identidad libp2p persistente: estable entre arranques para que el PeerID y los
-    // secretos compartidos derivados de él no cambien. (TODO: cifrar en reposo.)
-    private val identity: ByteArray by lazy {
-        val prefs = context.getSharedPreferences("nyx_identity", Context.MODE_PRIVATE)
-        prefs.getString("ed25519", null)?.let { Base64.decode(it, Base64.NO_WRAP) }
-            ?: Bridge.generateIdentity().also { fresh ->
-                prefs.edit().putString("ed25519", Base64.encodeToString(fresh, Base64.NO_WRAP)).apply()
-            }
+    /**
+     * Almacén de la identidad: la envuelve con una clave del Android Keystore (no exportable)
+     * y migra sola la copia en claro que dejaron versiones anteriores. Ver [IdentityStore],
+     * que es donde vive la lógica —y sus tests— sin depender de Android.
+     */
+    private val identityStore: IdentityStore by lazy {
+        IdentityStore(
+            prefs = SharedIdentityPrefs(
+                context.getSharedPreferences("nyx_identity", Context.MODE_PRIVATE),
+            ),
+            // Si el Keystore no está disponible en este móvil, IdentityStore sigue con el
+            // almacenamiento privado: quedarse sin identidad sería mucho peor.
+            wrapper = runCatching { KeystoreKeyWrapper() }.getOrNull(),
+            generate = { Bridge.generateIdentity() },
+            log = { android.util.Log.i("NyxIdentity", it) },
+        )
     }
+
+    // Identidad libp2p persistente: estable entre arranques para que el PeerID y los
+    // secretos compartidos derivados de él no cambien.
+    private val identity: ByteArray by lazy { identityStore.load() }
 
     private val settings get() =
         context.getSharedPreferences("nyx_settings", Context.MODE_PRIVATE)
@@ -84,8 +93,7 @@ class Libp2pNode @Inject constructor(
      */
     fun importIdentityBytes(bytes: ByteArray): String {
         val peerId = Bridge.peerIDForIdentity(bytes) // lanza si no es una identidad válida
-        context.getSharedPreferences("nyx_identity", Context.MODE_PRIVATE)
-            .edit().putString("ed25519", Base64.encodeToString(bytes, Base64.NO_WRAP)).apply()
+        identityStore.save(bytes)
         return peerId
     }
 
@@ -347,13 +355,8 @@ class Libp2pNode @Inject constructor(
     suspend fun findPeers(rendezvous: ByteArray, timeoutSec: Long = 20): List<String> =
         withContext(Dispatchers.IO) {
             val res = node?.findPeers(rendezvous.toHex(), timeoutSec).orEmpty()
-            if (res.isEmpty()) emptyList() else res.split("\n")
+            if (res.isEmpty()) emptyList() else res.split("\n").distinct()
         }
-
-    /** Intenta conexión directa (DCUtR) y cae a Circuit Relay v2 si falla. */
-    suspend fun dial(peerId: String) {
-        // TODO Fase 2: Node.dial(peerId) con fallback a relay
-    }
 
     private fun ByteArray.toHex(): String =
         joinToString("") { b -> "%02x".format(b) }
@@ -477,6 +480,15 @@ class Libp2pNode @Inject constructor(
             "/dns4/nyx.neto.chat/tcp/4001/p2p/12D3KooWAyAVyXAdPnj4NScf2PU4iV45j1skg1B2u9gswUpfziY3\n" +
                 "/dns4/nyx2.neto.chat/tcp/4001/p2p/12D3KooWBCxhFMH5HjSWArXNXkhbWkD2JXkv1U1L4pVGgJWGYBpk"
     }
+}
+
+/** Adaptador de `SharedPreferences` al puerto que usa [IdentityStore]. */
+private class SharedIdentityPrefs(
+    private val prefs: android.content.SharedPreferences,
+) : IdentityPrefs {
+    override fun get(key: String): String? = prefs.getString(key, null)
+    override fun put(key: String, value: String) = prefs.edit().putString(key, value).apply()
+    override fun remove(key: String) = prefs.edit().remove(key).apply()
 }
 
 sealed interface NodeEvent {

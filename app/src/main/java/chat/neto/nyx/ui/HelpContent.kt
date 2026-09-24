@@ -82,6 +82,17 @@ object HelpContent {
         ),
         HelpItem(
             category = "Privacidad y seguridad",
+            question = "¿Qué sabe de mí el nodo que ayuda a entregar los mensajes?",
+            answer = "El contenido, nada: solo maneja bloques cifrados que no puede abrir. " +
+                "Metadatos sí. Como tu contacto y tú publicáis el mismo punto de cita para " +
+                "poder encontraros, el nodo puede saber que sois pareja aunque vuestros " +
+                "mensajes viajen directos y no pasen por él; también sabe cuándo estás " +
+                "conectado y ve tu IP. Y si escribes a alguien desconectado, el mensaje espera " +
+                "en su buzón, donde el nodo ve qué PeerID deposita para cuál y a qué hora, " +
+                "hasta que se recoge.",
+        ),
+        HelpItem(
+            category = "Privacidad y seguridad",
             question = "¿Cómo bloqueo a alguien?",
             answer = "Desde el chat (⋮ → Bloquear), manteniendo pulsada la conversación en la " +
                 "lista, o desde su tarjeta del tablón (⋮). El bloqueo es inmediato y " +

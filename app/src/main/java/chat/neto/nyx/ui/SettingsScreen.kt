@@ -85,6 +85,8 @@ fun SettingsScreen(
     onOpenHelp: () -> Unit,
     onOpenBlocked: () -> Unit,
     onSetBootstrap: (String) -> Unit,
+    lanDiscovery: Boolean,
+    onSetLanDiscovery: (Boolean) -> Unit,
     onProbeLatency: () -> Unit,
     onExportBackup: (passphrase: String, uri: Uri) -> Unit,
     onImportBackup: (passphrase: String, uri: Uri) -> Unit,
@@ -224,6 +226,39 @@ fun SettingsScreen(
                         "Importar", NyxDownloadIcon,
                         modifier = Modifier.weight(1f),
                     ) { openBackup.launch(arrayOf("*/*")) }
+                }
+            }
+
+            SettingsCard(
+                "Red local",
+                onInfo = {
+                    infoDialog = "Descubrimiento en la red local" to
+                        "Nyx encuentra a tus contactos por internet, sin depender de la " +
+                        "red en la que estés. Esta opción añade un atajo para cuando los dos " +
+                        "móviles están en la misma WiFi.\n\nVa apagada porque, para hacerlo, " +
+                        "el móvil tiene que anunciarse a toda la red: cualquiera conectado a " +
+                        "esa WiFi vería que Nyx está ahí y con qué identificador. " +
+                        "Enciéndela solo si te hace falta y en una red de confianza."
+                },
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Descubrimiento en la red local",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            "Atajo para dos móviles en la misma WiFi. Apagado, tu móvil no " +
+                                "se anuncia a la red; encendido, quien comparta la WiFi puede " +
+                                "ver que Nyx está aquí.",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = lanDiscovery, onCheckedChange = onSetLanDiscovery)
                 }
             }
 

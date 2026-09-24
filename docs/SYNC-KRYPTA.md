@@ -73,7 +73,7 @@ después: el `.aar` no está en git.
 | `a642758` | 21 sep 2026 | Reintentar reenvía el archivo, no su descriptor | **Pendiente — bloque «doble ratchet»** (ver abajo): el reintento que arregla pasa por el sobre del ratchet. |
 | `58b2286` | 18 sep 2026 | Docs: los nodos los opera 4000MSNM S.R.L.; marco de metadatos | **No aplica**: solo docs de Krypta. Quién opera los nodos de Nyx es una decisión del autor que no se hereda. |
 | `dd95f04` | 18 sep 2026 | Docs: el wake v2 da la correlación en vivo en un paso | **Pendiente — bloque «buzón ciego»** (ver abajo). |
-| `04efc41` | 18 sep 2026 | Textos de usuario sobre lo que ve el nodo | **Pendiente — bloque «buzón ciego»** (ver abajo): los textos nuevos hablan de la etiqueta opaca del buzón v2. |
+| `04efc41` | 18 sep 2026 | Textos de usuario sobre lo que ve el nodo | **Portado en parte** en `7c2a59b`: entrada de ayuda nueva sobre metadatos (pareja por el punto de cita, conexión, IP). La frase de la etiqueta opaca no, porque aquí aún se deposita por PeerID. |
 | `3acc004` | 15 sep 2026 | Docs: respuesta al criterio de protocolo maduro | **No aplica**: solo docs de Krypta (revisión externa). |
 | `1980d3c` | 15 sep 2026 | Docs: referencias genéricas a la revisión independiente | **No aplica**: solo docs de Krypta (revisión externa). |
 | `fadb9fc` | 15 sep 2026 | Docs: respuesta al registro de hallazgos AK-2026-001 | **No aplica**: solo docs de Krypta (revisión externa). |
@@ -88,7 +88,7 @@ después: el `.aar` no está en git.
 | `a97cbab` | 14 sep 2026 | Revisión del protocolo: clave y nonce repetidos, mensajes perdidos, versión que bajaba | **Pendiente — bloque «doble ratchet»** (ver abajo). Es el más importante del bloque: corrige defectos del propio ratchet, así que va con él o no va. |
 | `8c4d874` | 12 sep 2026 | Docs: comparación con Signal, SECURITY.md, rotación | **Portado solo el hunk de ayuda** en `055e757` (la copia recupera PeerID y contactos, no conversaciones). El resto no aplica. |
 | `f562c33` | 12 sep 2026 | `security.txt` en los nodos y vigilancia que avisa al cambiar | **Pendiente, menor**: el `security.txt` lleva el contacto de Krypta y el resto toca `deploy-caddy.sh`, que Nyx no usa. Rehacerlo con datos de Nyx cuando haya canal de avisos. |
-| `16a1c4a` | 12 sep 2026 | Depósito ciego por contacto y fuzzing del parseo | **Pendiente — bloque «buzón ciego»** (ver abajo). |
+| `16a1c4a` | 12 sep 2026 | Depósito ciego por contacto y fuzzing del parseo | **Pendiente — bloque «doble ratchet»**: enciende el depósito ciego según el protocolo que anuncia cada contacto (sobre `V`), y ese anuncio llega con el ratchet. Hasta entonces Nyx **recibe** a ciegas pero **deposita** por PeerID. |
 | `5e11f05` | 12 sep 2026 | Una sola conexión por nodo, sin WebSocket redundantes | **Portado** en `04e20eb`; el campo `wsPruned` a mano. Aquí la WebSocket de sobra viene del ws/8081 que identify aprende, no de Caddy. |
 | `cb42f47` | 12 sep 2026 | Límite de ritmo en la retirada del buzón | **Portado** en `7886db2`, solo la retirada v1 (el hunk y el test de v2 son del buzón ciego). La bandeja de likes no pasa por este límite. **Falta desplegar en las dos cajas.** |
 | `ecf6833` | 12 sep 2026 | Licencia MIT o Apache-2.0 y README | **No aplica**: la licencia de Nyx la decide el autor; no se hereda de Krypta. |
@@ -116,10 +116,10 @@ después: el `.aar` no está en git.
 | `80af727` | 10 sep 2026 | Docs: poner al día lo que se promete | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
 | `afb576a` | 10 sep 2026 | Secreto hacia adelante con un doble ratchet por épocas | **Pendiente — bloque «doble ratchet»** (ver abajo). 56 ficheros y 4 453 líneas, con DB propia: es el núcleo del bloque. |
 | `2a6118e` | 9 sep 2026 | Cifrar la base de datos con SQLCipher | **Portado** en `0fdf56e`. La frase se guarda con `commit()` en vez de `apply()`. 6/6 instrumentados en el TECNO; el falso cuelgue era HiOS congelando el proceso de test (anotado en el test). **La app instalada aún no ha convertido su base.** |
-| `867af62` | 9 sep 2026 | Sonda de depósito ciego en el chequeo de salud | **Pendiente — bloque «buzón ciego»** (ver abajo). |
-| `63222d1` | 9 sep 2026 | El cliente recibe a ciegas (fase 4) | **Pendiente — bloque «buzón ciego»** (ver abajo). |
-| `157bcaf` | 9 sep 2026 | El puente Go habla v2 con caída a v1 por nodo | **Pendiente — bloque «buzón ciego»** (ver abajo). |
-| `b03a14a` | 9 sep 2026 | Etiquetas semanales y protocolo v2 en el nodo | **Pendiente — bloque «buzón ciego»** (ver abajo). |
+| `867af62` | 9 sep 2026 | Sonda de depósito ciego en el chequeo de salud | **Portado** en `c1e3215`, sin el hunk del README. Fallará contra las cajas hasta que se redespliegue el nodo. |
+| `63222d1` | 9 sep 2026 | El cliente recibe a ciegas (fase 4) | **Portado** en `2b31389`. Adaptado: la guarda de bloqueo mira el contacto resuelto por etiqueta (un sobre ciego no trae remitente; test propio). El registro del PeerID en el wake v2 ya estaba desde `705afc9`, que lo añadió aquí por los **likes**. |
+| `157bcaf` | 9 sep 2026 | El puente Go habla v2 con caída a v1 por nodo | **Portado** en `6db9efa`; `go.mod` y `mailboxFetch` a mano. AAR regenerado. |
+| `b03a14a` | 9 sep 2026 | Etiquetas semanales y protocolo v2 en el nodo | **Portado** en `3a92eeb`, limpio. Dominio de etiqueta `nyx-mbx`, separado del tablón y del rendezvous. **Falta desplegar.** |
 | `93e0046` | 9 sep 2026 | Docs: propuesta de depósito ciego | **Pendiente — bloque «buzón ciego»** (ver abajo) (diseño). |
 | `020bcbb` | 8 sep 2026 | Docs de la vigilancia y agente de launchd | **No aplica tal cual**: el plist lanza `check-nodes.sh` desde el Mac del autor contra los nodos de Krypta. Si se quiere vigilar los de Nyx, es un plist nuevo apuntando a este repo. |
 | `af3163f` | 8 sep 2026 | Límite de ritmo por remitente y chequeo de salud | **Portado** en `fc54c2c`. `check-nodes.sh` lee `DEFAULT_BOOTSTRAP` y saca los dos nodos de Nyx. **Falta desplegar.** |
@@ -161,7 +161,9 @@ Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el histori
 commits (los 11 que quedaban del 21 ago al 3 sep y los 68 del 8 al 22 sep): **26 portados** —dos
 solo en parte, `68458bc` y `8c4d874`— en 23 commits de aquí, y el resto anotados como «no
 aplica» o dentro de uno de los bloques pendientes. El de **respuestas citadas** (`37f185d`) se portó el
-mismo día en `2612bbf`. El bucle de "Cómo se usa" no
+mismo día en `2612bbf`. Del **buzón ciego** entró todo lo que no depende del ratchet (`3a92eeb`, `6db9efa`,
+`2b31389`, `c1e3215`, más `705afc9`, propio: el wake v2 también avisa por PeerID, o un like no
+despertaría al móvil): Nyx ya **recibe** a ciegas; el envío ciego va con el ratchet. El bucle de "Cómo se usa" no
 imprime nada.
 
 **Falta desplegar** en las dos cajas (`nyx` y `nyx2`) lo del nodo: reparto justo del buzón y
@@ -177,6 +179,5 @@ Nyx no son las de Krypta. Se portan como bloque o no se portan:
 
 | Bloque | Commits | Por qué no entra con el script |
 | --- | --- | --- |
-| **Buzón ciego** (protocolo v2) | `93e0046`, `b03a14a`, `157bcaf`, `63222d1`, `867af62`, `16a1c4a`, `dd95f04`, `04efc41` | Cambia el protocolo del buzón en el nodo **y** en el cliente (etiquetas semanales en vez de PeerID destino). En Nyx convive con la bandeja de likes, que por diseño va con remitente explícito, y exige redesplegar las dos cajas. |
-| **Doble ratchet** | `afb576a`, `6f5c624`, `15eb13a`, `3aca88a`, `04b6e43`, `dd1d8e0`, `7f2bbac`, `d2523ff`, `69dd3b3`, `87d6152`, `80af727`, `a97cbab`, `fe21111`, `f119237`, `ebf2d43`, `f8d9a75`, `a642758` | ~7 000 líneas con tablas propias, nuevo sobre v3 y una revisión externa que corrigió el propio ratchet (`a97cbab`). En Nyx toca `LikeService` (el like va con ECDH estático a un desconocido, sin sesión), la DB (que aquí va por otra numeración) y rompe la compatibilidad de mensajes con builds anteriores. |
+| **Doble ratchet** (+ `16a1c4a`, que enciende el depósito ciego) | `afb576a`, `6f5c624`, `15eb13a`, `3aca88a`, `04b6e43`, `dd1d8e0`, `7f2bbac`, `d2523ff`, `69dd3b3`, `87d6152`, `80af727`, `a97cbab`, `fe21111`, `f119237`, `ebf2d43`, `f8d9a75`, `a642758` | ~7 000 líneas con tablas propias, nuevo sobre v3 y una revisión externa que corrigió el propio ratchet (`a97cbab`). En Nyx toca `LikeService` (el like va con ECDH estático a un desconocido, sin sesión), la DB (que aquí va por otra numeración) y rompe la compatibilidad de mensajes con builds anteriores. |
 | **Post-cuántico** | `13037ec`, `7eca8df`, `3abeada` | Solo la primitiva y el diseño; sin el ratchet no tiene dónde usarse. |

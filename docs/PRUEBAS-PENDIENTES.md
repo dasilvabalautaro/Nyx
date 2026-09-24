@@ -544,24 +544,35 @@ latencia medida dice que poco, pero medir el RTT no es lo mismo que oírlo.
 
 ---
 
-## 17. Build del 24 sep: sincronización con Krypta — **PENDIENTE (1 móvil primero, luego 2)**
+## 17. Build del 24 sep: sincronización con Krypta — **1 MÓVIL VERIFICADO; falta con 2**
 
 El build que sale de la sincronización con Krypta del 24 sep 2026 (ver `docs/SYNC-KRYPTA.md`)
 hace **tres migraciones locales en el primer arranque**: la identidad pasa a ir envuelta en el
 Keystore, la base sube a v6 (sin `sharedSecret`) y se cifra con SQLCipher. Todas están probadas
 en el TECNO con los tests de `:data`, pero **ninguna sobre la base real** de la app.
 
-1. - [ ] **Antes de instalar**, exportar un `.nybk` (Ajustes → Copia de seguridad). Es la
-     única vuelta atrás si algo fuera mal: no lleva mensajes, pero sí identidad y contactos.
-2. - [ ] Instalar y abrir. Debe arrancar con el **mismo PeerID**, los contactos y los matches
+1. - [x] **Antes de instalar**, copia de seguridad. En vez del `.nybk` se hizo una copia **en
+     crudo** con `run-as` (base + WAL + prefs + avatar), que además lleva los mensajes: con
+     ella se puede devolver el móvil exactamente al estado anterior.
+2. - [x] Instalar y abrir. Debe arrancar con el **mismo PeerID**, los contactos y los matches
      intactos y las vistas previas de la lista **descifrando** (eso prueba que el secreto
      compartido se deriva bien ahora que no está en la base).
-3. - [ ] Comprobar que la base ya no es legible: `run-as chat.neto.nyx head -c 16
+3. - [x] Comprobar que la base ya no es legible: `run-as chat.neto.nyx head -c 16
      databases/nyx.db` no debe empezar por `SQLite format 3`.
-4. - [ ] **Responder citando** (nuevo): deslizar a la derecha un mensaje, y pulsación larga →
+4. - [~] **Responder citando** (nuevo): deslizar a la derecha un mensaje, y pulsación larga →
      Responder en uno recibido (el menú debe traer Responder · Copiar · Denunciar) y en uno
      propio (píldora con responder y copiar). Enviar texto, foto y nota de voz como respuesta;
      tocar la cita debe saltar al original y resaltarlo.
+   **Verificado en el TECNO el 24 sep 2026**, sobre su base real (v5, 1 contacto verificado,
+   25 mensajes): tras instalar encima, `nyx.db` empieza por bytes al azar y la identidad solo
+   queda como `ed25519_wrapped`; **mismo PeerID** (`12D3KooWL8tmg33x…JDcu`) antes y después;
+   el **segundo arranque** —el que tumbaba la app antes de `9e4add1`— arranca; Lucia sigue
+   ahí, verificada, y todo el historial visible se descifra (ningún `[cifrado]`).
+   Diagnóstico: filtro de conexiones con 3 permitidos (Lucia + los dos nodos), DHT
+   conectado, relay OK, Lucia encontrada por rendezvous y wake activo. De la cita solo se
+   comprobó la parte que no envía nada: deslizar abre la barra con ✕, y la pulsación larga
+   sobre un recibido saca Responder · Copiar · Denunciar. **Falta** enviar una respuesta
+   (texto, foto, nota de voz) y tocar la cita.
 5. - [ ] Con los dos móviles en este build: la cita debe llegar al otro lado resuelta contra
      su propia base, y «Mensaje no disponible» si el otro vació el chat.
 

@@ -133,7 +133,7 @@ después: el `.aar` no está en git.
 | `d8ceb03` | 8 sep 2026 | Envolver la clave Ed25519 con el Android Keystore | **Portado** en `1f09467`. La copia en claro de `nyx_identity` se migra sola al primer arranque. **La app instalada aún no ha pasado por la migración.** |
 | `2b9ea93` | 8 sep 2026 | Rendezvous: publicar una sola vez y ventana de solape | **Portado** en `b329490`, limpio. |
 | `5e6bddd` | 8 sep 2026 | Reparto justo del buzón y topes en relay y wake | **Portado** en `04f4ffc` **sin el hunk del relay**: aquí ya había topes propios (`relay.go`). **Falta desplegar.** |
-| `37f185d` | 3 sep 2026 | Responder citando un mensaje anterior | **Pendiente — bloque «respuestas citadas»** (ver abajo). Es una funcionalidad, no un arreglo. |
+| `37f185d` | 3 sep 2026 | Responder citando un mensaje anterior | **Portado** en `2612bbf`, a mano. La cita solo envuelve contenido (nunca un like ni una señal: test propio). Pulsación larga: menú Responder · Copiar · Denunciar en los recibidos, píldora de iconos en los propios. Sin probar en el móvil (PRUEBAS-PENDIENTES §17). |
 | `17aa61f` | 2 sep 2026 | Docs: dejar el fallo de 2.º plano en HiOS como está | **No aplica**: solo docs de Krypta (`PRUEBAS-PENDIENTES`). |
 | `21fcdc5` | 2 sep 2026 | Docs: causa del fallo en 2.º plano (HiOS congela la app) | **No aplica**: solo docs de Krypta. El hallazgo sí vale aquí: el 24 sep 2026 HiOS congeló también el proceso de test de `:data`. |
 | `72977de` | 2 sep 2026 | Copiar pasa a ser un botón de icono | **Portado** en `02ba6cf` (junto con `3629545` y `56974f6`). |
@@ -160,7 +160,8 @@ Todo lo anterior a `dfc84fb` (main de Krypta el 21 ago 2026) está en el histori
 **Último repaso: 24 sep 2026.** El tip de Krypta en `main` es `a310ced`. Este repaso decidió 79
 commits (los 11 que quedaban del 21 ago al 3 sep y los 68 del 8 al 22 sep): **26 portados** —dos
 solo en parte, `68458bc` y `8c4d874`— en 23 commits de aquí, y el resto anotados como «no
-aplica» o dentro de uno de los cuatro bloques pendientes. El bucle de "Cómo se usa" no
+aplica» o dentro de uno de los bloques pendientes. El de **respuestas citadas** (`37f185d`) se portó el
+mismo día en `2612bbf`. El bucle de "Cómo se usa" no
 imprime nada.
 
 **Falta desplegar** en las dos cajas (`nyx` y `nyx2`) lo del nodo: reparto justo del buzón y
@@ -179,4 +180,3 @@ Nyx no son las de Krypta. Se portan como bloque o no se portan:
 | **Buzón ciego** (protocolo v2) | `93e0046`, `b03a14a`, `157bcaf`, `63222d1`, `867af62`, `16a1c4a`, `dd95f04`, `04efc41` | Cambia el protocolo del buzón en el nodo **y** en el cliente (etiquetas semanales en vez de PeerID destino). En Nyx convive con la bandeja de likes, que por diseño va con remitente explícito, y exige redesplegar las dos cajas. |
 | **Doble ratchet** | `afb576a`, `6f5c624`, `15eb13a`, `3aca88a`, `04b6e43`, `dd1d8e0`, `7f2bbac`, `d2523ff`, `69dd3b3`, `87d6152`, `80af727`, `a97cbab`, `fe21111`, `f119237`, `ebf2d43`, `f8d9a75`, `a642758` | ~7 000 líneas con tablas propias, nuevo sobre v3 y una revisión externa que corrigió el propio ratchet (`a97cbab`). En Nyx toca `LikeService` (el like va con ECDH estático a un desconocido, sin sesión), la DB (que aquí va por otra numeración) y rompe la compatibilidad de mensajes con builds anteriores. |
 | **Post-cuántico** | `13037ec`, `7eca8df`, `3abeada` | Solo la primitiva y el diseño; sin el ratchet no tiene dónde usarse. |
-| **Respuestas citadas** | `37f185d` | Funcionalidad de chat (sobre `Y`, deslizar para responder), no arreglo. Ya bloqueó un porte (`936e9ae`) y dos adaptaciones de hoy (`b45e123`, `3de817c`). |

@@ -90,7 +90,7 @@ después: el `.aar` no está en git.
 | `f562c33` | 12 sep 2026 | `security.txt` en los nodos y vigilancia que avisa al cambiar | **Pendiente, menor**: el `security.txt` lleva el contacto de Krypta y el resto toca `deploy-caddy.sh`, que Nyx no usa. Rehacerlo con datos de Nyx cuando haya canal de avisos. |
 | `16a1c4a` | 12 sep 2026 | Depósito ciego por contacto y fuzzing del parseo | **Pendiente — bloque «doble ratchet»**: enciende el depósito ciego según el protocolo que anuncia cada contacto (sobre `V`), y ese anuncio llega con el ratchet. Hasta entonces Nyx **recibe** a ciegas pero **deposita** por PeerID. |
 | `5e11f05` | 12 sep 2026 | Una sola conexión por nodo, sin WebSocket redundantes | **Portado** en `04e20eb`; el campo `wsPruned` a mano. Aquí la WebSocket de sobra viene del ws/8081 que identify aprende, no de Caddy. |
-| `cb42f47` | 12 sep 2026 | Límite de ritmo en la retirada del buzón | **Portado** en `7886db2`, solo la retirada v1 (el hunk y el test de v2 son del buzón ciego). La bandeja de likes no pasa por este límite. **Falta desplegar en las dos cajas.** |
+| `cb42f47` | 12 sep 2026 | Límite de ritmo en la retirada del buzón | **Portado** en `7886db2`, solo la retirada v1 (el hunk y el test de v2 son del buzón ciego). La bandeja de likes no pasa por este límite. Desplegado el 24 sep. |
 | `ecf6833` | 12 sep 2026 | Licencia MIT o Apache-2.0 y README | **No aplica**: la licencia de Nyx la decide el autor; no se hereda de Krypta. |
 | `3abeada` | 11 sep 2026 | Docs: fases 1 y 2 del post-cuántico | **Pendiente — bloque «post-cuántico»** (ver abajo). |
 | `7eca8df` | 11 sep 2026 | Primitiva post-cuántica (ML-KEM-768), sin protocolo | **Pendiente — bloque «post-cuántico»** (ver abajo). No cambia nada por sí sola: solo tiene sentido junto al diseño que la usa. |
@@ -112,17 +112,17 @@ después: el `.aar` no está en git.
 | `f723717` | 10 sep 2026 | Sonda que reproduce la fuga de IP | **Portado** en `2fc8ba9` (con `35927e1`); el ejemplo apunta a `nyx.neto.chat`. El hunk de `.gitignore` (un PDF del autor) no aplica. |
 | `6133ff0` | 10 sep 2026 | Docs: confianza operativa, nodo de Dallas, wss/443 | **No aplica**: solo docs de Krypta e infra de Krypta. |
 | `68458bc` | 10 sep 2026 | VPS de Dallas + wss/443 por Caddy + ranker de marcado | **Portado solo el ranker** (`dial_ranker.go`) en `2bce58d`. Dallas, Caddy y el `DEFAULT_BOOTSTRAP` son infra de Krypta y no aplican. |
-| `3f393e4` | 10 sep 2026 | El log del nodo no guarda PeerIDs; retención del journal | **Portado** en `bb63308`; aquí ya estaba el sysctl de QUIC, entra el journal. Revisados `board.go`, `like.go` y `report.go`: no imprimen nada. **Falta desplegar.** |
+| `3f393e4` | 10 sep 2026 | El log del nodo no guarda PeerIDs; retención del journal | **Portado** en `bb63308`; aquí ya estaba el sysctl de QUIC, entra el journal. Revisados `board.go`, `like.go` y `report.go`: no imprimen nada. Desplegado el 24 sep. |
 | `80af727` | 10 sep 2026 | Docs: poner al día lo que se promete | **Pendiente — bloque «doble ratchet»** (ver abajo) (docs). |
 | `afb576a` | 10 sep 2026 | Secreto hacia adelante con un doble ratchet por épocas | **Pendiente — bloque «doble ratchet»** (ver abajo). 56 ficheros y 4 453 líneas, con DB propia: es el núcleo del bloque. |
 | `2a6118e` | 9 sep 2026 | Cifrar la base de datos con SQLCipher | **Portado** en `0fdf56e`. La frase se guarda con `commit()` en vez de `apply()`. 6/6 instrumentados en el TECNO; el falso cuelgue era HiOS congelando el proceso de test (anotado en el test). **La app instalada aún no ha convertido su base.** |
-| `867af62` | 9 sep 2026 | Sonda de depósito ciego en el chequeo de salud | **Portado** en `c1e3215`, sin el hunk del README. Fallará contra las cajas hasta que se redespliegue el nodo. |
+| `867af62` | 9 sep 2026 | Sonda de depósito ciego en el chequeo de salud | **Portado** en `c1e3215`, sin el hunk del README. Tras el despliegue del 24 sep da «ciego ok» en las dos cajas. |
 | `63222d1` | 9 sep 2026 | El cliente recibe a ciegas (fase 4) | **Portado** en `2b31389`. Adaptado: la guarda de bloqueo mira el contacto resuelto por etiqueta (un sobre ciego no trae remitente; test propio). El registro del PeerID en el wake v2 ya estaba desde `705afc9`, que lo añadió aquí por los **likes**. |
 | `157bcaf` | 9 sep 2026 | El puente Go habla v2 con caída a v1 por nodo | **Portado** en `6db9efa`; `go.mod` y `mailboxFetch` a mano. AAR regenerado. |
-| `b03a14a` | 9 sep 2026 | Etiquetas semanales y protocolo v2 en el nodo | **Portado** en `3a92eeb`, limpio. Dominio de etiqueta `nyx-mbx`, separado del tablón y del rendezvous. **Falta desplegar.** |
+| `b03a14a` | 9 sep 2026 | Etiquetas semanales y protocolo v2 en el nodo | **Portado** en `3a92eeb`, limpio. Dominio de etiqueta `nyx-mbx`, separado del tablón y del rendezvous. Desplegado el 24 sep. |
 | `93e0046` | 9 sep 2026 | Docs: propuesta de depósito ciego | **Pendiente — bloque «buzón ciego»** (ver abajo) (diseño). |
 | `020bcbb` | 8 sep 2026 | Docs de la vigilancia y agente de launchd | **No aplica tal cual**: el plist lanza `check-nodes.sh` desde el Mac del autor contra los nodos de Krypta. Si se quiere vigilar los de Nyx, es un plist nuevo apuntando a este repo. |
-| `af3163f` | 8 sep 2026 | Límite de ritmo por remitente y chequeo de salud | **Portado** en `fc54c2c`. `check-nodes.sh` lee `DEFAULT_BOOTSTRAP` y saca los dos nodos de Nyx. **Falta desplegar.** |
+| `af3163f` | 8 sep 2026 | Límite de ritmo por remitente y chequeo de salud | **Portado** en `fc54c2c`. `check-nodes.sh` lee `DEFAULT_BOOTSTRAP` y saca los dos nodos de Nyx. Desplegado el 24 sep. |
 | `9322a82` | 8 sep 2026 | Sacar el secreto compartido de la base (DB v6) | **Portado** en `8ed494b` con una `MIGRATION_5_6` propia (la v5 de aquí lleva `likes` y `blocked_peers`). Validada en la JVM contra `6.json` (falsificada) y en el TECNO sobre SQLite real, incluidas las tablas de Nyx. |
 | `347eb97` | 8 sep 2026 | Docs: lo que protege el Keystore y lo que no | **No aplica**: solo docs de Krypta (`security-model.md`, que Nyx no tiene). |
 | `62b50c4` | 8 sep 2026 | Docs: modelo de seguridad y auditoría del 7 sep | **No aplica**: solo docs de Krypta. Los hallazgos A-x de esa auditoría que tocan código son los commits de esta tabla. |
@@ -132,7 +132,7 @@ después: el `.aar` no está en git.
 | `b45e123` | 8 sep 2026 | Reintentar los fallidos al reconectar; blindar el id del emisor | **Portado** en `746f24e`, adaptado a `blocked_peers`. Añade además que a un bloqueado no se le anuncia el rendezvous (test falsificado). |
 | `d8ceb03` | 8 sep 2026 | Envolver la clave Ed25519 con el Android Keystore | **Portado** en `1f09467`. La copia en claro de `nyx_identity` se migra sola al primer arranque. **La app instalada aún no ha pasado por la migración.** |
 | `2b9ea93` | 8 sep 2026 | Rendezvous: publicar una sola vez y ventana de solape | **Portado** en `b329490`, limpio. |
-| `5e6bddd` | 8 sep 2026 | Reparto justo del buzón y topes en relay y wake | **Portado** en `04f4ffc` **sin el hunk del relay**: aquí ya había topes propios (`relay.go`). **Falta desplegar.** |
+| `5e6bddd` | 8 sep 2026 | Reparto justo del buzón y topes en relay y wake | **Portado** en `04f4ffc` **sin el hunk del relay**: aquí ya había topes propios (`relay.go`). Desplegado el 24 sep. |
 | `37f185d` | 3 sep 2026 | Responder citando un mensaje anterior | **Portado** en `2612bbf`, a mano. La cita solo envuelve contenido (nunca un like ni una señal: test propio). Pulsación larga: menú Responder · Copiar · Denunciar en los recibidos, píldora de iconos en los propios. Sin probar en el móvil (PRUEBAS-PENDIENTES §17). |
 | `17aa61f` | 2 sep 2026 | Docs: dejar el fallo de 2.º plano en HiOS como está | **No aplica**: solo docs de Krypta (`PRUEBAS-PENDIENTES`). |
 | `21fcdc5` | 2 sep 2026 | Docs: causa del fallo en 2.º plano (HiOS congela la app) | **No aplica**: solo docs de Krypta. El hallazgo sí vale aquí: el 24 sep 2026 HiOS congeló también el proceso de test de `:data`. |
@@ -166,11 +166,11 @@ mismo día en `2612bbf`. Del **buzón ciego** entró todo lo que no depende del 
 despertaría al móvil): Nyx ya **recibe** a ciegas; el envío ciego va con el ratchet. El bucle de "Cómo se usa" no
 imprime nada.
 
-**Falta desplegar** en las dos cajas (`nyx` y `nyx2`) lo del nodo: reparto justo del buzón y
-tope de wake (`5e6bddd`), límite de ritmo por remitente (`af3163f`), log sin PeerIDs y
-retención del journal (`3f393e4`) y límite en la retirada (`cb42f47`). Y la app instalada en el
-TECNO todavía no ha pasado por las tres migraciones locales (identidad en Keystore, DB v6 y
-SQLCipher); exportar un `.nybk` antes de instalar el build nuevo.
+**Desplegado en las dos cajas el 24 sep 2026** (`nyx` y `nyx2`, con `deploy-vps.sh`, mismo
+`node.key` y mismo PeerID en las dos): todo lo del nodo que se portó hasta aquí, incluidos el
+protocolo v2 del buzón y del wake. `check-nodes.sh` da en las dos «buzón ok · wake ok · relay
+ok · vuelta ok · ciego ok». La app del TECNO ya pasó las tres migraciones locales el mismo día
+(PRUEBAS-PENDIENTES §17).
 
 ### Bloques pendientes
 
